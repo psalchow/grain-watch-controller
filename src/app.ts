@@ -11,6 +11,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cors from 'cors';
 import { errorHandler, notFoundHandler } from './middleware';
+import { apiRouter } from './routes';
 
 /**
  * CORS configuration options.
@@ -81,15 +82,20 @@ function getDefaultCorsOptions(): CorsOptions {
  * 3. Request logging (Morgan) - except in test environment
  * 4. JSON body parsing
  * 5. Health check endpoint
- * 6. 404 handler (for unmatched routes)
- * 7. Centralised error handler
+ * 6. API routes (/api/v1/*)
+ *
+ * Note: Error handlers (404 and centralised) should be added by calling
+ * finaliseApp() after createApp(), or use createFullApp() for a complete
+ * application with all handlers.
  *
  * @param options - Optional configuration options
- * @returns Configured Express application
+ * @returns Configured Express application (without error handlers)
  *
  * @example
- * // Basic usage
+ * // Basic usage with finalisation
  * const app = createApp();
+ * finaliseApp(app);
+ * app.listen(3000);
  *
  * // With custom CORS configuration
  * const app = createApp({
@@ -98,6 +104,7 @@ function getDefaultCorsOptions(): CorsOptions {
  *     credentials: true,
  *   },
  * });
+ * finaliseApp(app);
  */
 export function createApp(options: CreateAppOptions = {}): Express {
   const app = express();
@@ -149,10 +156,18 @@ export function createApp(options: CreateAppOptions = {}): Express {
   });
 
   // ==========================================================================
-  // API Routes (to be added by caller)
+  // API Routes
   // ==========================================================================
-  // Routes should be added between createApp() and finaliseApp() calls,
-  // or use the returned app instance to add routes before starting the server.
+
+  /**
+   * Mount API routes under /api/v1 prefix.
+   *
+   * Route structure:
+   * - /api/v1/auth/* - Authentication endpoints (login, token refresh)
+   * - /api/v1/stocks/* - Stock data query endpoints
+   * - /api/v1/admin/* - Admin user management endpoints
+   */
+  app.use('/api/v1', apiRouter);
 
   return app;
 }
