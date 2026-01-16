@@ -1,0 +1,22 @@
+[
+  {
+    "id": "usr_001",
+    "username": "admin",
+    "passwordHash": "$2b$10$EXAMPLE_HASH_DO_NOT_USE_IN_PRODUCTION",
+    "email": "admin@example.com",
+    "role": "admin",
+    "stockAccess": ["*"],
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "active": true
+  },
+  {
+    "id": "usr_002",
+    "username": "viewer",
+    "passwordHash": "$2b$10$EXAMPLE_HASH_DO_NOT_USE_IN_PRODUCTION",
+    "email": "viewer@example.com",
+    "role": "viewer",
+    "stockAccess": ["corn-watch-1"],
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "active": true
+  }
+]
