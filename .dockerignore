@@ -1,0 +1,76 @@
+# =============================================================================
+# Docker Ignore File
+# =============================================================================
+# Excludes unnecessary files from Docker build context for faster builds
+# and smaller images.
+# =============================================================================
+
+# Dependencies - reinstalled in Docker build
+node_modules/
+
+# Build output - rebuilt in Docker
+dist/
+
+# Git repository
+.git/
+.gitignore
+
+# IDE and editor configuration
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files - secrets should not be baked into image
+.env
+.env.*
+!.env.example
+
+# Documentation - not needed at runtime
+docs/
+*.md
+!README.md
+
+# Tests - not needed in production image
+tests/
+coverage/
+jest.config.js
+
+# Development configuration
+nodemon.json
+eslint.config.mjs
+tsconfig.json
+
+# TypeScript source - only compiled JS needed
+src/
+
+# Data directory - mounted at runtime
+data/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Claude/AI configuration
+.claude/
+CLAUDE.md
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# TypeScript build cache
+*.tsbuildinfo

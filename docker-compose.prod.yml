@@ -1,0 +1,48 @@
+# =============================================================================
+# Grainwatch Controller BFF - Production Docker Compose
+# =============================================================================
+# Minimal configuration for Synology NAS deployment.
+# Assumes InfluxDB is already running in a separate container.
+#
+# Usage:
+#   docker-compose -f docker-compose.prod.yml up -d
+# =============================================================================
+
+services:
+  grainwatch-controller:
+    image: grainwatch-controller:latest
+    container_name: grainwatch-controller
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - USERS_FILE_PATH=/app/data/users.json
+    volumes:
+      - ./data:/app/data:rw
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - grainwatch-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # Resource limits (adjust based on Synology hardware)
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+networks:
+  grainwatch-network:
+    external: true
+    name: ${DOCKER_NETWORK:-grainwatch-network}
