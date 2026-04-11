@@ -12,12 +12,10 @@ import {
   validateQuery,
   validateParams,
   loginSchema,
-  stockQuerySchema,
   createUserSchema,
   updateUserSchema,
   stockIdParamsSchema,
   userIdParamsSchema,
-  layerEnum,
   userRoleEnum,
 } from '../../../src/middleware/validation.middleware';
 
@@ -338,69 +336,6 @@ describe('Validation Middleware', () => {
     });
   });
 
-  describe('stockQuerySchema', () => {
-    it('should accept valid query with all fields', () => {
-      const data = {
-        start: '2026-01-01T00:00:00.000Z',
-        end: '2026-01-02T00:00:00.000Z',
-        layer: 'mid',
-        device: '1.1',
-        window: '1h',
-      };
-      const result = stockQuerySchema.safeParse(data);
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should accept empty query (all optional)', () => {
-      const result = stockQuerySchema.safeParse({});
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should accept valid layer values', () => {
-      for (const layer of ['bottom', 'mid', 'top']) {
-        const result = stockQuerySchema.safeParse({ layer });
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it('should reject invalid layer value', () => {
-      const result = stockQuerySchema.safeParse({ layer: 'invalid' });
-
-      expect(result.success).toBe(false);
-    });
-
-    it('should accept valid window formats', () => {
-      for (const window of ['15m', '1h', '6h', '1d']) {
-        const result = stockQuerySchema.safeParse({ window });
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it('should reject invalid window format', () => {
-      const result = stockQuerySchema.safeParse({ window: 'invalid' });
-
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject when start is after end', () => {
-      const data = {
-        start: '2026-01-02T00:00:00.000Z',
-        end: '2026-01-01T00:00:00.000Z',
-      };
-      const result = stockQuerySchema.safeParse(data);
-
-      expect(result.success).toBe(false);
-    });
-
-    it('should reject invalid datetime format', () => {
-      const result = stockQuerySchema.safeParse({ start: 'not-a-date' });
-
-      expect(result.success).toBe(false);
-    });
-  });
-
   describe('createUserSchema', () => {
     it('should accept valid user creation data', () => {
       const data = {
@@ -603,31 +538,6 @@ describe('Validation Middleware', () => {
       const result = userIdParamsSchema.safeParse({});
 
       expect(result.success).toBe(false);
-    });
-  });
-
-  describe('layerEnum', () => {
-    it('should accept valid layer values', () => {
-      for (const value of ['bottom', 'mid', 'top']) {
-        const result = layerEnum.safeParse(value);
-        expect(result.success).toBe(true);
-      }
-    });
-
-    it('should reject invalid layer value', () => {
-      const result = layerEnum.safeParse('middle');
-
-      expect(result.success).toBe(false);
-    });
-
-    it('should provide helpful error message', () => {
-      const result = layerEnum.safeParse('invalid');
-
-      if (!result.success) {
-        expect(result.error.issues[0]?.message).toContain('bottom');
-        expect(result.error.issues[0]?.message).toContain('mid');
-        expect(result.error.issues[0]?.message).toContain('top');
-      }
     });
   });
 
