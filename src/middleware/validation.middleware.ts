@@ -187,68 +187,6 @@ export const loginSchema = z.object({
 export type LoginRequest = z.infer<typeof loginSchema>;
 
 /**
- * Temperature layer enum for validation.
- */
-export const layerEnum = z.enum(['bottom', 'mid', 'top'], {
-  errorMap: () => ({ message: 'Layer must be one of: bottom, mid, top' }),
-});
-
-/** Type for valid temperature layer values */
-export type Layer = z.infer<typeof layerEnum>;
-
-/**
- * ISO 8601 datetime string validator.
- */
-const isoDateTimeString = z.string().refine(
-  (value) => {
-    const date = new Date(value);
-    return !isNaN(date.getTime());
-  },
-  { message: 'Must be a valid ISO 8601 datetime string' }
-);
-
-/**
- * Stock query parameters schema for time-series data retrieval.
- */
-export const stockQuerySchema = z.object({
-  /** Start of time range (ISO 8601 datetime) */
-  start: isoDateTimeString.optional(),
-
-  /** End of time range (ISO 8601 datetime) */
-  end: isoDateTimeString.optional(),
-
-  /** Temperature layer filter */
-  layer: layerEnum.optional(),
-
-  /** Device ID filter */
-  device: z.string().optional(),
-
-  /** Aggregation window (e.g., '1h', '15m', '1d') */
-  window: z
-    .string()
-    .regex(
-      /^\d+[smhd]$/,
-      'Window must be a valid duration (e.g., "15m", "1h", "1d")'
-    )
-    .optional(),
-}).refine(
-  (data) => {
-    // If both start and end are provided, start must be before end
-    if (data.start && data.end) {
-      return new Date(data.start) < new Date(data.end);
-    }
-    return true;
-  },
-  {
-    message: 'Start date must be before end date',
-    path: ['start'],
-  }
-);
-
-/** Type inferred from stockQuerySchema */
-export type StockQueryParams = z.infer<typeof stockQuerySchema>;
-
-/**
  * User role enum for validation.
  */
 export const userRoleEnum = z.enum(['admin', 'viewer'], {
