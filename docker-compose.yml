@@ -11,7 +11,7 @@ services:
   # ---------------------------------------------------------------------------
   grainwatch-controller:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: grainwatch-controller
     restart: unless-stopped
@@ -30,7 +30,7 @@ services:
       - USERS_FILE_PATH=/app/data/users.json
     volumes:
       # Persist user data outside the container
-      - ./data:/app/data:rw
+      - ./backend/data:/app/data:rw
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
       interval: 30s

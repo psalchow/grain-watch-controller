@@ -16,11 +16,11 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       - USERS_FILE_PATH=/app/data/users.json
     volumes:
-      - ./data:/app/data:rw
+      - ./backend/data:/app/data:rw
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"]
       interval: 30s
