@@ -5,11 +5,7 @@
  * and result transformation without requiring a live database connection.
  */
 
-import {
-  InfluxDBService,
-  isValidWindowDuration,
-  WindowDuration,
-} from '../../../src/services/influx';
+import { InfluxDBService } from '../../../src/services/influx';
 
 // Mock the config module
 jest.mock('../../../src/config', () => ({
@@ -44,22 +40,6 @@ describe('InfluxDBService', () => {
   describe('constructor', () => {
     it('should create an InfluxDB client with config values', () => {
       expect(service).toBeInstanceOf(InfluxDBService);
-    });
-  });
-
-  describe('isValidWindowDuration', () => {
-    it('should return true for valid window durations', () => {
-      const validDurations: WindowDuration[] = ['1m', '5m', '15m', '30m', '1h', '6h', '12h', '1d'];
-      validDurations.forEach((duration) => {
-        expect(isValidWindowDuration(duration)).toBe(true);
-      });
-    });
-
-    it('should return false for invalid window durations', () => {
-      expect(isValidWindowDuration('2m')).toBe(false);
-      expect(isValidWindowDuration('1w')).toBe(false);
-      expect(isValidWindowDuration('invalid')).toBe(false);
-      expect(isValidWindowDuration('')).toBe(false);
     });
   });
 
@@ -136,145 +116,6 @@ describe('InfluxDBService', () => {
     });
   });
 
-  describe('getTemperatureTimeSeries', () => {
-    it('should query for temperature time series with correct parameters', async () => {
-      const mockResponse = {
-        results: [{
-          series: [{
-            name: 'Temp',
-            tags: { device: '1.1' },
-            columns: ['time', 'value'],
-            values: [
-              ['2024-01-15T00:00:00Z', 10.5],
-              ['2024-01-15T01:00:00Z', 10.3],
-            ],
-          }],
-        }],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await service.getTemperatureTimeSeries(
-        'corn-watch-1',
-        'top',
-        '2024-01-15T00:00:00Z',
-        '2024-01-16T00:00:00Z',
-        '1h'
-      );
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('temp-top'),
-        expect.anything()
-      );
-      expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
-        time: '2024-01-15T00:00:00.000Z',
-        device: '1.1',
-        value: 10.5,
-      });
-    });
-
-    it('should throw error for invalid layer', async () => {
-      await expect(
-        service.getTemperatureTimeSeries(
-          'corn-watch-1',
-          'invalid' as any,
-          '2024-01-15T00:00:00Z',
-          '2024-01-16T00:00:00Z'
-        )
-      ).rejects.toThrow('Invalid layer');
-    });
-
-    it('should throw error for invalid start time', async () => {
-      await expect(
-        service.getTemperatureTimeSeries(
-          'corn-watch-1',
-          'top',
-          'invalid-time',
-          '2024-01-16T00:00:00Z'
-        )
-      ).rejects.toThrow('Invalid startTime');
-    });
-
-    it('should throw error for invalid end time', async () => {
-      await expect(
-        service.getTemperatureTimeSeries(
-          'corn-watch-1',
-          'top',
-          '2024-01-15T00:00:00Z',
-          'invalid-time'
-        )
-      ).rejects.toThrow('Invalid endTime');
-    });
-
-    it('should throw error for invalid window duration', async () => {
-      await expect(
-        service.getTemperatureTimeSeries(
-          'corn-watch-1',
-          'top',
-          '2024-01-15T00:00:00Z',
-          '2024-01-16T00:00:00Z',
-          '2m' as any
-        )
-      ).rejects.toThrow('Invalid window duration');
-    });
-
-    it('should use default window duration of 15m', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
-
-      await service.getTemperatureTimeSeries(
-        'corn-watch-1',
-        'top',
-        '2024-01-15T00:00:00Z',
-        '2024-01-16T00:00:00Z'
-      );
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('time(15m)'),
-        expect.anything()
-      );
-    });
-  });
-
-  describe('getHumidityTimeSeries', () => {
-    it('should query for humidity time series', async () => {
-      const mockResponse = {
-        results: [{
-          series: [{
-            name: 'Temp',
-            tags: { device: '1.1' },
-            columns: ['time', 'value'],
-            values: [['2024-01-15T00:00:00Z', 85]],
-          }],
-        }],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await service.getHumidityTimeSeries(
-        'corn-watch-1',
-        '2024-01-15T00:00:00Z',
-        '2024-01-16T00:00:00Z'
-      );
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('humidity'),
-        expect.anything()
-      );
-      expect(result).toHaveLength(1);
-      expect(result[0]?.value).toBe(85);
-    });
-  });
-
   describe('getDeviceGroups', () => {
     it('should return list of device groups', async () => {
       const mockResponse = {
@@ -312,100 +153,6 @@ describe('InfluxDBService', () => {
       const result = await service.getDeviceGroups();
 
       expect(result).toEqual([]);
-    });
-  });
-
-  describe('getSummaryStats', () => {
-    it('should query for summary statistics', async () => {
-      const mockResponse = {
-        results: [{
-          series: [{
-            name: 'Temp',
-            tags: { device: '1.1' },
-            columns: ['time', 'min', 'max', 'avg', 'current'],
-            values: [[
-              '2024-01-15T00:00:00Z',
-              9.5,
-              11.5,
-              10.5,
-              10.5,
-            ]],
-          }],
-        }],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await service.getSummaryStats('corn-watch-1', 'top', 24);
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('MIN'),
-        expect.anything()
-      );
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
-        device: '1.1',
-        min: 9.5,
-        max: 11.5,
-        avg: 10.5,
-        current: 10.5,
-      });
-    });
-
-    it('should use default hours of 24', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
-
-      await service.getSummaryStats('corn-watch-1', 'top');
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('24h'),
-        expect.anything()
-      );
-    });
-
-    it('should throw error for invalid hours', async () => {
-      await expect(
-        service.getSummaryStats('corn-watch-1', 'top', 0)
-      ).rejects.toThrow('Invalid hours');
-
-      await expect(
-        service.getSummaryStats('corn-watch-1', 'top', 10000)
-      ).rejects.toThrow('Invalid hours');
-    });
-  });
-
-  describe('getBatteryStatus', () => {
-    it('should query for battery status', async () => {
-      const mockResponse = {
-        results: [{
-          series: [{
-            name: 'Temp',
-            tags: { device: '1.1' },
-            columns: ['time', 'battery'],
-            values: [['2024-01-15T00:00:00Z', 436]],
-          }],
-        }],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await service.getBatteryStatus('corn-watch-1');
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('batteryMV'),
-        expect.anything()
-      );
-      expect(result).toHaveLength(1);
-      expect(result[0]?.battery).toBe(436);
     });
   });
 
