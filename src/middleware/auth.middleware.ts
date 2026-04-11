@@ -23,7 +23,7 @@ let authServiceInstance: AuthService | null = null;
  *
  * @returns AuthService instance
  */
-function getAuthService(): AuthService {
+export function getAuthService(): AuthService {
   if (!authServiceInstance) {
     authServiceInstance = new AuthService();
   }

@@ -11,7 +11,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cors from 'cors';
 import { errorHandler, notFoundHandler } from './middleware';
-import { apiRouter } from './routes';
+import { createApiRouter } from './routes';
 
 /**
  * CORS configuration options.
@@ -167,7 +167,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
    * - /api/v1/stocks/* - Stock data query endpoints
    * - /api/v1/admin/* - Admin user management endpoints
    */
-  app.use('/api/v1', apiRouter);
+  app.use('/api/v1', createApiRouter());
 
   return app;
 }

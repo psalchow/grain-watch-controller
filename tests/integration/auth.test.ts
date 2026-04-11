@@ -8,7 +8,7 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
-import { UserService } from '../../src/services/auth';
+import { UserService, AuthService } from '../../src/services/auth';
 import { setAuthService } from '../../src/middleware';
 
 // Mock the config module
@@ -50,13 +50,11 @@ describe('Auth Endpoints', () => {
   const testUsersPath = '/tmp/test-auth-users.json';
 
   beforeAll(async () => {
-    // Reset auth service
-    setAuthService(null);
-
     // Create test user service with a clean file
     userService = new UserService(testUsersPath);
 
     // Clear any existing users and create test users
+    userService.clearCache();
     await userService.saveUsers([]);
 
     // Create test admin user
@@ -83,6 +81,10 @@ describe('Auth Endpoints', () => {
       stockAccess: ['corn-watch-1'],
     });
     await userService.updateUser(disabledProfile.id, { active: false });
+
+    // Create auth service with our test user service
+    const authService = new AuthService(userService);
+    setAuthService(authService);
 
     // Create app
     app = createApp();
@@ -236,15 +238,17 @@ describe('Auth Endpoints', () => {
       expect(response.body).toHaveProperty('token');
       expect(response.body).toHaveProperty('expiresIn');
 
-      // Verify new token is different from old token
-      expect(response.body.token).not.toBe(validToken);
-
       // Verify new token is valid
       const decoded = jwt.verify(
         response.body.token,
         'test-secret-key-for-testing-only-must-be-long-enough'
       );
       expect(decoded).toHaveProperty('userId');
+      expect(decoded).toHaveProperty('username', 'testadmin');
+      expect(decoded).toHaveProperty('role', 'admin');
+
+      // Note: Token may be identical to validToken if generated within the same second
+      // (JWT iat is in seconds, not milliseconds)
     });
 
     it('should return 401 for missing Authorization header', async () => {

@@ -4,6 +4,9 @@ describe('Configuration', () => {
   beforeEach(() => {
     jest.resetModules();
     process.env = { ...originalEnv };
+    // Set required env vars to prevent validation errors
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+    process.env['INFLUXDB_URL'] = 'http://localhost:8086';
   });
 
   afterAll(() => {
@@ -14,6 +17,7 @@ describe('Configuration', () => {
     delete process.env['PORT'];
     delete process.env['NODE_ENV'];
     delete process.env['JWT_SECRET'];
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
 
     const { config } = await import('../../src/config/index');
 
@@ -25,6 +29,7 @@ describe('Configuration', () => {
     process.env['PORT'] = '4000';
     process.env['NODE_ENV'] = 'development';
     process.env['JWT_SECRET'] = 'test-secret';
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
 
     const { config } = await import('../../src/config/index');
 
@@ -36,6 +41,8 @@ describe('Configuration', () => {
   it('should validate JWT secret length in production', async () => {
     process.env['NODE_ENV'] = 'production';
     process.env['JWT_SECRET'] = 'short';
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+    process.env['INFLUXDB_URL'] = 'http://localhost:8086';
 
     await expect(import('../../src/config/index')).rejects.toThrow(
       /JWT_SECRET must be at least 32 characters/
@@ -45,6 +52,8 @@ describe('Configuration', () => {
   it('should require JWT secret to be changed in production', async () => {
     process.env['NODE_ENV'] = 'production';
     delete process.env['JWT_SECRET'];
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+    process.env['INFLUXDB_URL'] = 'http://localhost:8086';
 
     await expect(import('../../src/config/index')).rejects.toThrow(
       /JWT_SECRET must be set in production/
@@ -53,6 +62,7 @@ describe('Configuration', () => {
 
   it('should include influxdb measurement in config', async () => {
     process.env['INFLUXDB_MEASUREMENT'] = 'TestMeasurement';
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
 
     const { config } = await import('../../src/config/index');
 
@@ -61,6 +71,7 @@ describe('Configuration', () => {
 
   it('should include usersFilePath in config', async () => {
     process.env['USERS_FILE_PATH'] = '/custom/path/users.json';
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
 
     const { config } = await import('../../src/config/index');
 

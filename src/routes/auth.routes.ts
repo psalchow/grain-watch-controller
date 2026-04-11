@@ -7,8 +7,7 @@
 
 import { Router } from 'express';
 import { AuthController } from '../controllers';
-import { authService } from '../services';
-import { validateBody, loginSchema, authenticate } from '../middleware';
+import { validateBody, loginSchema, authenticate, getAuthService } from '../middleware';
 
 /**
  * Creates the authentication router with all auth-related endpoints.
@@ -17,6 +16,7 @@ import { validateBody, loginSchema, authenticate } from '../middleware';
  */
 export function createAuthRouter(): Router {
   const router = Router();
+  const authService = getAuthService();
   const controller = new AuthController(authService);
 
   /**

@@ -6,9 +6,9 @@
  */
 
 import { Router } from 'express';
-import { authRouter } from './auth.routes';
-import { stocksRouter } from './stocks.routes';
-import { adminRouter } from './admin.routes';
+import { createAuthRouter } from './auth.routes';
+import { createStocksRouter } from './stocks.routes';
+import { createAdminRouter } from './admin.routes';
 
 /**
  * Creates the main API router with all route modules mounted.
@@ -24,13 +24,13 @@ export function createApiRouter(): Router {
   const router = Router();
 
   // Mount authentication routes
-  router.use('/auth', authRouter);
+  router.use('/auth', createAuthRouter());
 
   // Mount stock data routes
-  router.use('/stocks', stocksRouter);
+  router.use('/stocks', createStocksRouter());
 
   // Mount admin routes
-  router.use('/admin', adminRouter);
+  router.use('/admin', createAdminRouter());
 
   return router;
 }

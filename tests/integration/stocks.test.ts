@@ -35,14 +35,14 @@ jest.mock('../../src/config', () => ({
 }));
 
 // Mock InfluxDB service
-const mockGetDeviceGroups = jest.fn();
-const mockGetLatestReadings = jest.fn();
-const mockGetTemperatureTimeSeries = jest.fn();
-const mockGetHumidityTimeSeries = jest.fn();
-const mockGetSummaryStats = jest.fn();
-const mockGetBatteryStatus = jest.fn();
-
 jest.mock('../../src/services/influx/influx.service', () => {
+  const mockGetDeviceGroups = jest.fn();
+  const mockGetLatestReadings = jest.fn();
+  const mockGetTemperatureTimeSeries = jest.fn();
+  const mockGetHumidityTimeSeries = jest.fn();
+  const mockGetSummaryStats = jest.fn();
+  const mockGetBatteryStatus = jest.fn();
+
   return {
     InfluxDBService: jest.fn().mockImplementation(() => ({
       getDeviceGroups: mockGetDeviceGroups,
@@ -54,6 +54,13 @@ jest.mock('../../src/services/influx/influx.service', () => {
       testConnection: jest.fn().mockResolvedValue(true),
     })),
     isValidWindowDuration: (d: string) => ['1m', '5m', '15m', '30m', '1h', '6h', '12h', '1d'].includes(d),
+    // Export mock functions so tests can access them
+    __mockGetDeviceGroups: mockGetDeviceGroups,
+    __mockGetLatestReadings: mockGetLatestReadings,
+    __mockGetTemperatureTimeSeries: mockGetTemperatureTimeSeries,
+    __mockGetHumidityTimeSeries: mockGetHumidityTimeSeries,
+    __mockGetSummaryStats: mockGetSummaryStats,
+    __mockGetBatteryStatus: mockGetBatteryStatus,
   };
 });
 
@@ -74,6 +81,15 @@ describe('Stock Endpoints', () => {
   let adminToken: string;
   let viewerToken: string;
   let restrictedViewerToken: string;
+
+  // Get mock functions from the mocked module
+  const mockedInflux = jest.requireMock('../../src/services/influx/influx.service');
+  const mockGetDeviceGroups = mockedInflux.__mockGetDeviceGroups;
+  const mockGetLatestReadings = mockedInflux.__mockGetLatestReadings;
+  const mockGetTemperatureTimeSeries = mockedInflux.__mockGetTemperatureTimeSeries;
+  const mockGetHumidityTimeSeries = mockedInflux.__mockGetHumidityTimeSeries;
+  const mockGetSummaryStats = mockedInflux.__mockGetSummaryStats;
+  const mockGetBatteryStatus = mockedInflux.__mockGetBatteryStatus;
 
   beforeAll(() => {
     setAuthService(null);

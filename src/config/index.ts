@@ -9,23 +9,20 @@
  * InfluxDB connection configuration.
  */
 interface InfluxDBConfig {
-  /** InfluxDB host address */
-  host: string;
+  /** InfluxDB URL (e.g., 'http://localhost:8086') */
+  url: string;
 
-  /** InfluxDB port number */
-  port: number;
+  /** Authentication token */
+  token: string;
 
-  /** Database/bucket name */
-  database: string;
+  /** Organization name */
+  org: string;
+
+  /** Bucket name */
+  bucket: string;
 
   /** Measurement name for sensor data */
   measurement: string;
-
-  /** Authentication username (optional) */
-  username: string | undefined;
-
-  /** Authentication password (optional) */
-  password: string | undefined;
 }
 
 /**
@@ -102,15 +99,6 @@ function getEnvVarAsInt(key: string, defaultValue?: number): number {
   return parsed;
 }
 
-/**
- * Retrieves an optional environment variable.
- *
- * @param key - Environment variable name
- * @returns The environment variable value or undefined
- */
-function getOptionalEnvVar(key: string): string | undefined {
-  return process.env[key];
-}
 
 /**
  * Validates the configuration and throws descriptive errors for invalid settings.
@@ -136,9 +124,11 @@ function validateConfig(cfg: Config): void {
     errors.push(`PORT must be between 1 and 65535, got: ${cfg.port}`);
   }
 
-  // Validate InfluxDB port range
-  if (cfg.influxdb.port < 1 || cfg.influxdb.port > 65535) {
-    errors.push(`INFLUXDB_PORT must be between 1 and 65535, got: ${cfg.influxdb.port}`);
+  // Validate InfluxDB URL format
+  try {
+    new URL(cfg.influxdb.url);
+  } catch {
+    errors.push(`INFLUXDB_URL must be a valid URL, got: ${cfg.influxdb.url}`);
   }
 
   // Validate JWT expiry format (basic check)
@@ -166,12 +156,11 @@ function validateConfig(cfg: Config): void {
  * - NODE_ENV: Environment name (default: 'development')
  * - JWT_SECRET: Secret for signing JWTs (required in production)
  * - JWT_EXPIRES_IN: Token expiry duration (default: '24h')
- * - INFLUXDB_HOST: InfluxDB host (default: 'localhost')
- * - INFLUXDB_PORT: InfluxDB port (default: 8086)
- * - INFLUXDB_DATABASE: Database name (default: 'cornwatch')
+ * - INFLUXDB_URL: InfluxDB URL (default: 'http://localhost:8086')
+ * - INFLUXDB_TOKEN: Authentication token (required)
+ * - INFLUXDB_ORG: Organization name (default: 'grainwatch')
+ * - INFLUXDB_BUCKET: Bucket name (default: 'grainwatch')
  * - INFLUXDB_MEASUREMENT: Measurement name (default: 'Temp')
- * - INFLUXDB_USERNAME: Database username (optional)
- * - INFLUXDB_PASSWORD: Database password (optional)
  * - USERS_FILE_PATH: Path to users JSON file (default: './data/users.json')
  */
 export const config: Config = {
@@ -182,12 +171,11 @@ export const config: Config = {
     expiresIn: getEnvVar('JWT_EXPIRES_IN', '24h'),
   },
   influxdb: {
-    host: getEnvVar('INFLUXDB_HOST', 'localhost'),
-    port: getEnvVarAsInt('INFLUXDB_PORT', 8086),
-    database: getEnvVar('INFLUXDB_DATABASE', 'cornwatch'),
+    url: getEnvVar('INFLUXDB_URL', 'http://localhost:8086'),
+    token: getEnvVar('INFLUXDB_TOKEN', ''),
+    org: getEnvVar('INFLUXDB_ORG', 'grainwatch'),
+    bucket: getEnvVar('INFLUXDB_BUCKET', 'grainwatch'),
     measurement: getEnvVar('INFLUXDB_MEASUREMENT', 'Temp'),
-    username: getOptionalEnvVar('INFLUXDB_USERNAME'),
-    password: getOptionalEnvVar('INFLUXDB_PASSWORD'),
   },
   usersFilePath: getEnvVar('USERS_FILE_PATH', './data/users.json'),
 };

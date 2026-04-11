@@ -93,6 +93,14 @@ When assigned a task:
    - Confirm logging is appropriate
    - Update documentation if needed
 
+6. **Commit Changes**: When work is considered complete:
+   - Create a git commit containing the changes
+   - A commit must contain only the changes that belong logically together
+   - A commit should belong to a task
+   - Use multiple commits for the changes, if required
+   - use the custom /git-commit-and-push command when committing changes
+   - do not commit any secrets. e.g. `.env` file
+
 ## Important Principles
 
 - **Security First**: Every endpoint must be authenticated and authorized appropriately. Users should never access data they don't own.

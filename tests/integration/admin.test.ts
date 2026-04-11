@@ -9,7 +9,7 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
-import { UserService } from '../../src/services/auth';
+import { UserService, AuthService } from '../../src/services/auth';
 import { setAuthService } from '../../src/middleware';
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
@@ -67,13 +67,15 @@ describe('Admin Endpoints', () => {
   const testUsersPath = '/tmp/test-admin-users.json';
 
   beforeAll(async () => {
-    setAuthService(null);
-
     // Create test user service with a clean file
     userService = new UserService(testUsersPath);
 
     // Clear any existing users
     await userService.saveUsers([]);
+
+    // Create auth service with our test user service
+    const authService = new AuthService(userService);
+    setAuthService(authService);
 
     // Create app
     app = createApp();
@@ -82,6 +84,7 @@ describe('Admin Endpoints', () => {
 
   beforeEach(async () => {
     // Reset users before each test
+    userService.clearCache();
     await userService.saveUsers([]);
 
     // Create admin user

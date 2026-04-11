@@ -2,10 +2,10 @@
  * InfluxDB service for querying grain stock sensor data.
  *
  * Provides methods for retrieving temperature, humidity, and device status
- * from the InfluxDB time-series database using InfluxQL queries.
+ * from the InfluxDB 2.x time-series database using InfluxQL queries via
+ * the v1 compatibility API.
  */
 
-import { InfluxDB, escape, ISingleHostConfig } from 'influx';
 import { config } from '../../config';
 import { Layer } from '../../models';
 
@@ -96,14 +96,29 @@ export function isValidWindowDuration(duration: string): duration is WindowDurat
 }
 
 /**
+ * InfluxDB query result interface.
+ */
+interface InfluxQueryResult {
+  results: Array<{
+    series?: Array<{
+      name: string;
+      columns: string[];
+      values: Array<Array<string | number | null>>;
+      tags?: Record<string, string>;
+    }>;
+  }>;
+}
+
+/**
  * InfluxDB service for querying grain stock measurement data.
  *
- * All queries use InfluxQL and the `influx` package (v5.9.3).
- * String values are escaped using the library's escape functions to prevent injection.
+ * Uses InfluxDB 2.x with InfluxQL queries via the v1 compatibility API.
+ * String values are escaped to prevent injection.
  */
 export class InfluxDBService {
-  private client: InfluxDB;
-  private readonly database: string;
+  private readonly url: string;
+  private readonly token: string;
+  private readonly bucket: string;
   private readonly measurement: string;
 
   /**
@@ -113,39 +128,54 @@ export class InfluxDBService {
    * which derives values from environment variables.
    */
   constructor() {
-    this.database = config.influxdb.database;
+    this.url = config.influxdb.url;
+    this.token = config.influxdb.token;
+    this.bucket = config.influxdb.bucket;
     this.measurement = config.influxdb.measurement;
+  }
 
-    const clientConfig: ISingleHostConfig = {
-      host: config.influxdb.host,
-      port: config.influxdb.port,
-      database: this.database,
-    };
+  /**
+   * Executes an InfluxQL query using the v1 compatibility API.
+   *
+   * @param query - InfluxQL query string
+   * @returns Query results
+   */
+  private async executeQuery(query: string): Promise<InfluxQueryResult> {
+    const queryUrl = `${this.url}/query?db=${encodeURIComponent(this.bucket)}&q=${encodeURIComponent(query)}`;
 
-    // Only add credentials if they are defined
-    if (config.influxdb.username) {
-      clientConfig.username = config.influxdb.username;
+    const response = await fetch(queryUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${this.token}`,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`InfluxDB query failed: ${response.statusText}`);
     }
-    if (config.influxdb.password) {
-      clientConfig.password = config.influxdb.password;
-    }
 
-    this.client = new InfluxDB(clientConfig);
+    return await response.json() as InfluxQueryResult;
   }
 
   /**
    * Escapes a string value for use in InfluxQL queries.
    *
-   * Uses the influx library's escape.stringLit function to properly
-   * escape single quotes and other special characters.
-   *
    * @param value - String value to escape
-   * @returns Escaped string (without surrounding quotes)
+   * @returns Escaped string
    */
   private escapeString(value: string): string {
-    // escape.stringLit adds surrounding quotes, but we need just the escaped content
-    // for use within our own quoted strings
     return value.replace(/'/g, "\\'");
+  }
+
+  /**
+   * Escapes a measurement name for use in InfluxQL queries.
+   *
+   * @param name - Measurement name to escape
+   * @returns Escaped measurement name with quotes
+   */
+  private escapeMeasurement(name: string): string {
+    return `"${name.replace(/"/g, '\\"')}"`;
   }
 
   /**
@@ -216,42 +246,45 @@ export class InfluxDBService {
         LAST("humidity") AS "humidity",
         LAST("batteryMV") AS "battery",
         LAST("measurementTimeS") AS "measurement_time"
-      FROM "${escape.measurement(this.measurement)}"
+      FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
         AND time > now() - 1h
       GROUP BY "device"
     `;
 
-    interface LatestReadingRow {
-      temp_top: number | null;
-      temp_mid: number | null;
-      temp_bottom: number | null;
-      humidity: number | null;
-      battery: number | null;
-      measurement_time: number | null;
-    }
+    const result = await this.executeQuery(query);
+    const deviceMap = new Map<string, DeviceReading>();
 
-    const results = await this.client.query<LatestReadingRow>(query);
-    const groups = results.groups();
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
 
-    return groups
-      .filter((group) => group.tags.device !== undefined)
-      .map((group) => {
-        const row = group.rows[0];
-        const measurementTimeS = row?.measurement_time;
+      for (const series of queryResult.series) {
+        const device = series.tags?.device;
+        if (!device || !series.values || series.values.length === 0) continue;
 
-        return {
-          device: group.tags.device as string,
-          tempTop: row?.temp_top ?? null,
-          tempMid: row?.temp_mid ?? null,
-          tempBottom: row?.temp_bottom ?? null,
-          humidity: row?.humidity ?? null,
-          battery: row?.battery ?? null,
+        const columnMap = new Map<string, number>();
+        series.columns.forEach((col, idx) => columnMap.set(col, idx));
+
+        const row = series.values[0];
+        if (!row) continue;
+
+        const measurementTimeS = row[columnMap.get('measurement_time') ?? -1] as number | null;
+
+        deviceMap.set(device, {
+          device,
+          tempTop: (row[columnMap.get('temp_top') ?? -1] as number | null) ?? null,
+          tempMid: (row[columnMap.get('temp_mid') ?? -1] as number | null) ?? null,
+          tempBottom: (row[columnMap.get('temp_bottom') ?? -1] as number | null) ?? null,
+          humidity: (row[columnMap.get('humidity') ?? -1] as number | null) ?? null,
+          battery: (row[columnMap.get('battery') ?? -1] as number | null) ?? null,
           measurementTime: measurementTimeS
             ? new Date(measurementTimeS * 1000).toISOString()
             : null,
-        };
-      });
+        });
+      }
+    }
+
+    return Array.from(deviceMap.values());
   }
 
   /**
@@ -293,7 +326,7 @@ export class InfluxDBService {
 
     const query = `
       SELECT mean("${field}") AS "value"
-      FROM "${escape.measurement(this.measurement)}"
+      FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
         AND time >= '${startTime}'
         AND time <= '${endTime}'
@@ -301,25 +334,31 @@ export class InfluxDBService {
       FILL(null)
     `;
 
-    interface TimeSeriesRow {
-      time: { toISOString(): string };
-      value: number | null;
-    }
-
-    const results = await this.client.query<TimeSeriesRow>(query);
-    const groups = results.groups();
+    const result = await this.executeQuery(query);
     const points: TimeSeriesPoint[] = [];
 
-    for (const group of groups) {
-      const deviceId = group.tags.device;
-      if (deviceId === undefined) continue;
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
 
-      for (const row of group.rows) {
-        points.push({
-          time: row.time.toISOString(),
-          device: deviceId,
-          value: row.value,
-        });
+      for (const series of queryResult.series) {
+        const device = series.tags?.device;
+        if (!device || !series.values) continue;
+
+        const columnMap = new Map<string, number>();
+        series.columns.forEach((col, idx) => columnMap.set(col, idx));
+
+        for (const row of series.values) {
+          const time = row[columnMap.get('time') ?? -1];
+          const value = row[columnMap.get('value') ?? -1] as number | null;
+
+          if (time) {
+            points.push({
+              time: new Date(time).toISOString(),
+              device,
+              value: value ?? null,
+            });
+          }
+        }
       }
     }
 
@@ -360,7 +399,7 @@ export class InfluxDBService {
 
     const query = `
       SELECT mean("humidity") AS "value"
-      FROM "${escape.measurement(this.measurement)}"
+      FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
         AND time >= '${startTime}'
         AND time <= '${endTime}'
@@ -368,25 +407,31 @@ export class InfluxDBService {
       FILL(null)
     `;
 
-    interface TimeSeriesRow {
-      time: { toISOString(): string };
-      value: number | null;
-    }
-
-    const results = await this.client.query<TimeSeriesRow>(query);
-    const groups = results.groups();
+    const result = await this.executeQuery(query);
     const points: TimeSeriesPoint[] = [];
 
-    for (const group of groups) {
-      const deviceId = group.tags.device;
-      if (deviceId === undefined) continue;
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
 
-      for (const row of group.rows) {
-        points.push({
-          time: row.time.toISOString(),
-          device: deviceId,
-          value: row.value,
-        });
+      for (const series of queryResult.series) {
+        const device = series.tags?.device;
+        if (!device || !series.values) continue;
+
+        const columnMap = new Map<string, number>();
+        series.columns.forEach((col, idx) => columnMap.set(col, idx));
+
+        for (const row of series.values) {
+          const time = row[columnMap.get('time') ?? -1];
+          const value = row[columnMap.get('value') ?? -1] as number | null;
+
+          if (time) {
+            points.push({
+              time: new Date(time).toISOString(),
+              device,
+              value: value ?? null,
+            });
+          }
+        }
       }
     }
 
@@ -405,16 +450,30 @@ export class InfluxDBService {
    * // Returns: ['corn-watch-1', 'corn-watch-2']
    */
   async getDeviceGroups(): Promise<string[]> {
-    const query = `SHOW TAG VALUES FROM "${escape.measurement(this.measurement)}" WITH KEY = "device-group"`;
+    const query = `SHOW TAG VALUES FROM ${this.escapeMeasurement(this.measurement)} WITH KEY = "device-group"`;
 
-    interface TagValueRow {
-      key: string;
-      value: string;
+    const result = await this.executeQuery(query);
+    const groups: string[] = [];
+
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
+
+      for (const series of queryResult.series) {
+        if (!series.values) continue;
+
+        const columnMap = new Map<string, number>();
+        series.columns.forEach((col, idx) => columnMap.set(col, idx));
+
+        for (const row of series.values) {
+          const value = row[columnMap.get('value') ?? -1];
+          if (typeof value === 'string') {
+            groups.push(value);
+          }
+        }
+      }
     }
 
-    const results = await this.client.query<TagValueRow>(query);
-
-    return results.map((row) => row.value);
+    return groups;
   }
 
   /**
@@ -456,34 +515,39 @@ export class InfluxDBService {
         MAX("${field}") AS "max",
         MEAN("${field}") AS "avg",
         LAST("${field}") AS "current"
-      FROM "${escape.measurement(this.measurement)}"
+      FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
         AND time >= now() - ${hours}h
       GROUP BY "device"
     `;
 
-    interface StatsRow {
-      min: number | null;
-      max: number | null;
-      avg: number | null;
-      current: number | null;
+    const result = await this.executeQuery(query);
+    const deviceMap = new Map<string, SummaryStats>();
+
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
+
+      for (const series of queryResult.series) {
+        const device = series.tags?.device;
+        if (!device || !series.values || series.values.length === 0) continue;
+
+        const columnMap = new Map<string, number>();
+        series.columns.forEach((col, idx) => columnMap.set(col, idx));
+
+        const row = series.values[0];
+        if (!row) continue;
+
+        deviceMap.set(device, {
+          device,
+          min: (row[columnMap.get('min') ?? -1] as number | null) ?? null,
+          max: (row[columnMap.get('max') ?? -1] as number | null) ?? null,
+          avg: (row[columnMap.get('avg') ?? -1] as number | null) ?? null,
+          current: (row[columnMap.get('current') ?? -1] as number | null) ?? null,
+        });
+      }
     }
 
-    const results = await this.client.query<StatsRow>(query);
-    const groups = results.groups();
-
-    return groups
-      .filter((group) => group.tags.device !== undefined)
-      .map((group) => {
-        const row = group.rows[0];
-        return {
-          device: group.tags.device as string,
-          min: row?.min ?? null,
-          max: row?.max ?? null,
-          avg: row?.avg ?? null,
-          current: row?.current ?? null,
-        };
-      });
+    return Array.from(deviceMap.values());
   }
 
   /**
@@ -507,28 +571,36 @@ export class InfluxDBService {
 
     const query = `
       SELECT LAST("batteryMV") AS "battery"
-      FROM "${escape.measurement(this.measurement)}"
+      FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
         AND time > now() - 1h
       GROUP BY "device"
     `;
 
-    interface BatteryRow {
-      battery: number | null;
+    const result = await this.executeQuery(query);
+    const deviceMap = new Map<string, BatteryStatus>();
+
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
+
+      for (const series of queryResult.series) {
+        const device = series.tags?.device;
+        if (!device || !series.values || series.values.length === 0) continue;
+
+        const columnMap = new Map<string, number>();
+        series.columns.forEach((col, idx) => columnMap.set(col, idx));
+
+        const row = series.values[0];
+        if (!row) continue;
+
+        deviceMap.set(device, {
+          device,
+          battery: (row[columnMap.get('battery') ?? -1] as number | null) ?? null,
+        });
+      }
     }
 
-    const results = await this.client.query<BatteryRow>(query);
-    const groups = results.groups();
-
-    return groups
-      .filter((group) => group.tags.device !== undefined)
-      .map((group) => {
-        const row = group.rows[0];
-        return {
-          device: group.tags.device as string,
-          battery: row?.battery ?? null,
-        };
-      });
+    return Array.from(deviceMap.values());
   }
 
   /**
@@ -541,13 +613,9 @@ export class InfluxDBService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      const pingResults = await this.client.ping(5000);
-      const onlineHosts = pingResults.filter((host) => host.online);
-
-      if (onlineHosts.length === 0) {
-        throw new Error('No InfluxDB hosts are online');
-      }
-
+      // Try a simple query to test the connection
+      const query = `SHOW MEASUREMENTS LIMIT 1`;
+      await this.executeQuery(query);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

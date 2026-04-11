@@ -128,12 +128,18 @@ export class UserService {
   /**
    * Loads users from the JSON file.
    *
+   * Returns cached users if available, otherwise reads from file.
    * Creates an empty users array if the file does not exist.
    *
    * @returns Array of user objects
    * @throws UserServiceError if file reading fails
    */
   async loadUsers(): Promise<User[]> {
+    // Return cached users if available
+    if (this.usersCache !== null) {
+      return this.usersCache;
+    }
+
     const absolutePath = this.getAbsolutePath();
 
     try {

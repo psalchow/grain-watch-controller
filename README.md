@@ -66,6 +66,27 @@ npm run build
 npm start
 ```
 
+### First-Time Setup
+
+When you first start the application, a default admin user is automatically created if no users exist:
+
+```
+Username: admin
+Password: changeme123
+```
+
+**Important:** Change this default password immediately after first login by creating a new admin user and deleting the default one, or updating it through the admin API.
+
+```bash
+# Login with default credentials
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "changeme123"}'
+
+# Use the returned token to create a new admin user with a secure password
+# Then delete the default admin user
+```
+
 ### Docker Deployment
 
 ```bash
@@ -98,8 +119,13 @@ docker-compose up -d
 - Password hashing with bcrypt
 
 ✅ **Testing**
-- 251 passing unit and integration tests
+- 295 passing unit and integration tests
 - 97% code coverage
+
+✅ **Bootstrap**
+- Automatic default admin user creation on first startup
+- Seamless setup for development and production
+- Idempotent initialization (safe to run multiple times)
 
 ✅ **Deployment**
 - Docker configuration
@@ -163,20 +189,19 @@ Required environment variables (see `.env.example` for full list):
 PORT=3000
 NODE_ENV=production
 
-# InfluxDB
-INFLUX_HOST=influxdb
-INFLUX_PORT=8086
-INFLUX_DATABASE=cornwatch
-INFLUX_MEASUREMENT=Temp
-INFLUX_USERNAME=your-username
-INFLUX_PASSWORD=your-password
+# InfluxDB 2.x
+INFLUXDB_URL=http://influxdb:8086
+INFLUXDB_TOKEN=your-influxdb-token
+INFLUXDB_ORG=grainwatch
+INFLUXDB_BUCKET=grainwatch
+INFLUXDB_MEASUREMENT=Temp
 
 # JWT
 JWT_SECRET=your-secret-key-change-this-in-production
 JWT_EXPIRES_IN=24h
 
 # User Storage
-USER_FILE_PATH=./data/users.json
+USERS_FILE_PATH=./data/users.json
 ```
 
 ## Deployment

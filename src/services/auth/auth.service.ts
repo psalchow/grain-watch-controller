@@ -116,6 +116,15 @@ export class AuthService {
   }
 
   /**
+   * Gets the UserService instance used by this AuthService.
+   *
+   * @returns UserService instance
+   */
+  getUserService(): UserService {
+    return this.userService;
+  }
+
+  /**
    * Generates a JWT token for a user.
    *
    * The token includes user ID, username, role, and stock access claims.

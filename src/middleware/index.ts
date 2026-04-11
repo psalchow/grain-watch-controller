@@ -10,6 +10,7 @@ export {
   requireRole,
   requireStockAccess,
   setAuthService,
+  getAuthService,
 } from './auth.middleware';
 
 // Error handling middleware

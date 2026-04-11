@@ -325,15 +325,15 @@ class InfluxDBService {
   private measurement: string;
 
   constructor() {
-    this.database = process.env.INFLUX_DATABASE || 'cornwatch';
-    this.measurement = process.env.INFLUX_MEASUREMENT || 'Temp';
+    this.database = process.env.INFLUXDB_DATABASE || 'cornwatch';
+    this.measurement = process.env.INFLUXDB_MEASUREMENT || 'Temp';
 
     this.client = new InfluxDB({
-      host: process.env.INFLUX_HOST || 'localhost',
-      port: parseInt(process.env.INFLUX_PORT || '8086'),
+      host: process.env.INFLUXDB_HOST || 'localhost',
+      port: parseInt(process.env.INFLUXDB_PORT || '8086'),
       database: this.database,
-      username: process.env.INFLUX_USERNAME,
-      password: process.env.INFLUX_PASSWORD,
+      username: process.env.INFLUXDB_USERNAME,
+      password: process.env.INFLUXDB_PASSWORD,
     });
   }
 

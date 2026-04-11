@@ -268,7 +268,7 @@ export function errorHandler(
   error: Error,
   req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _next: NextFunction
 ): void {
   logError(error, req);
@@ -316,7 +316,7 @@ export function errorHandler(
 export function notFoundHandler(
   req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   _next: NextFunction
 ): void {
   const response: ErrorResponse = {
