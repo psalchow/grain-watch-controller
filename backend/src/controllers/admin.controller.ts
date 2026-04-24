@@ -7,7 +7,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { UserService, UserServiceError, CreateUserData, UpdateUserData } from '../services/auth';
+import { UserService, UserServiceError, CreateUserData, UpdateUserData } from '../services';
 import { CreateUserRequest } from '../middleware';
 
 /**
@@ -34,7 +34,7 @@ export class AdminController {
    *
    * Returns all users with their profiles (excluding password hashes).
    *
-   * @param req - Express request with authenticated admin user
+   * @param _req - Express request with authenticated admin user
    * @param res - Express response object
    * @param next - Express next function for error handling
    *
