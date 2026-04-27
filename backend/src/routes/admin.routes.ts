@@ -16,8 +16,8 @@ import {
   validateParams,
   createUserSchema,
   userIdParamsSchema,
+  getAuthService,
 } from '../middleware';
-import { authService } from '../services';
 import { z } from 'zod';
 
 /**
@@ -54,6 +54,7 @@ const updateStatusSchema = z.object({
  */
 export function createAdminRouter(): Router {
   const router = Router();
+  const authService = getAuthService();
   const userService = authService.getUserService();
   const controller = new AdminController(userService);
 

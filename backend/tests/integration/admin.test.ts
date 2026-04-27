@@ -25,12 +25,11 @@ jest.mock('../../src/config', () => ({
       expiresIn: '24h',
     },
     influxdb: {
-      host: 'localhost',
-      port: 8086,
-      database: 'testdb',
+      url: 'http://localhost:8086',
+      token: 'test-token',
+      org: 'test-org',
+      bucket: 'testdb',
       measurement: 'Temp',
-      username: undefined,
-      password: undefined,
     },
   },
 }));

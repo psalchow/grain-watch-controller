@@ -24,6 +24,13 @@ jest.mock('../../../src/config', () => ({
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
     },
+    influxdb: {
+      url: 'http://localhost:8086',
+      token: 'test-token',
+      org: 'test-org',
+      bucket: 'testdb',
+      measurement: 'Temp',
+    },
   },
 }));
 
