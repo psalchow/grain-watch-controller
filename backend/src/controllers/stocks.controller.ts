@@ -6,18 +6,24 @@ interface StockMetadata {
   name: string;
   description: string;
   deviceCount: number;
+  deviceGroup: string;
+  active: boolean;
 }
 
 const STOCK_METADATA: Record<string, StockMetadata> = {
-  'corn-watch-1': {
-    name: 'Grain Stock 1',
-    description: 'Main storage facility',
+  'grain-watch-1': {
+    name: 'Halle 8',
+    description: 'Lagerhalle 8',
     deviceCount: 5,
+    deviceGroup: 'corn-watch-1',
+    active: true,
   },
-  'corn-watch-2': {
-    name: 'Grain Stock 2',
-    description: 'Secondary storage',
+  'grain-watch-2': {
+    name: 'Halle 7',
+    description: 'Lagerhalle 7 - inaktiv',
     deviceCount: 5,
+    deviceGroup: 'corn-watch-2',
+    active: false,
   },
 };
 
@@ -46,9 +52,7 @@ export class StocksController {
         return;
       }
 
-      const deviceGroups = await this.influxService.getDeviceGroups();
-
-      const accessibleStocks = deviceGroups.filter((stockId) => {
+      const accessibleStocks = Object.keys(STOCK_METADATA).filter((stockId) => {
         if (user.stockAccess.includes('*')) {
           return true;
         }
@@ -62,7 +66,7 @@ export class StocksController {
           name: metadata?.name ?? stockId,
           description: metadata?.description ?? '',
           deviceCount: metadata?.deviceCount ?? 5,
-          active: true,
+          active: metadata?.active ?? false,
         };
       });
 

@@ -116,46 +116,6 @@ describe('InfluxDBService', () => {
     });
   });
 
-  describe('getDeviceGroups', () => {
-    it('should return list of device groups', async () => {
-      const mockResponse = {
-        results: [{
-          series: [{
-            name: 'Temp',
-            columns: ['key', 'value'],
-            values: [
-              ['device-group', 'corn-watch-1'],
-              ['device-group', 'corn-watch-2'],
-            ],
-          }],
-        }],
-      };
-
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => mockResponse,
-      });
-
-      const result = await service.getDeviceGroups();
-
-      const callUrl = mockFetch.mock.calls[0][0] as string;
-      const decodedUrl = decodeURIComponent(callUrl);
-      expect(decodedUrl).toContain('SHOW TAG VALUES');
-      expect(result).toEqual(['corn-watch-1', 'corn-watch-2']);
-    });
-
-    it('should return empty array when no device groups exist', async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ results: [] }),
-      });
-
-      const result = await service.getDeviceGroups();
-
-      expect(result).toEqual([]);
-    });
-  });
-
   describe('testConnection', () => {
     it('should return true when at least one host is online', async () => {
       mockFetch.mockResolvedValue({

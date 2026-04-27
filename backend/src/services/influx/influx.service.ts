@@ -187,44 +187,6 @@ export class InfluxDBService {
   }
 
   /**
-   * Retrieves all available device groups (grain stocks).
-   *
-   * Returns a list of unique device group identifiers found in the database.
-   *
-   * @returns Array of device group identifiers
-   *
-   * @example
-   * const stocks = await influxService.getDeviceGroups();
-   * // Returns: ['corn-watch-1', 'corn-watch-2']
-   */
-  async getDeviceGroups(): Promise<string[]> {
-    const query = `SHOW TAG VALUES FROM ${this.escapeMeasurement(this.measurement)} WITH KEY = "device-group"`;
-
-    const result = await this.executeQuery(query);
-    const groups: string[] = [];
-
-    for (const queryResult of result.results) {
-      if (!queryResult.series) continue;
-
-      for (const series of queryResult.series) {
-        if (!series.values) continue;
-
-        const columnMap = new Map<string, number>();
-        series.columns.forEach((col, idx) => columnMap.set(col, idx));
-
-        for (const row of series.values) {
-          const value = row[columnMap.get('value') ?? -1];
-          if (typeof value === 'string') {
-            groups.push(value);
-          }
-        }
-      }
-    }
-
-    return groups;
-  }
-
-  /**
    * Tests the connection to InfluxDB.
    *
    * Attempts to ping the database and returns connection status.
