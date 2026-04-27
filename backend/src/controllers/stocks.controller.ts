@@ -86,8 +86,28 @@ export class StocksController {
   ): Promise<void> {
     try {
       const stockId = req.params['stockId'] as string;
+      const user = req.user;
 
-      const readings = await this.influxService.getLatestReadings(stockId);
+      if (!user) {
+        res.status(401).json({
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
+        });
+        return;
+      }
+
+      const metadata = STOCK_METADATA[stockId];
+      if (!metadata) {
+        throw new NotFoundError(`Stock not found: ${stockId}`);
+      }
+
+      if (!user.stockAccess.includes('*') && !user.stockAccess.includes(stockId)) {
+        res.status(403).json({
+          error: { code: 'FORBIDDEN', message: `Access denied to stock: ${stockId}` },
+        });
+        return;
+      }
+
+      const readings = await this.influxService.getLatestReadings(metadata.deviceGroup);
 
       if (readings.length === 0) {
         throw new NotFoundError(`No readings found for stock: ${stockId}`);
@@ -100,8 +120,6 @@ export class StocksController {
           ? reading.measurementTime
           : latest;
       }, null as string | null);
-
-      const metadata = STOCK_METADATA[stockId];
 
       const devices = readings.map((reading) => ({
         device: reading.device,

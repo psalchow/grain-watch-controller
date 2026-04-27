@@ -36,16 +36,13 @@ jest.mock('../../src/config', () => ({
 
 // Mock InfluxDB service
 jest.mock('../../src/services/influx/influx.service', () => {
-  const mockGetDeviceGroups = jest.fn();
   const mockGetLatestReadings = jest.fn();
 
   return {
     InfluxDBService: jest.fn().mockImplementation(() => ({
-      getDeviceGroups: mockGetDeviceGroups,
       getLatestReadings: mockGetLatestReadings,
       testConnection: jest.fn().mockResolvedValue(true),
     })),
-    __mockGetDeviceGroups: mockGetDeviceGroups,
     __mockGetLatestReadings: mockGetLatestReadings,
   };
 });
@@ -68,9 +65,7 @@ describe('Stock Endpoints', () => {
   let viewerToken: string;
   let restrictedViewerToken: string;
 
-  // Get mock functions from the mocked module
   const mockedInflux = jest.requireMock('../../src/services/influx/influx.service');
-  const mockGetDeviceGroups = mockedInflux.__mockGetDeviceGroups;
   const mockGetLatestReadings = mockedInflux.__mockGetLatestReadings;
 
   beforeAll(() => {
@@ -88,14 +83,14 @@ describe('Stock Endpoints', () => {
       userId: 'usr_002',
       username: 'viewer',
       role: 'viewer',
-      stockAccess: ['corn-watch-1', 'corn-watch-2'],
+      stockAccess: ['grain-watch-1', 'grain-watch-2'],
     });
 
     restrictedViewerToken = createToken({
       userId: 'usr_003',
       username: 'restricted',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      stockAccess: ['grain-watch-1'],
     });
 
     // Create app
@@ -107,8 +102,6 @@ describe('Stock Endpoints', () => {
     jest.clearAllMocks();
 
     // Set up default mock responses
-    mockGetDeviceGroups.mockResolvedValue(['corn-watch-1', 'corn-watch-2']);
-
     mockGetLatestReadings.mockResolvedValue([
       {
         device: '1.1',
@@ -158,7 +151,7 @@ describe('Stock Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.stocks).toHaveLength(1);
-      expect(response.body.stocks[0].id).toBe('corn-watch-1');
+      expect(response.body.stocks[0].id).toBe('grain-watch-1');
     });
 
     it('should return 401 without authentication', async () => {
@@ -179,11 +172,11 @@ describe('Stock Endpoints', () => {
   describe('GET /api/v1/stocks/:stockId/latest', () => {
     it('should return latest readings for authorised stock', async () => {
       const response = await request(app)
-        .get('/api/v1/stocks/corn-watch-1/latest')
+        .get('/api/v1/stocks/grain-watch-1/latest')
         .set('Authorization', `Bearer ${viewerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('stockId', 'corn-watch-1');
+      expect(response.body).toHaveProperty('stockId', 'grain-watch-1');
       expect(response.body).toHaveProperty('stockName');
       expect(response.body).toHaveProperty('timestamp');
       expect(response.body).toHaveProperty('devices');
@@ -199,7 +192,7 @@ describe('Stock Endpoints', () => {
 
     it('should return 403 for unauthorised stock', async () => {
       const response = await request(app)
-        .get('/api/v1/stocks/corn-watch-2/latest')
+        .get('/api/v1/stocks/grain-watch-2/latest')
         .set('Authorization', `Bearer ${restrictedViewerToken}`);
 
       expect(response.status).toBe(403);
@@ -207,7 +200,7 @@ describe('Stock Endpoints', () => {
 
     it('should allow admin access to any stock', async () => {
       const response = await request(app)
-        .get('/api/v1/stocks/corn-watch-2/latest')
+        .get('/api/v1/stocks/grain-watch-2/latest')
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(200);
@@ -217,7 +210,7 @@ describe('Stock Endpoints', () => {
       mockGetLatestReadings.mockResolvedValue([]);
 
       const response = await request(app)
-        .get('/api/v1/stocks/corn-watch-1/latest')
+        .get('/api/v1/stocks/grain-watch-1/latest')
         .set('Authorization', `Bearer ${viewerToken}`);
 
       expect(response.status).toBe(404);
@@ -225,7 +218,7 @@ describe('Stock Endpoints', () => {
 
     it('should return 401 without authentication', async () => {
       const response = await request(app)
-        .get('/api/v1/stocks/corn-watch-1/latest');
+        .get('/api/v1/stocks/grain-watch-1/latest');
 
       expect(response.status).toBe(401);
     });
