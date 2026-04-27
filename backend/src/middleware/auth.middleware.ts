@@ -6,7 +6,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { AuthService, AuthenticationError } from '../services/auth';
+import { AuthService, AuthenticationError, authService as defaultAuthService } from '../services';
 import { UserRole, UserProfile } from '../models';
 
 // Import the Express type augmentation to ensure the Request.user property is recognised
@@ -14,26 +14,24 @@ import '../types/express.d.ts';
 
 /**
  * Shared AuthService instance for middleware.
+ * Defaults to the singleton from services/index.ts.
  * Can be overridden for testing purposes via setAuthService.
  */
 let authServiceInstance: AuthService | null = null;
 
 /**
- * Gets the AuthService instance, creating one if necessary.
+ * Gets the AuthService instance, falling back to the shared singleton.
  *
  * @returns AuthService instance
  */
 export function getAuthService(): AuthService {
-  if (!authServiceInstance) {
-    authServiceInstance = new AuthService();
-  }
-  return authServiceInstance;
+  return authServiceInstance ?? defaultAuthService;
 }
 
 /**
  * Sets a custom AuthService instance (primarily for testing).
  *
- * @param service - AuthService instance to use, or null to reset
+ * @param service - AuthService instance to use, or null to reset to default
  */
 export function setAuthService(service: AuthService | null): void {
   authServiceInstance = service;

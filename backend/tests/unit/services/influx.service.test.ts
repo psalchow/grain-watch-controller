@@ -5,7 +5,7 @@
  * and result transformation without requiring a live database connection.
  */
 
-import { InfluxDBService } from '../../../src/services/influx';
+import { InfluxDBService } from '../../../src/services';
 
 // Mock the config module
 jest.mock('../../../src/config', () => ({
@@ -17,6 +17,9 @@ jest.mock('../../../src/config', () => ({
       bucket: 'testdb',
       measurement: 'Temp',
     },
+    jwt: {
+      secret: 'jwt-secret',
+    }
   },
 }));
 
