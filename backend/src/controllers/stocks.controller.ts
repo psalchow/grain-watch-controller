@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { InfluxDBService } from '../services/influx';
+import { InfluxDBService } from '../services';
 import { NotFoundError } from '../middleware';
+import { hasStockAccess } from '../models';
 
 interface StockMetadata {
   name: string;
@@ -40,24 +41,11 @@ export class StocksController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = req.user;
+      const user = req.user!;
 
-      if (!user) {
-        res.status(401).json({
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'Authentication required',
-          },
-        });
-        return;
-      }
-
-      const accessibleStocks = Object.keys(STOCK_METADATA).filter((stockId) => {
-        if (user.stockAccess.includes('*')) {
-          return true;
-        }
-        return user.stockAccess.includes(stockId);
-      });
+      const accessibleStocks = Object.keys(STOCK_METADATA).filter((stockId) =>
+        hasStockAccess(user, stockId)
+      );
 
       const stocks = accessibleStocks.map((stockId) => {
         const metadata = STOCK_METADATA[stockId];
@@ -86,25 +74,10 @@ export class StocksController {
   ): Promise<void> {
     try {
       const stockId = req.params['stockId'] as string;
-      const user = req.user;
-
-      if (!user) {
-        res.status(401).json({
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' },
-        });
-        return;
-      }
 
       const metadata = STOCK_METADATA[stockId];
       if (!metadata) {
         throw new NotFoundError(`Stock not found: ${stockId}`);
-      }
-
-      if (!user.stockAccess.includes('*') && !user.stockAccess.includes(stockId)) {
-        res.status(403).json({
-          error: { code: 'FORBIDDEN', message: `Access denied to stock: ${stockId}` },
-        });
-        return;
       }
 
       const readings = await this.influxService.getLatestReadings(metadata.deviceGroup);

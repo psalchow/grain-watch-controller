@@ -7,7 +7,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { AuthService, AuthenticationError, authService as defaultAuthService } from '../services';
-import { UserRole, UserProfile } from '../models';
+import { UserRole, UserProfile, hasStockAccess } from '../models';
 
 // Import the Express type augmentation to ensure the Request.user property is recognised
 import '../types/express.d.ts';
@@ -192,14 +192,7 @@ export function requireStockAccess(
     return;
   }
 
-  // Check if user has wildcard access (can access all stocks)
-  if (user.stockAccess.includes('*')) {
-    next();
-    return;
-  }
-
-  // Check if user has explicit access to this stock
-  if (!user.stockAccess.includes(stockId)) {
+  if (!hasStockAccess(user, stockId)) {
     res.status(403).json({
       statusCode: 403,
       message: `Access denied to stock: ${stockId}`,

@@ -3,6 +3,7 @@ export {
   UserProfile,
   UserRole,
   JWTPayload,
+  hasStockAccess,
 } from './user.model';
 
 export {

@@ -130,18 +130,7 @@ export class AuthController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = req.user;
-
-      if (!user) {
-        res.status(401).json({
-          error: {
-            code: 'UNAUTHORIZED',
-            message: 'Authentication required',
-            details: 'A valid token must be provided in the Authorization header',
-          },
-        });
-        return;
-      }
+      const user = req.user!;
 
       const refreshResult = await this.authService.refreshToken(user.id);
 

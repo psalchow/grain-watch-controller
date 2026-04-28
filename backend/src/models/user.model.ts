@@ -66,6 +66,17 @@ export interface UserProfile {
 }
 
 /**
+ * Checks whether a user has access to a specific stock.
+ *
+ * @param user - User profile to check
+ * @param stockId - Stock identifier to check access for
+ * @returns true if the user has wildcard or explicit access
+ */
+export function hasStockAccess(user: UserProfile, stockId: string): boolean {
+  return user.stockAccess.includes('*') || user.stockAccess.includes(stockId);
+}
+
+/**
  * JWT token payload structure.
  * Contains claims embedded in the authentication token.
  */
