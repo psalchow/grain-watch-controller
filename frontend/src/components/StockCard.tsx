@@ -12,8 +12,9 @@ export function StockCard({ stock, onClick }: StockCardProps) {
   return (
     <Card
       className={cn(
-        'transition-all hover:shadow-md',
-        onClick && 'cursor-pointer hover:border-primary/50'
+        'transition-all',
+        onClick && 'cursor-pointer hover:shadow-md hover:border-primary/50',
+        !onClick && 'opacity-60'
       )}
       onClick={onClick}
     >

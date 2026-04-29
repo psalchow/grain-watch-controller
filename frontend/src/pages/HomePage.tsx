@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { StockCard } from '@/components/StockCard';
@@ -7,6 +8,7 @@ import { stocksApi } from '@/api';
 import { GrainStock } from '@/types/api';
 
 export default function HomePage() {
+  const navigate = useNavigate();
   const [stocks, setStocks] = useState<GrainStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,10 +88,7 @@ export default function HomePage() {
               <StockCard
                 key={stock.id}
                 stock={stock}
-                onClick={() => {
-                  // TODO: Navigate to stock detail page
-                  console.warn('Stock clicked:', stock.id);
-                }}
+                onClick={stock.active ? () => navigate(`/stocks/${stock.id}`) : undefined}
               />
             ))}
           </div>
