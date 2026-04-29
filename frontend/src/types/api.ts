@@ -40,13 +40,13 @@ export interface StocksResponse {
 export interface DeviceReading {
   device: string;
   temperature: {
-    top: number;
-    mid: number;
-    bottom: number;
+    top: number | null;
+    mid: number | null;
+    bottom: number | null;
   };
-  humidity: number;
-  batteryMV: number;
-  lastMeasurement: string; // ISO 8601
+  humidity: number | null;
+  batteryMV: number | null;
+  lastMeasurement: string | null; // ISO 8601
 }
 
 export interface LatestReadingsResponse {
