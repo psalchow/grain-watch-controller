@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
@@ -15,7 +15,7 @@ export default function StockDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async (showRefreshing = false) => {
+  const loadData = useCallback(async (showRefreshing = false) => {
     if (!stockId) return;
     if (showRefreshing) setRefreshing(true);
     setError(null);
@@ -29,11 +29,11 @@ export default function StockDetailPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [stockId]);
 
   useEffect(() => {
     loadData();
-  }, [stockId]);
+  }, [loadData]);
 
   return (
     <div className="min-h-screen bg-background">
