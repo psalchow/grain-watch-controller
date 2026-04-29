@@ -147,7 +147,7 @@ export class InfluxDBService {
         LAST("measurementTimeS") AS "measurement_time"
       FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
-        AND time > now() - 1h
+        AND time > now() - 26w
       GROUP BY "device"
     `;
 
