@@ -61,6 +61,24 @@ describe('getRange', () => {
     expect(range.fromUtc.toISOString()).toBe('2026-03-29T22:00:00.000Z');
   });
 
+  it('handles the DST transition from CEST to CET (last Sunday of October)', () => {
+    // 2026-10-25T05:00:00Z is Sunday 07:00 CEST in Berlin, inside the ISO week
+    // that started Mon 2026-10-19 00:00 CEST. The DST fall-back to CET happens
+    // later that same Sunday, so the week boundary itself is in CEST.
+    const now = new Date('2026-10-25T05:00:00Z');
+    const range = getRange('week', now);
+    // Mon 2026-10-19 00:00 +02:00 (CEST) = 2026-10-18T22:00 UTC
+    expect(range.fromUtc.toISOString()).toBe('2026-10-18T22:00:00.000Z');
+  });
+
+  it('computes correct local midnight on the fall-back day itself', () => {
+    // 2026-10-25T05:00:00Z is 06:00 CET on the fall-back Sunday.
+    const now = new Date('2026-10-25T05:00:00Z');
+    const range = getRange('day', now);
+    // Local midnight 2026-10-25T00:00 +02:00 (CEST, before 03:00 CEST → 02:00 CET transition)
+    expect(range.fromUtc.toISOString()).toBe('2026-10-24T22:00:00.000Z');
+  });
+
   it('treats local Sunday as the last day of the ISO week', () => {
     // 2026-05-24 is a Sunday in Berlin. Week should still start Monday 2026-05-18.
     const now = new Date('2026-05-24T20:00:00Z');
