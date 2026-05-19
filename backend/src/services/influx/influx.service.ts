@@ -34,6 +34,25 @@ export interface DeviceReading {
   measurementTime: string | null;
 }
 
+/** Single aggregated data point in a series. */
+export interface SeriesPoint {
+  /** ISO 8601 UTC timestamp of the bucket start. */
+  t: string;
+  /** Mean value in the bucket, or null if no data was recorded. */
+  v: number | null;
+}
+
+/** Per-layer aggregated history readings keyed by device id. */
+export interface HistoryReadings {
+  temperature: {
+    top: Map<string, SeriesPoint[]>;
+    mid: Map<string, SeriesPoint[]>;
+    bottom: Map<string, SeriesPoint[]>;
+  };
+  /** Present only when humidity was requested. */
+  humidity?: Map<string, SeriesPoint[]>;
+}
+
 /**
  * InfluxDB query result interface.
  */
@@ -184,6 +203,98 @@ export class InfluxDBService {
     }
 
     return Array.from(deviceMap.values());
+  }
+
+  /**
+   * Retrieves aggregated history for all devices in a stock.
+   *
+   * Runs one query per requested field in parallel. Each query
+   * aggregates by the supplied interval, grouped by device, with
+   * `fill(null)` to surface gaps.
+   */
+  async getHistory(
+    deviceGroup: string,
+    fromUtc: Date,
+    toUtc: Date,
+    intervalSeconds: number,
+    includeHumidity: boolean,
+  ): Promise<HistoryReadings> {
+    const escapedGroup = this.escapeString(deviceGroup);
+    const measurement = this.escapeMeasurement(this.measurement);
+    const fromIso = fromUtc.toISOString();
+    const toIso = toUtc.toISOString();
+    const interval = `${intervalSeconds}s`;
+
+    const buildQuery = (field: string): string => `
+      SELECT MEAN(${this.escapeMeasurement(field)}) AS "mean"
+      FROM ${measurement}
+      WHERE "device-group" = '${escapedGroup}'
+        AND time >= '${fromIso}'
+        AND time <= '${toIso}'
+      GROUP BY time(${interval}), "device" fill(null)
+    `;
+
+    const runLayer = (field: string): Promise<Map<string, SeriesPoint[]>> =>
+      this.executeQuery(buildQuery(field)).then((r) =>
+        this.parseHistorySeries(r),
+      );
+
+    const queries: [
+      Promise<Map<string, SeriesPoint[]>>,
+      Promise<Map<string, SeriesPoint[]>>,
+      Promise<Map<string, SeriesPoint[]>>,
+    ] = [runLayer('temp-top'), runLayer('temp-mid'), runLayer('temp-bottom')];
+
+    let humidityPromise: Promise<Map<string, SeriesPoint[]>> | undefined;
+    if (includeHumidity) {
+      humidityPromise = runLayer('humidity');
+    }
+
+    const [top, mid, bottom] = await Promise.all(queries);
+    const humidity = humidityPromise ? await humidityPromise : undefined;
+
+    const result: HistoryReadings = {
+      temperature: { top, mid, bottom },
+    };
+    if (humidity) {
+      result.humidity = humidity;
+    }
+    return result;
+  }
+
+  /** Transforms an Influx query result into a per-device map of points. */
+  private parseHistorySeries(
+    result: InfluxQueryResult,
+  ): Map<string, SeriesPoint[]> {
+    const out = new Map<string, SeriesPoint[]>();
+
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
+
+      for (const series of queryResult.series) {
+        const device = series.tags?.device;
+        if (!device) continue;
+
+        const timeIdx = series.columns.indexOf('time');
+        const meanIdx = series.columns.indexOf('mean');
+        if (timeIdx === -1 || meanIdx === -1) continue;
+
+        const points: SeriesPoint[] = (series.values ?? []).map((row) => {
+          const rawTime = row[timeIdx];
+          const rawValue = row[meanIdx];
+          const t =
+            typeof rawTime === 'string'
+              ? new Date(rawTime).toISOString()
+              : new Date(Number(rawTime)).toISOString();
+          const v = typeof rawValue === 'number' ? rawValue : null;
+          return { t, v };
+        });
+
+        out.set(device, points);
+      }
+    }
+
+    return out;
   }
 
   /**

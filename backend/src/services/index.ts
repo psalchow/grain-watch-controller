@@ -13,4 +13,4 @@ export type {
   LoginResult,
   DecodedToken,
 } from './auth';
-export type { DeviceReading } from './influx';
+export type { DeviceReading, SeriesPoint, HistoryReadings } from './influx';
