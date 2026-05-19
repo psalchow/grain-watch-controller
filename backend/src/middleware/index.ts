@@ -24,6 +24,7 @@ export {
   stockIdParamsSchema,
   userIdParamsSchema,
   userRoleEnum,
+  historyQuerySchema,
 } from './validation.middleware';
 
 export type {
@@ -33,4 +34,5 @@ export type {
   StockIdParams,
   UserIdParams,
   UserRole,
+  HistoryQuery,
 } from './validation.middleware';

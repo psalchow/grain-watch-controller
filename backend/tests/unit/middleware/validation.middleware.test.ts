@@ -17,6 +17,7 @@ import {
   stockIdParamsSchema,
   userIdParamsSchema,
   userRoleEnum,
+  historyQuerySchema,
 } from '../../../src/middleware/validation.middleware';
 
 /**
@@ -634,5 +635,25 @@ describe('Validation Middleware', () => {
         path: expect.any(String),
       });
     });
+  });
+});
+
+describe('historyQuerySchema', () => {
+  it.each(['day', 'week', 'month', 'year'])(
+    'accepts resolution %s',
+    (resolution) => {
+      const result = historyQuerySchema.safeParse({ resolution });
+      expect(result.success).toBe(true);
+    },
+  );
+
+  it('rejects an unknown resolution', () => {
+    const result = historyQuerySchema.safeParse({ resolution: 'hour' });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a missing resolution', () => {
+    const result = historyQuerySchema.safeParse({});
+    expect(result.success).toBe(false);
   });
 });

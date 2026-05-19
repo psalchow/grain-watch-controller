@@ -326,3 +326,16 @@ export const userIdParamsSchema = z.object({
 
 /** Type inferred from userIdParamsSchema */
 export type UserIdParams = z.infer<typeof userIdParamsSchema>;
+
+/**
+ * Stock history endpoint query schema.
+ */
+export const historyQuerySchema = z.object({
+  resolution: z.enum(['day', 'week', 'month', 'year'], {
+    required_error: 'Resolution is required',
+    invalid_type_error: 'Resolution must be one of: day, week, month, year',
+  }),
+});
+
+/** Type inferred from historyQuerySchema */
+export type HistoryQuery = z.infer<typeof historyQuerySchema>;
