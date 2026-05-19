@@ -128,6 +128,7 @@ export class StocksController {
   ): Promise<void> {
     try {
       const stockId = req.params['stockId'] as string;
+      // Validated upstream by validateQuery(historyQuerySchema) in routes/stocks.routes.ts.
       const resolution = (req.query as { resolution: Resolution }).resolution;
 
       const metadata = STOCK_METADATA[stockId];
@@ -145,9 +146,11 @@ export class StocksController {
         metadata.hasHumidity
       );
 
+      const groupMatch = metadata.deviceGroup.match(/-(\d+)$/);
+      const devicePrefix = groupMatch ? groupMatch[1] : '1';
       const devices = Array.from(
         { length: metadata.deviceCount },
-        (_, i) => `1.${i + 1}`
+        (_, i) => `${devicePrefix}.${i + 1}`,
       );
 
       const seriesFor = (layer: Map<string, SeriesPoint[]>): SeriesPoint[][] =>
