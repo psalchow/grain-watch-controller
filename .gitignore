@@ -43,3 +43,6 @@ temp/
 
 # Vite
 vite.config.ts.timestamp-*
+
+# Superpowers visual companion
+.superpowers/
