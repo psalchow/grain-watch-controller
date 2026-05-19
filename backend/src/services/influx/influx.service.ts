@@ -239,19 +239,12 @@ export class InfluxDBService {
         this.parseHistorySeries(r),
       );
 
-    const queries: [
-      Promise<Map<string, SeriesPoint[]>>,
-      Promise<Map<string, SeriesPoint[]>>,
-      Promise<Map<string, SeriesPoint[]>>,
-    ] = [runLayer('temp-top'), runLayer('temp-mid'), runLayer('temp-bottom')];
-
-    let humidityPromise: Promise<Map<string, SeriesPoint[]>> | undefined;
-    if (includeHumidity) {
-      humidityPromise = runLayer('humidity');
-    }
-
-    const [top, mid, bottom] = await Promise.all(queries);
-    const humidity = humidityPromise ? await humidityPromise : undefined;
+    const [top, mid, bottom, humidity] = await Promise.all([
+      runLayer('temp-top'),
+      runLayer('temp-mid'),
+      runLayer('temp-bottom'),
+      includeHumidity ? runLayer('humidity') : Promise.resolve(undefined),
+    ] as const);
 
     const result: HistoryReadings = {
       temperature: { top, mid, bottom },

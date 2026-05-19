@@ -165,7 +165,7 @@ describe('InfluxDBService', () => {
     });
 
     it('maps Influx series into per-device point arrays per layer', async () => {
-      const respFor = (_field: string) => ({
+      const respForValue = (value: number) => ({
         ok: true,
         json: async () => ({
           results: [{
@@ -175,19 +175,9 @@ describe('InfluxDBService', () => {
                 tags: { device: '1.1' },
                 columns: ['time', 'mean'],
                 values: [
-                  ['2026-05-19T00:00:00Z', 12.0],
+                  ['2026-05-19T00:00:00Z', value],
                   ['2026-05-19T00:30:00Z', null],
-                  ['2026-05-19T01:00:00Z', 12.5],
-                ],
-              },
-              {
-                name: 'Temp',
-                tags: { device: '1.2' },
-                columns: ['time', 'mean'],
-                values: [
-                  ['2026-05-19T00:00:00Z', 13.0],
-                  ['2026-05-19T00:30:00Z', 13.2],
-                  ['2026-05-19T01:00:00Z', 13.4],
+                  ['2026-05-19T01:00:00Z', value + 1],
                 ],
               },
             ],
@@ -195,11 +185,10 @@ describe('InfluxDBService', () => {
         }),
       });
 
-      // Each call returns the same shape regardless of field.
       mockFetch
-        .mockResolvedValueOnce(respFor('temp-top'))
-        .mockResolvedValueOnce(respFor('temp-mid'))
-        .mockResolvedValueOnce(respFor('temp-bottom'));
+        .mockResolvedValueOnce(respForValue(10))   // temp-top
+        .mockResolvedValueOnce(respForValue(20))   // temp-mid
+        .mockResolvedValueOnce(respForValue(30));  // temp-bottom
 
       const result = await service.getHistory(
         'corn-watch-1',
@@ -210,13 +199,17 @@ describe('InfluxDBService', () => {
       );
 
       expect(result.temperature.top.get('1.1')).toEqual([
-        { t: '2026-05-19T00:00:00.000Z', v: 12.0 },
+        { t: '2026-05-19T00:00:00.000Z', v: 10 },
         { t: '2026-05-19T00:30:00.000Z', v: null },
-        { t: '2026-05-19T01:00:00.000Z', v: 12.5 },
+        { t: '2026-05-19T01:00:00.000Z', v: 11 },
       ]);
-      expect(result.temperature.top.get('1.2')?.[1]).toEqual({
-        t: '2026-05-19T00:30:00.000Z',
-        v: 13.2,
+      expect(result.temperature.mid.get('1.1')?.[0]).toEqual({
+        t: '2026-05-19T00:00:00.000Z',
+        v: 20,
+      });
+      expect(result.temperature.bottom.get('1.1')?.[0]).toEqual({
+        t: '2026-05-19T00:00:00.000Z',
+        v: 30,
       });
       expect(result.humidity).toBeUndefined();
     });
