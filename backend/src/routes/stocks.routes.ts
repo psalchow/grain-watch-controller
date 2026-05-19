@@ -5,7 +5,9 @@ import {
   authenticate,
   requireStockAccess,
   validateParams,
+  validateQuery,
   stockIdParamsSchema,
+  historyQuerySchema,
 } from '../middleware';
 
 export function createStocksRouter(): Router {
@@ -24,6 +26,15 @@ export function createStocksRouter(): Router {
     validateParams(stockIdParamsSchema),
     requireStockAccess,
     (req, res, next) => controller.getLatestReadings(req, res, next)
+  );
+
+  router.get(
+    '/:stockId/history',
+    authenticate,
+    validateParams(stockIdParamsSchema),
+    validateQuery(historyQuerySchema),
+    requireStockAccess,
+    (req, res, next) => controller.getHistory(req, res, next)
   );
 
   return router;
