@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
+import { StockHistorySection } from '@/components/StockHistorySection';
 import { Button } from '@/components/ui/button';
 import { stocksApi } from '@/api';
-import { LatestReadingsResponse } from '@/types/api';
+import type { LatestReadingsResponse, Resolution } from '@/types/api';
 
 export default function StockDetailPage() {
   const { stockId } = useParams<{ stockId: string }>();
@@ -14,6 +15,8 @@ export default function StockDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<Resolution>('day');
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const loadData = useCallback(async (showRefreshing = false) => {
     if (!stockId) return;
@@ -35,18 +38,18 @@ export default function StockDetailPage() {
     loadData();
   }, [loadData]);
 
+  const handleRefresh = () => {
+    loadData(true);
+    setRefreshNonce((n) => n + 1);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
 
       <main className="container max-w-screen-xl px-4 py-6">
-        {/* Header row */}
         <div className="flex items-center gap-3 mb-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/')}
-          >
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
             <ArrowLeft className="h-4 w-4" />
             <span className="ml-1">Back</span>
           </Button>
@@ -64,7 +67,7 @@ export default function StockDetailPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => loadData(true)}
+              onClick={handleRefresh}
               disabled={refreshing || loading}
             >
               {refreshing ? (
@@ -77,7 +80,6 @@ export default function StockDetailPage() {
           </div>
         </div>
 
-        {/* Content */}
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -95,11 +97,21 @@ export default function StockDetailPage() {
             </Button>
           </div>
         ) : data && data.devices.length > 0 ? (
-          <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
-            {data.devices.map((device) => (
-              <SensorCard key={device.device} reading={device} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
+              {data.devices.map((device) => (
+                <SensorCard key={device.device} reading={device} />
+              ))}
+            </div>
+            {stockId && (
+              <StockHistorySection
+                stockId={stockId}
+                resolution={resolution}
+                onResolutionChange={setResolution}
+                refreshNonce={refreshNonce}
+              />
+            )}
+          </>
         ) : (
           <div className="text-center py-12 text-muted-foreground">
             <p>No sensor data available</p>
