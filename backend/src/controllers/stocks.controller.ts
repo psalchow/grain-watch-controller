@@ -9,6 +9,7 @@ interface StockMetadata {
   description: string;
   deviceCount: number;
   deviceGroup: string;
+  devicePrefix: string;
   active: boolean;
   hasHumidity: boolean;
 }
@@ -19,6 +20,7 @@ const STOCK_METADATA: Record<string, StockMetadata> = {
     description: 'Lagerhalle 8',
     deviceCount: 5,
     deviceGroup: 'corn-watch-1',
+    devicePrefix: '1',
     active: true,
     hasHumidity: false,
   },
@@ -27,6 +29,7 @@ const STOCK_METADATA: Record<string, StockMetadata> = {
     description: 'Lagerhalle 7 - inaktiv',
     deviceCount: 5,
     deviceGroup: 'corn-watch-2',
+    devicePrefix: '1',
     active: false,
     hasHumidity: false,
   },
@@ -146,11 +149,9 @@ export class StocksController {
         metadata.hasHumidity
       );
 
-      const groupMatch = metadata.deviceGroup.match(/-(\d+)$/);
-      const devicePrefix = groupMatch ? groupMatch[1] : '1';
       const devices = Array.from(
         { length: metadata.deviceCount },
-        (_, i) => `${devicePrefix}.${i + 1}`,
+        (_, i) => `${metadata.devicePrefix}.${i + 1}`,
       );
 
       const seriesFor = (layer: Map<string, SeriesPoint[]>): SeriesPoint[][] =>
