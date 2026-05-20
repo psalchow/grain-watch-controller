@@ -36,13 +36,16 @@ jest.mock('../../src/config', () => ({
 // Mock InfluxDB service
 jest.mock('../../src/services/influx/influx.service', () => {
   const mockGetLatestReadings = jest.fn();
+  const mockGetHistory = jest.fn();
 
   return {
     InfluxDBService: jest.fn().mockImplementation(() => ({
       getLatestReadings: mockGetLatestReadings,
+      getHistory: mockGetHistory,
       testConnection: jest.fn().mockResolvedValue(true),
     })),
     __mockGetLatestReadings: mockGetLatestReadings,
+    __mockGetHistory: mockGetHistory,
   };
 });
 
@@ -66,6 +69,7 @@ describe('Stock Endpoints', () => {
 
   const mockedInflux = jest.requireMock('../../src/services/influx/influx.service');
   const mockGetLatestReadings = mockedInflux.__mockGetLatestReadings;
+  const mockGetHistory = mockedInflux.__mockGetHistory;
 
   beforeAll(() => {
     setAuthService(null);
@@ -99,6 +103,8 @@ describe('Stock Endpoints', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetLatestReadings.mockReset();
+    mockGetHistory.mockReset();
 
     // Set up default mock responses
     mockGetLatestReadings.mockResolvedValue([
@@ -218,6 +224,105 @@ describe('Stock Endpoints', () => {
     it('should return 401 without authentication', async () => {
       const response = await request(app)
         .get('/api/v1/stocks/grain-watch-1/latest');
+
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('GET /stocks/:stockId/history', () => {
+    beforeEach(() => {
+      mockGetHistory.mockResolvedValue({
+        temperature: {
+          top: new Map([
+            ['1.1', [
+              { t: '2026-05-19T00:00:00.000Z', v: 12.0 },
+              { t: '2026-05-19T00:30:00.000Z', v: 12.4 },
+            ]],
+            ['1.2', [
+              { t: '2026-05-19T00:00:00.000Z', v: 13.0 },
+              { t: '2026-05-19T00:30:00.000Z', v: 13.2 },
+            ]],
+          ]),
+          mid: new Map(),
+          bottom: new Map(),
+        },
+      });
+    });
+
+    it('returns 200 with the expected response shape for resolution=day', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/history?resolution=day')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        stockId: 'grain-watch-1',
+        stockName: 'Halle 8',
+        resolution: 'day',
+        intervalSeconds: 1800,
+        devices: ['1.1', '1.2', '1.3', '1.4', '1.5'],
+      });
+      expect(response.body.series.temperature).toBeDefined();
+      expect(response.body.series.temperature.top).toHaveLength(5);
+      expect(response.body.series.temperature.top[0]).toEqual([
+        { t: '2026-05-19T00:00:00.000Z', v: 12.0 },
+        { t: '2026-05-19T00:30:00.000Z', v: 12.4 },
+      ]);
+      // Device 1.3 had no series — empty array.
+      expect(response.body.series.temperature.top[2]).toEqual([]);
+      // Humidity not enabled for grain-watch-1.
+      expect(response.body.series.humidity).toBeUndefined();
+    });
+
+    it.each([
+      ['day', 1800],
+      ['week', 21600],
+      ['month', 43200],
+      ['year', 86400],
+    ])('returns the correct intervalSeconds for resolution=%s', async (resolution, intervalSeconds) => {
+      const response = await request(app)
+        .get(`/api/v1/stocks/grain-watch-1/history?resolution=${resolution}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.intervalSeconds).toBe(intervalSeconds);
+    });
+
+    it('returns 400 for an unknown resolution', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/history?resolution=hour')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 400 when resolution is missing', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/history')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 404 for an unknown stock', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/unknown-stock/history?resolution=day')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it('returns 403 for a viewer without access to the stock', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-2/history?resolution=day')
+        .set('Authorization', `Bearer ${restrictedViewerToken}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('returns 401 without a token', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/history?resolution=day');
 
       expect(response.status).toBe(401);
     });
