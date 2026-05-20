@@ -5,6 +5,8 @@ import {
   TimeSeriesResponse,
   SummaryResponse,
   BatteryResponse,
+  StockHistoryResponse,
+  Resolution,
   Layer,
 } from '../types/api';
 
@@ -92,6 +94,20 @@ export const stocksApi = {
   async getBatteryStatus(stockId: string): Promise<BatteryResponse> {
     const response = await axios.get<BatteryResponse>(
       `/stocks/${stockId}/battery`
+    );
+    return response.data;
+  },
+
+  /**
+   * Get aggregated history for all layers of a stock.
+   */
+  async getStockHistory(
+    stockId: string,
+    resolution: Resolution,
+  ): Promise<StockHistoryResponse> {
+    const response = await axios.get<StockHistoryResponse>(
+      `/stocks/${stockId}/history`,
+      { params: { resolution } },
     );
     return response.data;
   },

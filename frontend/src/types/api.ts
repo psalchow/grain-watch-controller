@@ -145,3 +145,31 @@ export interface ApiError {
     details?: string;
   };
 }
+
+// Stock History
+export type Resolution = 'day' | 'week' | 'month' | 'year';
+
+export interface SeriesPoint {
+  /** ISO 8601 UTC timestamp at the bucket start. */
+  t: string;
+  /** Mean value or null if no data was recorded in the bucket. */
+  v: number | null;
+}
+
+export interface StockHistoryResponse {
+  stockId: string;
+  stockName: string;
+  resolution: Resolution;
+  from: string; // ISO 8601 UTC
+  to: string;   // ISO 8601 UTC
+  intervalSeconds: number;
+  devices: string[];
+  series: {
+    temperature: {
+      top: SeriesPoint[][];
+      mid: SeriesPoint[][];
+      bottom: SeriesPoint[][];
+    };
+    humidity?: SeriesPoint[][];
+  };
+}
