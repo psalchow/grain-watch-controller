@@ -7,7 +7,14 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx jest:*)",
+      "Skill(commit-commands:commit)",
+      "Bash(npm run:*)",
+      "Bash(npm list:*)",
+      "Bash(git checkout *)",
+      "Bash(npx eslint *)",
+      "Bash(node *)"
     ]
   }
 }
