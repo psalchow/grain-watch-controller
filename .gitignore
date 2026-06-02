@@ -46,3 +46,6 @@ vite.config.ts.timestamp-*
 
 # Superpowers visual companion
 .superpowers/
+
+# Claude Code local settings
+.claude/settings.local.json
