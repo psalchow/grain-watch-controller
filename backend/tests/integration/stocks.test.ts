@@ -9,6 +9,9 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
+import { initDb, closeDb, getDb } from '../../src/db';
+import { runMigrations } from '../../src/db/migrate';
+import { resetServiceSingletonsForTests } from '../../src/services';
 import { setAuthService } from '../../src/middleware';
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
@@ -18,7 +21,6 @@ jest.mock('../../src/config', () => ({
   config: {
     port: 3000,
     nodeEnv: 'test',
-    usersFilePath: './data/test-users.json',
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
@@ -72,6 +74,8 @@ describe('Stock Endpoints', () => {
   const mockGetHistory = mockedInflux.__mockGetHistory;
 
   beforeAll(() => {
+    initDb({ path: ':memory:' });
+    runMigrations(getDb());
     setAuthService(null);
 
     // Create test tokens
@@ -131,6 +135,8 @@ describe('Stock Endpoints', () => {
 
   afterAll(() => {
     setAuthService(null);
+    closeDb();
+    resetServiceSingletonsForTests();
   });
 
   describe('GET /api/v1/stocks', () => {

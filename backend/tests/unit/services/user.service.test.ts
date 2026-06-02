@@ -2,170 +2,48 @@
  * Unit tests for UserService.
  *
  * These tests verify user CRUD operations, password hashing,
- * and stock access permission checks.
+ * and stock access permission checks against the SQLite-backed
+ * {@link UserRepository}.
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import * as bcrypt from 'bcrypt';
+import { createTestDb, TestDb } from '../../setup/db';
+import { UserRepository } from '../../../src/db/repositories';
 import {
   UserService,
-  UserServiceError,
   CreateUserData,
 } from '../../../src/services/auth';
 import { User } from '../../../src/models';
 
-// Mock the config module
-jest.mock('../../../src/config', () => ({
-  config: {
-    usersFilePath: './data/users.json',
-    jwt: {
-      secret: 'test-secret-key-for-testing-only',
-      expiresIn: '24h',
-    },
-  },
-}));
-
 describe('UserService', () => {
+  let testDb: TestDb;
   let service: UserService;
-  let tempDir: string;
-  let tempFilePath: string;
+  let repo: UserRepository;
 
-  beforeEach(async () => {
-    // Create a temporary directory for test files
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'grainwatch-test-'));
-    tempFilePath = path.join(tempDir, 'users.json');
-    service = new UserService(tempFilePath);
+  beforeEach(() => {
+    testDb = createTestDb();
+    repo = new UserRepository(testDb.db);
+    service = new UserService(repo);
   });
 
-  afterEach(async () => {
-    // Clean up temporary files
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
-  });
-
-  describe('loadUsers', () => {
-    it('should return empty array when file does not exist', async () => {
-      const users = await service.loadUsers();
-      expect(users).toEqual([]);
-    });
-
-    it('should load users from existing file', async () => {
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'testuser',
-          passwordHash: '$2b$10$hashedpassword',
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-      ];
-
-      await fs.writeFile(tempFilePath, JSON.stringify(testUsers));
-
-      const users = await service.loadUsers();
-
-      expect(users).toHaveLength(1);
-      expect(users[0]?.username).toBe('testuser');
-    });
-
-    it('should throw error for invalid JSON', async () => {
-      await fs.writeFile(tempFilePath, 'not valid json');
-
-      await expect(service.loadUsers()).rejects.toThrow(UserServiceError);
-      await expect(service.loadUsers()).rejects.toMatchObject({
-        code: 'FILE_ERROR',
-      });
-    });
-
-    it('should throw error for non-array JSON', async () => {
-      await fs.writeFile(tempFilePath, '{"not": "an array"}');
-
-      await expect(service.loadUsers()).rejects.toThrow(
-        'Invalid users file format: expected array'
-      );
-    });
-  });
-
-  describe('saveUsers', () => {
-    it('should create directory if it does not exist', async () => {
-      const nestedPath = path.join(tempDir, 'nested', 'dir', 'users.json');
-      const nestedService = new UserService(nestedPath);
-
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'testuser',
-          passwordHash: '$2b$10$hashedpassword',
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-      ];
-
-      await nestedService.saveUsers(testUsers);
-
-      const content = await fs.readFile(nestedPath, 'utf-8');
-      const parsed = JSON.parse(content);
-
-      expect(parsed).toHaveLength(1);
-      expect(parsed[0].username).toBe('testuser');
-    });
-
-    it('should format JSON with indentation', async () => {
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'testuser',
-          passwordHash: '$2b$10$hashedpassword',
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-      ];
-
-      await service.saveUsers(testUsers);
-
-      const content = await fs.readFile(tempFilePath, 'utf-8');
-
-      // Check that it's formatted with newlines (not minified)
-      expect(content).toContain('\n');
-      expect(content).toContain('  ');
-    });
+  afterEach(() => {
+    testDb.close();
   });
 
   describe('findUserByUsername', () => {
     beforeEach(async () => {
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'admin',
-          passwordHash: '$2b$10$hashedpassword',
-          role: 'admin',
-          stockAccess: ['*'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-        {
-          id: 'usr_002',
-          username: 'viewer',
-          passwordHash: '$2b$10$hashedpassword',
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-      ];
-
-      await fs.writeFile(tempFilePath, JSON.stringify(testUsers));
+      await service.createUser({
+        username: 'admin',
+        password: 'adminpassword',
+        role: 'admin',
+        stockAccess: ['*'],
+      });
+      await service.createUser({
+        username: 'viewer',
+        password: 'viewerpassword',
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+      });
     });
 
     it('should find existing user by username', async () => {
@@ -185,19 +63,12 @@ describe('UserService', () => {
 
   describe('findUserById', () => {
     beforeEach(async () => {
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'admin',
-          passwordHash: '$2b$10$hashedpassword',
-          role: 'admin',
-          stockAccess: ['*'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-      ];
-
-      await fs.writeFile(tempFilePath, JSON.stringify(testUsers));
+      await service.createUser({
+        username: 'admin',
+        password: 'adminpassword',
+        role: 'admin',
+        stockAccess: ['*'],
+      });
     });
 
     it('should find existing user by ID', async () => {
@@ -233,7 +104,7 @@ describe('UserService', () => {
       expect(profile.stockAccess).toEqual(['corn-watch-1']);
 
       // Profile should not contain password hash
-      expect((profile as any).passwordHash).toBeUndefined();
+      expect((profile as unknown as { passwordHash?: unknown }).passwordHash).toBeUndefined();
 
       // Verify password was hashed in stored user
       const storedUser = await service.findUserByUsername('newuser');
@@ -253,14 +124,14 @@ describe('UserService', () => {
         username: 'user1',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       await service.createUser({
         username: 'user2',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       const user1 = await service.findUserByUsername('user1');
@@ -276,7 +147,7 @@ describe('UserService', () => {
           username: '',
           password: 'password123',
           role: 'viewer',
-          stockAccess: [],
+          stockAccess: ['corn-watch-1'],
         })
       ).rejects.toThrow('Username is required');
     });
@@ -287,7 +158,7 @@ describe('UserService', () => {
           username: 'testuser',
           password: 'short',
           role: 'viewer',
-          stockAccess: [],
+          stockAccess: ['corn-watch-1'],
         })
       ).rejects.toThrow('Password must be at least 8 characters');
     });
@@ -297,7 +168,7 @@ describe('UserService', () => {
         username: 'existing',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       await expect(
@@ -305,7 +176,7 @@ describe('UserService', () => {
           username: 'existing',
           password: 'password456',
           role: 'viewer',
-          stockAccess: [],
+          stockAccess: ['corn-watch-1'],
         })
       ).rejects.toThrow("Username 'existing' already exists");
 
@@ -314,7 +185,7 @@ describe('UserService', () => {
           username: 'existing',
           password: 'password456',
           role: 'viewer',
-          stockAccess: [],
+          stockAccess: ['corn-watch-1'],
         })
       ).rejects.toMatchObject({ code: 'USERNAME_EXISTS' });
     });
@@ -324,7 +195,7 @@ describe('UserService', () => {
         username: 'newuser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       const user = await service.findUserByUsername('newuser');
@@ -338,7 +209,7 @@ describe('UserService', () => {
         username: 'newuser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       const afterCreate = new Date();
@@ -439,7 +310,7 @@ describe('UserService', () => {
         username: 'otheruser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       await expect(
@@ -470,7 +341,7 @@ describe('UserService', () => {
         username: 'userToDelete',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
     });
 
@@ -591,7 +462,7 @@ describe('UserService', () => {
         username: 'existinguser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        stockAccess: ['corn-watch-1'],
       });
 
       const profile = await service.initializeDefaultUsers();
@@ -625,16 +496,37 @@ describe('UserService', () => {
       const profiles = await service.getAllUsers();
 
       expect(profiles).toHaveLength(2);
-      expect(profiles[0]?.username).toBe('user1');
-      expect(profiles[1]?.username).toBe('user2');
+      const usernames = profiles.map((p) => p.username).sort();
+      expect(usernames).toEqual(['user1', 'user2']);
     });
 
     it('should not include password hashes', async () => {
       const profiles = await service.getAllUsers();
 
       for (const profile of profiles) {
-        expect((profile as any).passwordHash).toBeUndefined();
+        expect((profile as unknown as { passwordHash?: unknown }).passwordHash).toBeUndefined();
       }
+    });
+  });
+
+  describe('listFullUsers', () => {
+    beforeEach(async () => {
+      await service.createUser({
+        username: 'user1',
+        password: 'password123',
+        role: 'admin',
+        stockAccess: ['*'],
+      });
+    });
+
+    it('should return full user records including passwordHash and createdAt', async () => {
+      const users = await service.listFullUsers();
+
+      expect(users).toHaveLength(1);
+      expect(users[0]?.username).toBe('user1');
+      expect(users[0]?.passwordHash).toBeDefined();
+      expect(users[0]?.createdAt).toBeDefined();
+      expect(users[0]?.active).toBe(true);
     });
   });
 
@@ -660,39 +552,14 @@ describe('UserService', () => {
       expect(profile.stockAccess).toEqual(['corn-watch-1']);
 
       // These should not be in profile
-      expect((profile as any).passwordHash).toBeUndefined();
-      expect((profile as any).createdAt).toBeUndefined();
-      expect((profile as any).active).toBeUndefined();
-    });
-  });
-
-  describe('clearCache', () => {
-    it('should clear the internal cache', async () => {
-      // Load users to populate cache
-      await service.loadUsers();
-
-      // Clear cache
-      service.clearCache();
-
-      // Modify file directly
-      const testUsers: User[] = [
-        {
-          id: 'usr_999',
-          username: 'directwrite',
-          passwordHash: 'hash',
-          role: 'admin',
-          stockAccess: ['*'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-      ];
-      await fs.writeFile(tempFilePath, JSON.stringify(testUsers));
-
-      // Load should now read from file, not cache
-      const users = await service.loadUsers();
-
-      expect(users).toHaveLength(1);
-      expect(users[0]?.username).toBe('directwrite');
+      const asUnknown = profile as unknown as {
+        passwordHash?: unknown;
+        createdAt?: unknown;
+        active?: unknown;
+      };
+      expect(asUnknown.passwordHash).toBeUndefined();
+      expect(asUnknown.createdAt).toBeUndefined();
+      expect(asUnknown.active).toBeUndefined();
     });
   });
 });

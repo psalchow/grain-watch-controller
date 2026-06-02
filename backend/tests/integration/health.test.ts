@@ -1,12 +1,22 @@
 import request from 'supertest';
 import { createApp } from '../../src/app';
 import { Express } from 'express';
+import { initDb, closeDb, getDb } from '../../src/db';
+import { runMigrations } from '../../src/db/migrate';
+import { resetServiceSingletonsForTests } from '../../src/services';
 
 describe('Health Check Endpoint', () => {
   let app: Express;
 
   beforeAll(() => {
+    initDb({ path: ':memory:' });
+    runMigrations(getDb());
     app = createApp();
+  });
+
+  afterAll(() => {
+    closeDb();
+    resetServiceSingletonsForTests();
   });
 
   describe('GET /health', () => {

@@ -35,18 +35,7 @@ export function createApiRouter(): Router {
   return router;
 }
 
-/**
- * Pre-configured API router instance.
- *
- * Mount this router under /api/v1 in the main application:
- *
- * @example
- * import { apiRouter } from './routes';
- * app.use('/api/v1', apiRouter);
- */
-export const apiRouter = createApiRouter();
-
-// Re-export individual routers for direct use if needed
-export { authRouter, createAuthRouter } from './auth.routes';
-export { stocksRouter, createStocksRouter } from './stocks.routes';
-export { adminRouter, createAdminRouter } from './admin.routes';
+// Re-export router factories for direct use if needed
+export { createAuthRouter } from './auth.routes';
+export { createStocksRouter } from './stocks.routes';
+export { createAdminRouter } from './admin.routes';

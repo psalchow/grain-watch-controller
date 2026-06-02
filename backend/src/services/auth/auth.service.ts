@@ -102,17 +102,27 @@ function parseExpiryToSeconds(expiresIn: string): number {
 export class AuthService {
   private readonly jwtSecret: string;
   private readonly jwtExpiresIn: string;
-  private readonly userService: UserService;
+  private readonly userService: UserService | null;
 
   /**
    * Creates a new AuthService instance.
    *
-   * @param userService - Optional UserService instance (creates new one if not provided)
+   * @param userService - Optional UserService instance. When omitted, the
+   *   service relies on callers mocking auth methods (used in tests).
+   *   Operations that require user lookups will throw if the service is
+   *   missing.
    */
   constructor(userService?: UserService) {
     this.jwtSecret = config.jwt.secret;
     this.jwtExpiresIn = config.jwt.expiresIn;
-    this.userService = userService ?? new UserService();
+    this.userService = userService ?? null;
+  }
+
+  private requireUserService(): UserService {
+    if (!this.userService) {
+      throw new Error('AuthService: no UserService configured');
+    }
+    return this.userService;
   }
 
   /**
@@ -121,7 +131,7 @@ export class AuthService {
    * @returns UserService instance
    */
   getUserService(): UserService {
-    return this.userService;
+    return this.requireUserService();
   }
 
   /**
@@ -211,7 +221,7 @@ export class AuthService {
    */
   async login(username: string, password: string): Promise<LoginResult> {
     // Find user by username
-    const user = await this.userService.findUserByUsername(username);
+    const user = await this.requireUserService().findUserByUsername(username);
 
     if (!user) {
       throw new AuthenticationError(
@@ -319,7 +329,7 @@ export class AuthService {
    * @throws AuthenticationError if user not found or account disabled
    */
   async refreshToken(userId: string): Promise<LoginResult> {
-    const user = await this.userService.findUserById(userId);
+    const user = await this.requireUserService().findUserById(userId);
 
     if (!user) {
       throw new AuthenticationError(

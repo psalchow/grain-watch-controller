@@ -5,11 +5,10 @@
  * and user authentication operations.
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
+import { createTestDb, TestDb } from '../../setup/db';
+import { UserRepository } from '../../../src/db/repositories';
 import {
   AuthService,
   AuthenticationError,
@@ -20,7 +19,6 @@ import { User } from '../../../src/models';
 // Mock the config module
 jest.mock('../../../src/config', () => ({
   config: {
-    usersFilePath: './data/users.json',
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
@@ -28,27 +26,29 @@ jest.mock('../../../src/config', () => ({
   },
 }));
 
-describe('AuthService', () => {
-  let authService: AuthService;
-  let userService: UserService;
-  let tempDir: string;
-  let tempFilePath: string;
+/**
+ * Inserts a fully-formed user into the repo without going through createUser
+ * (so the test can control the password hash directly).
+ */
+async function seedUser(repo: UserRepository, user: User): Promise<void> {
+  await repo.insert(user);
+}
 
-  beforeEach(async () => {
-    // Create a temporary directory for test files
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'grainwatch-auth-test-'));
-    tempFilePath = path.join(tempDir, 'users.json');
-    userService = new UserService(tempFilePath);
+describe('AuthService', () => {
+  let testDb: TestDb;
+  let userService: UserService;
+  let authService: AuthService;
+  let repo: UserRepository;
+
+  beforeEach(() => {
+    testDb = createTestDb();
+    repo = new UserRepository(testDb.db);
+    userService = new UserService(repo);
     authService = new AuthService(userService);
   });
 
-  afterEach(async () => {
-    // Clean up temporary files
-    try {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
+  afterEach(() => {
+    testDb.close();
   });
 
   describe('generateToken', () => {
@@ -210,28 +210,24 @@ describe('AuthService', () => {
     beforeEach(async () => {
       // Create a test user
       const passwordHash = await bcrypt.hash('password123', 10);
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'testuser',
-          passwordHash,
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-        {
-          id: 'usr_002',
-          username: 'disableduser',
-          passwordHash,
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: false,
-        },
-      ];
-
-      await fs.writeFile(tempFilePath, JSON.stringify(testUsers));
+      await seedUser(repo, {
+        id: 'usr_001',
+        username: 'testuser',
+        passwordHash,
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: true,
+      });
+      await seedUser(repo, {
+        id: 'usr_002',
+        username: 'disableduser',
+        passwordHash,
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: false,
+      });
     });
 
     it('should return login result for valid credentials', async () => {
@@ -404,28 +400,24 @@ describe('AuthService', () => {
   describe('refreshToken', () => {
     beforeEach(async () => {
       const passwordHash = await bcrypt.hash('password123', 10);
-      const testUsers: User[] = [
-        {
-          id: 'usr_001',
-          username: 'activeuser',
-          passwordHash,
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: true,
-        },
-        {
-          id: 'usr_002',
-          username: 'disableduser',
-          passwordHash,
-          role: 'viewer',
-          stockAccess: ['corn-watch-1'],
-          createdAt: '2026-01-01T00:00:00.000Z',
-          active: false,
-        },
-      ];
-
-      await fs.writeFile(tempFilePath, JSON.stringify(testUsers));
+      await seedUser(repo, {
+        id: 'usr_001',
+        username: 'activeuser',
+        passwordHash,
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: true,
+      });
+      await seedUser(repo, {
+        id: 'usr_002',
+        username: 'disableduser',
+        passwordHash,
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: false,
+      });
     });
 
     it('should generate new token for active user', async () => {

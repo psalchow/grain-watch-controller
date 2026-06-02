@@ -20,7 +20,6 @@ import { UserServiceError } from '../../../src/services/auth/user.service';
 // Mock the config module
 jest.mock('../../../src/config', () => ({
   config: {
-    usersFilePath: './data/users.json',
     jwt: {
       secret: 'test-secret-key-for-testing-only',
       expiresIn: '24h',
@@ -363,10 +362,10 @@ describe('Error Handling Middleware', () => {
         expect(statusMock).toHaveBeenCalledWith(400);
       });
 
-      it('should return 500 for FILE_ERROR', () => {
+      it('should return 500 for DB_ERROR', () => {
         const error = new UserServiceError(
-          'Failed to read file',
-          'FILE_ERROR'
+          'Failed to access database',
+          'DB_ERROR'
         );
 
         errorHandler(

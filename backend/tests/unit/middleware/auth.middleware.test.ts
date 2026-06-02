@@ -15,11 +15,13 @@ import {
 } from '../../../src/middleware/auth.middleware';
 import { AuthService } from '../../../src/services/auth';
 import { UserProfile } from '../../../src/models';
+import { initDb, closeDb, getDb } from '../../../src/db';
+import { runMigrations } from '../../../src/db/migrate';
+import { resetServiceSingletonsForTests } from '../../../src/services';
 
 // Mock the config module
 jest.mock('../../../src/config', () => ({
   config: {
-    usersFilePath: './data/users.json',
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
@@ -50,6 +52,19 @@ describe('Authentication Middleware', () => {
   let nextFunction: NextFunction;
   let jsonMock: jest.Mock;
   let statusMock: jest.Mock;
+
+  beforeAll(() => {
+    // The default auth service Proxy resolves to the singleton, which needs
+    // a DB to instantiate its UserRepository. Provide an in-memory DB so the
+    // fallback path works in tests that don't override the auth service.
+    initDb({ path: ':memory:' });
+    runMigrations(getDb());
+  });
+
+  afterAll(() => {
+    closeDb();
+    resetServiceSingletonsForTests();
+  });
 
   beforeEach(() => {
     // Reset auth service before each test

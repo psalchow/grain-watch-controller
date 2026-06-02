@@ -139,7 +139,7 @@ function getStatusCode(error: Error): number {
       case 'USERNAME_EXISTS':
       case 'INVALID_INPUT':
         return 400;
-      case 'FILE_ERROR':
+      case 'DB_ERROR':
         return 500;
       default:
         return 500;

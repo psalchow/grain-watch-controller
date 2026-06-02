@@ -2,47 +2,25 @@
  * Tests for application bootstrap functionality.
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
-
-// Mock the services module to provide a test-specific userService
-jest.mock('../../src/services', () => {
-  const testUsersFile = path.join(__dirname, '../data/bootstrap-test/users.json');
-  const originalModule = jest.requireActual('../../src/services');
-  const testUserService = new originalModule.UserService(testUsersFile);
-
-  return {
-    ...originalModule,
-    userService: testUserService,
-  };
-});
-
-// Import after mocking
+import { initDb, closeDb, getDb } from '../../src/db';
+import { runMigrations } from '../../src/db/migrate';
+import {
+  getUserService,
+  userService,
+  resetServiceSingletonsForTests,
+} from '../../src/services';
 import { bootstrapApplication, validateBootstrap } from '../../src/bootstrap';
-import { userService } from '../../src/services';
 
 describe('Application Bootstrap', () => {
-  const testUsersDir = path.join(__dirname, '../data/bootstrap-test');
-
-  beforeEach(async () => {
-    // Clean up any existing test files
-    try {
-      await fs.rm(testUsersDir, { recursive: true, force: true });
-    } catch {
-      // Ignore errors if directory doesn't exist
-    }
-
-    // Clear the cache
-    userService.clearCache();
+  beforeEach(() => {
+    initDb({ path: ':memory:' });
+    runMigrations(getDb());
   });
 
-  afterEach(async () => {
-    // Clean up test files
-    try {
-      await fs.rm(testUsersDir, { recursive: true, force: true });
-    } catch {
-      // Ignore errors
-    }
+  afterEach(() => {
+    closeDb();
+    resetServiceSingletonsForTests();
+    jest.restoreAllMocks();
   });
 
   describe('bootstrapApplication', () => {
@@ -97,7 +75,9 @@ describe('Application Bootstrap', () => {
     it('should handle bootstrap errors gracefully in development mode', async () => {
       // Mock initializeDefaultUsers to throw an error
       const mockError = new Error('Simulated bootstrap failure');
-      jest.spyOn(userService, 'initializeDefaultUsers').mockRejectedValueOnce(mockError);
+      jest
+        .spyOn(getUserService(), 'initializeDefaultUsers')
+        .mockRejectedValueOnce(mockError);
 
       // Override NODE_ENV temporarily
       const originalEnv = process.env['NODE_ENV'];
@@ -155,7 +135,9 @@ describe('Application Bootstrap', () => {
     it('should return false on validation errors', async () => {
       // Mock getAllUsers to throw an error
       const mockError = new Error('Simulated validation error');
-      jest.spyOn(userService, 'getAllUsers').mockRejectedValueOnce(mockError);
+      jest
+        .spyOn(getUserService(), 'getAllUsers')
+        .mockRejectedValueOnce(mockError);
 
       // Mock console.error
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();

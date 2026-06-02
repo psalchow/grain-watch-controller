@@ -40,4 +40,3 @@ export function createStocksRouter(): Router {
   return router;
 }
 
-export const stocksRouter = createStocksRouter();

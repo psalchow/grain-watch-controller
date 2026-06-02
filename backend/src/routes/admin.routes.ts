@@ -163,7 +163,3 @@ export function createAdminRouter(): Router {
   return router;
 }
 
-/**
- * Pre-configured admin router instance.
- */
-export const adminRouter = createAdminRouter();

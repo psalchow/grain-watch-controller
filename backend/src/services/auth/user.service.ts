@@ -2,13 +2,12 @@
  * User management service for the grainwatch-controller BFF.
  *
  * Handles user CRUD operations, password hashing, and stock access
- * permission checks. User data is persisted to a JSON file.
+ * permission checks. User data is persisted via the {@link UserRepository}
+ * (SQLite-backed via Drizzle ORM).
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
 import * as bcrypt from 'bcrypt';
-import { config } from '../../config';
+import { UserRepository } from '../../db/repositories';
 import { User, UserProfile, UserRole } from '../../models';
 
 /**
@@ -21,7 +20,7 @@ export class UserServiceError extends Error {
       | 'USER_NOT_FOUND'
       | 'USERNAME_EXISTS'
       | 'INVALID_INPUT'
-      | 'FILE_ERROR'
+      | 'DB_ERROR'
   ) {
     super(message);
     this.name = 'UserServiceError';
@@ -75,137 +74,17 @@ export interface UpdateUserData {
 const BCRYPT_SALT_ROUNDS = 10;
 
 /**
- * Service for managing user data stored in a JSON file.
+ * Service for managing user data backed by a {@link UserRepository}.
  *
  * Provides methods for user CRUD operations and authorisation checks.
- * All file operations are asynchronous to ensure thread safety.
  */
 export class UserService {
-  private readonly filePath: string;
-  private usersCache: User[] | null = null;
-
   /**
    * Creates a new UserService instance.
    *
-   * @param customFilePath - Optional custom path to users file (defaults to config value)
+   * @param repo - UserRepository used for persistence
    */
-  constructor(customFilePath?: string) {
-    this.filePath = customFilePath ?? config.usersFilePath;
-  }
-
-  /**
-   * Resolves the absolute path to the users file.
-   *
-   * @returns Absolute path to the users JSON file
-   */
-  private getAbsolutePath(): string {
-    if (path.isAbsolute(this.filePath)) {
-      return this.filePath;
-    }
-    return path.resolve(process.cwd(), this.filePath);
-  }
-
-  /**
-   * Ensures the data directory exists.
-   *
-   * @throws UserServiceError if directory creation fails
-   */
-  private async ensureDirectoryExists(): Promise<void> {
-    const absolutePath = this.getAbsolutePath();
-    const directory = path.dirname(absolutePath);
-
-    try {
-      await fs.mkdir(directory, { recursive: true });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new UserServiceError(
-        `Failed to create data directory: ${message}`,
-        'FILE_ERROR'
-      );
-    }
-  }
-
-  /**
-   * Loads users from the JSON file.
-   *
-   * Returns cached users if available, otherwise reads from file.
-   * Creates an empty users array if the file does not exist.
-   *
-   * @returns Array of user objects
-   * @throws UserServiceError if file reading fails
-   */
-  async loadUsers(): Promise<User[]> {
-    // Return cached users if available
-    if (this.usersCache !== null) {
-      return this.usersCache;
-    }
-
-    const absolutePath = this.getAbsolutePath();
-
-    try {
-      const content = await fs.readFile(absolutePath, 'utf-8');
-      const parsed: unknown = JSON.parse(content);
-
-      if (!Array.isArray(parsed)) {
-        throw new UserServiceError(
-          'Invalid users file format: expected array',
-          'FILE_ERROR'
-        );
-      }
-
-      this.usersCache = parsed as User[];
-      return this.usersCache;
-    } catch (error) {
-      // If file doesn't exist, return empty array
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        this.usersCache = [];
-        return [];
-      }
-
-      // If JSON parsing failed
-      if (error instanceof SyntaxError) {
-        throw new UserServiceError(
-          `Invalid JSON in users file: ${error.message}`,
-          'FILE_ERROR'
-        );
-      }
-
-      // Re-throw UserServiceError
-      if (error instanceof UserServiceError) {
-        throw error;
-      }
-
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new UserServiceError(
-        `Failed to read users file: ${message}`,
-        'FILE_ERROR'
-      );
-    }
-  }
-
-  /**
-   * Saves users to the JSON file.
-   *
-   * @param users - Array of users to save
-   * @throws UserServiceError if file writing fails
-   */
-  async saveUsers(users: User[]): Promise<void> {
-    await this.ensureDirectoryExists();
-
-    const absolutePath = this.getAbsolutePath();
-
-    try {
-      const content = JSON.stringify(users, null, 2);
-      await fs.writeFile(absolutePath, content, 'utf-8');
-      this.usersCache = users;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new UserServiceError(
-        `Failed to write users file: ${message}`,
-        'FILE_ERROR'
-      );
-    }
-  }
+  constructor(private readonly repo: UserRepository) {}
 
   /**
    * Finds a user by username.
@@ -214,8 +93,7 @@ export class UserService {
    * @returns User object or null if not found
    */
   async findUserByUsername(username: string): Promise<User | null> {
-    const users = await this.loadUsers();
-    return users.find((user) => user.username === username) ?? null;
+    return this.repo.findByUsername(username);
   }
 
   /**
@@ -225,73 +103,73 @@ export class UserService {
    * @returns User object or null if not found
    */
   async findUserById(id: string): Promise<User | null> {
-    const users = await this.loadUsers();
-    return users.find((user) => user.id === id) ?? null;
+    return this.repo.findById(id);
+  }
+
+  /**
+   * Gets all users as profiles (without password hashes).
+   *
+   * @returns Array of user profiles
+   */
+  async getAllUsers(): Promise<UserProfile[]> {
+    const users = await this.repo.findAll();
+    return users.map((u) => this.toUserProfile(u));
+  }
+
+  /**
+   * Returns full user records (including passwordHash, active, createdAt).
+   *
+   * @returns Array of full user objects
+   */
+  async listFullUsers(): Promise<User[]> {
+    return this.repo.findAll();
   }
 
   /**
    * Creates a new user with a hashed password.
    *
-   * @param userData - User data including plain text password
+   * @param data - User data including plain text password
    * @returns The created user profile (without password hash)
    * @throws UserServiceError if username already exists or input is invalid
    */
-  async createUser(userData: CreateUserData): Promise<UserProfile> {
-    // Validate input
-    if (!userData.username || userData.username.trim().length === 0) {
+  async createUser(data: CreateUserData): Promise<UserProfile> {
+    if (!data.username || data.username.trim().length === 0) {
       throw new UserServiceError('Username is required', 'INVALID_INPUT');
     }
-
-    if (!userData.password || userData.password.length < 8) {
+    if (!data.password || data.password.length < 8) {
       throw new UserServiceError(
         'Password must be at least 8 characters',
         'INVALID_INPUT'
       );
     }
 
-    const users = await this.loadUsers();
-
-    // Check for duplicate username
-    const existingUser = users.find(
-      (user) => user.username === userData.username
-    );
-    if (existingUser) {
+    const existing = await this.repo.findByUsername(data.username);
+    if (existing) {
       throw new UserServiceError(
-        `Username '${userData.username}' already exists`,
+        `Username '${data.username}' already exists`,
         'USERNAME_EXISTS'
       );
     }
 
-    // Generate unique ID
-    const id = this.generateUserId(users);
+    const id = await this.generateUserId();
+    const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(
-      userData.password,
-      BCRYPT_SALT_ROUNDS
-    );
-
-    // Build user object, conditionally adding email only if provided
-    const newUser: User = {
+    const user: User = {
       id,
-      username: userData.username.trim(),
+      username: data.username.trim(),
       passwordHash,
-      role: userData.role,
-      stockAccess: userData.stockAccess,
+      role: data.role,
+      stockAccess: data.stockAccess,
       createdAt: new Date().toISOString(),
       active: true,
     };
-
-    // Only add email if it's provided (exactOptionalPropertyTypes compliance)
-    const trimmedEmail = userData.email?.trim();
-    if (trimmedEmail !== undefined) {
-      newUser.email = trimmedEmail;
+    const trimmedEmail = data.email?.trim();
+    if (trimmedEmail !== undefined && trimmedEmail.length > 0) {
+      user.email = trimmedEmail;
     }
 
-    users.push(newUser);
-    await this.saveUsers(users);
-
-    return this.toUserProfile(newUser);
+    await this.repo.insert(user);
+    return this.toUserProfile(user);
   }
 
   /**
@@ -303,23 +181,16 @@ export class UserService {
    * @throws UserServiceError if user not found or username already exists
    */
   async updateUser(id: string, updates: UpdateUserData): Promise<UserProfile> {
-    const users = await this.loadUsers();
-    const userIndex = users.findIndex((user) => user.id === id);
-
-    if (userIndex === -1) {
+    const existing = await this.repo.findById(id);
+    if (!existing) {
       throw new UserServiceError(
         `User with ID '${id}' not found`,
         'USER_NOT_FOUND'
       );
     }
 
-    const existingUser = users[userIndex] as User;
-
-    // Check for duplicate username if updating
-    if (updates.username && updates.username !== existingUser.username) {
-      const duplicate = users.find(
-        (user) => user.username === updates.username
-      );
+    if (updates.username && updates.username !== existing.username) {
+      const duplicate = await this.repo.findByUsername(updates.username);
       if (duplicate) {
         throw new UserServiceError(
           `Username '${updates.username}' already exists`,
@@ -328,7 +199,6 @@ export class UserService {
       }
     }
 
-    // Validate password if provided
     if (updates.password !== undefined && updates.password.length < 8) {
       throw new UserServiceError(
         'Password must be at least 8 characters',
@@ -336,37 +206,26 @@ export class UserService {
       );
     }
 
-    // Build updated user
-    const updatedUser: User = {
-      ...existingUser,
-      username: updates.username?.trim() ?? existingUser.username,
-      role: updates.role ?? existingUser.role,
-      stockAccess: updates.stockAccess ?? existingUser.stockAccess,
-      active: updates.active ?? existingUser.active,
-    };
-
-    // Handle email update (exactOptionalPropertyTypes compliance)
-    if (updates.email !== undefined) {
-      const trimmedEmail = updates.email.trim();
-      if (trimmedEmail.length > 0) {
-        updatedUser.email = trimmedEmail;
-      } else {
-        delete updatedUser.email;
-      }
-    }
-
-    // Hash new password if provided
+    const patch: Parameters<UserRepository['update']>[1] = {};
+    if (updates.username !== undefined) patch.username = updates.username.trim();
+    if (updates.role !== undefined) patch.role = updates.role;
+    if (updates.active !== undefined) patch.active = updates.active;
+    if (updates.stockAccess !== undefined) patch.stockAccess = updates.stockAccess;
     if (updates.password) {
-      updatedUser.passwordHash = await bcrypt.hash(
-        updates.password,
-        BCRYPT_SALT_ROUNDS
-      );
+      patch.passwordHash = await bcrypt.hash(updates.password, BCRYPT_SALT_ROUNDS);
+    }
+    if (updates.email !== undefined) {
+      const trimmed = updates.email.trim();
+      patch.email = trimmed.length > 0 ? trimmed : null;
     }
 
-    users[userIndex] = updatedUser;
-    await this.saveUsers(users);
+    await this.repo.update(id, patch);
 
-    return this.toUserProfile(updatedUser);
+    const updated = await this.repo.findById(id);
+    if (!updated) {
+      throw new UserServiceError('User disappeared after update', 'DB_ERROR');
+    }
+    return this.toUserProfile(updated);
   }
 
   /**
@@ -377,19 +236,13 @@ export class UserService {
    * @throws UserServiceError if user not found
    */
   async deleteUser(id: string): Promise<boolean> {
-    const users = await this.loadUsers();
-    const userIndex = users.findIndex((user) => user.id === id);
-
-    if (userIndex === -1) {
+    const existed = await this.repo.delete(id);
+    if (!existed) {
       throw new UserServiceError(
         `User with ID '${id}' not found`,
         'USER_NOT_FOUND'
       );
     }
-
-    users.splice(userIndex, 1);
-    await this.saveUsers(users);
-
     return true;
   }
 
@@ -401,12 +254,7 @@ export class UserService {
    * @returns True if user has access to the stock
    */
   canAccessStock(user: User | UserProfile, stockId: string): boolean {
-    // Admin users with wildcard access can access all stocks
-    if (user.stockAccess.includes('*')) {
-      return true;
-    }
-
-    // Check if stock is in user's access list
+    if (user.stockAccess.includes('*')) return true;
     return user.stockAccess.includes(stockId);
   }
 
@@ -421,30 +269,14 @@ export class UserService {
    * @returns The created admin profile, or null if users already exist
    */
   async initializeDefaultUsers(): Promise<UserProfile | null> {
-    const users = await this.loadUsers();
-
-    if (users.length > 0) {
-      return null;
-    }
-
-    const adminProfile = await this.createUser({
+    const existing = await this.repo.findAll();
+    if (existing.length > 0) return null;
+    return this.createUser({
       username: 'admin',
       password: 'changeme123',
       role: 'admin',
       stockAccess: ['*'],
     });
-
-    return adminProfile;
-  }
-
-  /**
-   * Gets all users as profiles (without password hashes).
-   *
-   * @returns Array of user profiles
-   */
-  async getAllUsers(): Promise<UserProfile[]> {
-    const users = await this.loadUsers();
-    return users.map((user) => this.toUserProfile(user));
   }
 
   /**
@@ -460,43 +292,23 @@ export class UserService {
       role: user.role,
       stockAccess: user.stockAccess,
     };
-
-    // Only add email if present (exactOptionalPropertyTypes compliance)
-    if (user.email !== undefined) {
-      profile.email = user.email;
-    }
-
+    if (user.email !== undefined) profile.email = user.email;
     return profile;
   }
 
   /**
-   * Generates a unique user ID.
-   *
-   * @param existingUsers - Array of existing users
-   * @returns Unique user ID in format 'usr_XXX'
+   * Generates a unique user ID in format 'usr_XXX'.
    */
-  private generateUserId(existingUsers: User[]): string {
-    // Extract numeric parts from existing IDs
-    const existingNumbers = existingUsers
-      .map((user) => {
-        const match = user.id.match(/^usr_(\d+)$/);
+  private async generateUserId(): Promise<string> {
+    const existing = await this.repo.findAll();
+    const numbers = existing
+      .map((u) => {
+        const match = u.id.match(/^usr_(\d+)$/);
         const numStr = match?.[1];
         return numStr !== undefined ? parseInt(numStr, 10) : 0;
       })
-      .filter((num) => !isNaN(num));
-
-    // Find next available number
-    const maxNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) : 0;
-    const nextNumber = maxNumber + 1;
-
-    return `usr_${String(nextNumber).padStart(3, '0')}`;
-  }
-
-  /**
-   * Clears the internal users cache.
-   * Useful for testing or forcing a reload from disk.
-   */
-  clearCache(): void {
-    this.usersCache = null;
+      .filter((n) => !isNaN(n));
+    const next = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
+    return `usr_${String(next).padStart(3, '0')}`;
   }
 }

@@ -8,6 +8,9 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
+import { initDb, closeDb, getDb } from '../../src/db';
+import { runMigrations } from '../../src/db/migrate';
+import { UserRepository } from '../../src/db/repositories';
 import { UserService, AuthService } from '../../src/services/auth';
 import { setAuthService } from '../../src/middleware';
 
@@ -16,7 +19,6 @@ jest.mock('../../src/config', () => ({
   config: {
     port: 3000,
     nodeEnv: 'test',
-    usersFilePath: './data/test-users.json',
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
@@ -46,15 +48,11 @@ jest.mock('../../src/services/influx/influx.service', () => {
 describe('Auth Endpoints', () => {
   let app: Express;
   let userService: UserService;
-  const testUsersPath = '/tmp/test-auth-users.json';
 
   beforeAll(async () => {
-    // Create test user service with a clean file
-    userService = new UserService(testUsersPath);
-
-    // Clear any existing users and create test users
-    userService.clearCache();
-    await userService.saveUsers([]);
+    initDb({ path: ':memory:' });
+    runMigrations(getDb());
+    userService = new UserService(new UserRepository(getDb()));
 
     // Create test admin user
     await userService.createUser({
@@ -90,15 +88,9 @@ describe('Auth Endpoints', () => {
     finaliseApp(app);
   });
 
-  afterAll(async () => {
-    // Clean up test users file
-    const fs = await import('fs').then((m) => m.promises);
-    try {
-      await fs.unlink(testUsersPath);
-    } catch {
-      // Ignore if file doesn't exist
-    }
+  afterAll(() => {
     setAuthService(null);
+    closeDb();
   });
 
   describe('POST /api/v1/auth/login', () => {

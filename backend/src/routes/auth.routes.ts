@@ -69,7 +69,3 @@ export function createAuthRouter(): Router {
   return router;
 }
 
-/**
- * Pre-configured authentication router instance.
- */
-export const authRouter = createAuthRouter();

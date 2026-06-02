@@ -9,6 +9,9 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
+import { initDb, closeDb, getDb } from '../../src/db';
+import { runMigrations } from '../../src/db/migrate';
+import { UserRepository } from '../../src/db/repositories';
 import { UserService, AuthService } from '../../src/services/auth';
 import { setAuthService } from '../../src/middleware';
 
@@ -19,7 +22,6 @@ jest.mock('../../src/config', () => ({
   config: {
     port: 3000,
     nodeEnv: 'test',
-    usersFilePath: './data/test-users.json',
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
@@ -63,14 +65,11 @@ describe('Admin Endpoints', () => {
   let userService: UserService;
   let adminToken: string;
   let viewerToken: string;
-  const testUsersPath = '/tmp/test-admin-users.json';
 
-  beforeAll(async () => {
-    // Create test user service with a clean file
-    userService = new UserService(testUsersPath);
-
-    // Clear any existing users
-    await userService.saveUsers([]);
+  beforeAll(() => {
+    initDb({ path: ':memory:' });
+    runMigrations(getDb());
+    userService = new UserService(new UserRepository(getDb()));
 
     // Create auth service with our test user service
     const authService = new AuthService(userService);
@@ -81,10 +80,17 @@ describe('Admin Endpoints', () => {
     finaliseApp(app);
   });
 
+  afterAll(() => {
+    setAuthService(null);
+    closeDb();
+  });
+
   beforeEach(async () => {
-    // Reset users before each test
-    userService.clearCache();
-    await userService.saveUsers([]);
+    // Reset users: delete all existing users so each test gets a clean slate
+    const allUsers = await userService.listFullUsers();
+    for (const u of allUsers) {
+      await userService.deleteUser(u.id);
+    }
 
     // Create admin user
     const admin = await userService.createUser({
@@ -96,7 +102,7 @@ describe('Admin Endpoints', () => {
     });
 
     // Create viewer user
-    await userService.createUser({
+    const viewer = await userService.createUser({
       username: 'testviewer',
       password: 'viewerpassword123',
       role: 'viewer',
@@ -112,22 +118,11 @@ describe('Admin Endpoints', () => {
     });
 
     viewerToken = createToken({
-      userId: 'usr_002',
+      userId: viewer.id,
       username: 'testviewer',
       role: 'viewer',
       stockAccess: ['corn-watch-1'],
     });
-  });
-
-  afterAll(async () => {
-    // Clean up test users file
-    const fs = await import('fs').then((m) => m.promises);
-    try {
-      await fs.unlink(testUsersPath);
-    } catch {
-      // Ignore if file doesn't exist
-    }
-    setAuthService(null);
   });
 
   describe('GET /api/v1/admin/users', () => {

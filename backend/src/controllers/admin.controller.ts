@@ -63,7 +63,7 @@ export class AdminController {
       const users = await this.userService.getAllUsers();
 
       // Get full user data to include createdAt and active status
-      const fullUsers = await this.userService.loadUsers();
+      const fullUsers = await this.userService.listFullUsers();
 
       const enrichedUsers = users.map((profile) => {
         const fullUser = fullUsers.find((u) => u.id === profile.id);
@@ -365,7 +365,7 @@ export class AdminController {
    * @returns Appropriate HTTP status code
    */
   private getUserErrorStatusCode(
-    code: 'USER_NOT_FOUND' | 'USERNAME_EXISTS' | 'INVALID_INPUT' | 'FILE_ERROR'
+    code: 'USER_NOT_FOUND' | 'USERNAME_EXISTS' | 'INVALID_INPUT' | 'DB_ERROR'
   ): number {
     switch (code) {
       case 'USER_NOT_FOUND':
@@ -373,7 +373,7 @@ export class AdminController {
       case 'USERNAME_EXISTS':
       case 'INVALID_INPUT':
         return 400;
-      case 'FILE_ERROR':
+      case 'DB_ERROR':
         return 500;
       default:
         return 500;
@@ -387,7 +387,7 @@ export class AdminController {
    * @returns Descriptive error details string
    */
   private getUserErrorDetails(
-    code: 'USER_NOT_FOUND' | 'USERNAME_EXISTS' | 'INVALID_INPUT' | 'FILE_ERROR'
+    code: 'USER_NOT_FOUND' | 'USERNAME_EXISTS' | 'INVALID_INPUT' | 'DB_ERROR'
   ): string {
     switch (code) {
       case 'USER_NOT_FOUND':
@@ -396,7 +396,7 @@ export class AdminController {
         return 'A user with this username already exists';
       case 'INVALID_INPUT':
         return 'The provided input data is invalid';
-      case 'FILE_ERROR':
+      case 'DB_ERROR':
         return 'An error occurred while accessing user data';
       default:
         return 'An unexpected error occurred';
