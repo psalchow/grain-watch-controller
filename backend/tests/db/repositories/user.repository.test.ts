@@ -85,3 +85,49 @@ describe('UserRepository', () => {
     expect(count.c).toBe(0);
   });
 });
+
+describe('UserRepository.update', () => {
+  let testDb: TestDb;
+  let repo: UserRepository;
+
+  beforeEach(async () => {
+    testDb = createTestDb();
+    repo = new UserRepository(testDb.db);
+    await repo.insert({
+      id: 'usr_001',
+      username: 'alice',
+      passwordHash: 'hash',
+      role: 'admin',
+      stockAccess: ['*'],
+      createdAt: '2026-06-02T00:00:00.000Z',
+      active: true,
+    });
+  });
+
+  afterEach(() => testDb.close());
+
+  it('updates scalar fields without touching stockAccess', async () => {
+    await repo.update('usr_001', { username: 'alice2', active: false });
+    const found = await repo.findById('usr_001');
+    expect(found?.username).toBe('alice2');
+    expect(found?.active).toBe(false);
+    expect(found?.stockAccess).toEqual(['*']);
+  });
+
+  it('replaces stockAccess wholesale when provided', async () => {
+    await repo.update('usr_001', { stockAccess: ['grain-watch-1'] });
+    const found = await repo.findById('usr_001');
+    expect(found?.stockAccess).toEqual(['grain-watch-1']);
+  });
+
+  it('clears email when set to null', async () => {
+    await repo.update('usr_001', { email: 'alice@example.com' });
+    await repo.update('usr_001', { email: null });
+    const found = await repo.findById('usr_001');
+    expect(found?.email).toBeUndefined();
+  });
+
+  it('throws when user does not exist', async () => {
+    await expect(repo.update('missing', { active: false })).rejects.toThrow('User not found');
+  });
+});

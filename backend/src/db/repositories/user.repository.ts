@@ -54,6 +54,45 @@ export class UserRepository {
     });
   }
 
+  async update(
+    id: string,
+    patch: {
+      username?: string;
+      passwordHash?: string;
+      email?: string | null;
+      role?: 'admin' | 'viewer';
+      active?: boolean;
+      stockAccess?: string[];
+    }
+  ): Promise<void> {
+    this.db.transaction((tx) => {
+      const existing = tx.select().from(users).where(eq(users.id, id)).get();
+      if (!existing) {
+        throw new Error('User not found');
+      }
+
+      const scalarUpdates: Record<string, unknown> = {};
+      if (patch.username !== undefined) scalarUpdates['username'] = patch.username;
+      if (patch.passwordHash !== undefined) scalarUpdates['passwordHash'] = patch.passwordHash;
+      if (patch.email !== undefined) scalarUpdates['email'] = patch.email;
+      if (patch.role !== undefined) scalarUpdates['role'] = patch.role;
+      if (patch.active !== undefined) scalarUpdates['active'] = patch.active;
+
+      if (Object.keys(scalarUpdates).length > 0) {
+        tx.update(users).set(scalarUpdates).where(eq(users.id, id)).run();
+      }
+
+      if (patch.stockAccess !== undefined) {
+        tx.delete(userStockAccess).where(eq(userStockAccess.userId, id)).run();
+        if (patch.stockAccess.length > 0) {
+          tx.insert(userStockAccess)
+            .values(patch.stockAccess.map((stockId) => ({ userId: id, stockId })))
+            .run();
+        }
+      }
+    });
+  }
+
   async delete(id: string): Promise<boolean> {
     const result = this.db.delete(users).where(eq(users.id, id)).run();
     return result.changes > 0;
