@@ -40,10 +40,7 @@ jest.config.js
 # Development configuration
 nodemon.json
 eslint.config.mjs
-tsconfig.json
-
-# TypeScript source - only compiled JS needed
-src/
+# Note: tsconfig.json and src/ are needed by the builder stage to compile TypeScript
 
 # Data directory - mounted at runtime
 data/

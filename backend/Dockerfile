@@ -13,6 +13,9 @@ FROM node:24-alpine AS dependencies
 
 WORKDIR /app
 
+# Native build tools required by better-sqlite3 (node-gyp)
+RUN apk add --no-cache python3 make g++
+
 # Copy package files for dependency installation
 COPY package.json package-lock.json ./
 
@@ -34,6 +37,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 # Copy source files
 COPY package.json package-lock.json tsconfig.json ./
 COPY src ./src
+COPY drizzle ./drizzle
 
 # Build TypeScript
 RUN npm run build
@@ -65,6 +69,9 @@ COPY --from=builder --chown=appuser:nodejs /app/node_modules ./node_modules
 
 # Copy compiled application
 COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
+
+# Copy database migrations
+COPY --from=builder --chown=appuser:nodejs /app/drizzle ./drizzle
 
 # Copy package.json for version info and npm scripts
 COPY --chown=appuser:nodejs package.json ./
