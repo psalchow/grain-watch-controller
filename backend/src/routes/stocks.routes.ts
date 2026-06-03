@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { StocksController } from '../controllers';
-import { influxService } from '../services';
+import { influxService, stockService } from '../services';
 import {
   authenticate,
   requireStockAccess,
@@ -12,7 +12,7 @@ import {
 
 export function createStocksRouter(): Router {
   const router = Router();
-  const controller = new StocksController(influxService);
+  const controller = new StocksController(influxService, stockService);
 
   router.get(
     '/',

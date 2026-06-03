@@ -1,46 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
-import { InfluxDBService, SeriesPoint } from '../services';
+import { InfluxDBService, SeriesPoint, StockService } from '../services';
 import { NotFoundError } from '../middleware';
 import { hasStockAccess } from '../models';
 import { getRange, Resolution } from '../utils/timeRange';
 
-interface StockMetadata {
-  name: string;
-  description: string;
-  deviceCount: number;
-  deviceGroup: string;
-  devicePrefix: string;
-  active: boolean;
-  hasHumidity: boolean;
-}
-
-const STOCK_METADATA: Record<string, StockMetadata> = {
-  'grain-watch-1': {
-    name: 'Halle 8',
-    description: 'Lagerhalle 8',
-    deviceCount: 5,
-    deviceGroup: 'corn-watch-1',
-    devicePrefix: '1',
-    active: true,
-    hasHumidity: true,
-  },
-  'grain-watch-2': {
-    name: 'Halle 7',
-    description: 'Lagerhalle 7 - inaktiv',
-    deviceCount: 5,
-    deviceGroup: 'corn-watch-2',
-    devicePrefix: '2',
-    active: false,
-    hasHumidity: false,
-  },
-};
-
 export class StocksController {
-  private readonly influxService: InfluxDBService;
-
-  constructor(influxService: InfluxDBService) {
-    this.influxService = influxService;
-  }
+  constructor(
+    private readonly influxService: InfluxDBService,
+    private readonly stockService: StockService
+  ) {}
 
   async listStocks(
     req: Request,
@@ -50,20 +18,16 @@ export class StocksController {
     try {
       const user = req.user!;
 
-      const accessibleStocks = Object.keys(STOCK_METADATA).filter((stockId) =>
-        hasStockAccess(user, stockId)
-      );
+      const allStocks = await this.stockService.listStocks();
+      const accessibleStocks = allStocks.filter((s) => hasStockAccess(user, s.id));
 
-      const stocks = accessibleStocks.map((stockId) => {
-        const metadata = STOCK_METADATA[stockId];
-        return {
-          id: stockId,
-          name: metadata?.name ?? stockId,
-          description: metadata?.description ?? '',
-          deviceCount: metadata?.deviceCount ?? 5,
-          active: metadata?.active ?? false,
-        };
-      });
+      const stocks = accessibleStocks.map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description ?? '',
+        deviceCount: s.deviceCount,
+        active: s.active,
+      }));
 
       res.status(200).json({
         stocks,
@@ -82,7 +46,7 @@ export class StocksController {
     try {
       const stockId = req.params['stockId'] as string;
 
-      const metadata = STOCK_METADATA[stockId];
+      const metadata = await this.stockService.getStock(stockId);
       if (!metadata) {
         throw new NotFoundError(`Stock not found: ${stockId}`);
       }
@@ -134,7 +98,7 @@ export class StocksController {
       // Validated upstream by validateQuery(historyQuerySchema) in routes/stocks.routes.ts.
       const resolution = (req.query as { resolution: Resolution }).resolution;
 
-      const metadata = STOCK_METADATA[stockId];
+      const metadata = await this.stockService.getStock(stockId);
       if (!metadata) {
         throw new NotFoundError(`Stock not found: ${stockId}`);
       }

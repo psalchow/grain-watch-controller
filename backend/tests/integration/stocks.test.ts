@@ -13,6 +13,8 @@ import { initDb, closeDb, getDb } from '../../src/db';
 import { runMigrations } from '../../src/db/migrate';
 import { resetServiceSingletonsForTests } from '../../src/services';
 import { setAuthService } from '../../src/middleware';
+import { StockRepository } from '../../src/db/repositories';
+import { seedStocks } from '../../src/db/seed';
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
 
@@ -73,9 +75,10 @@ describe('Stock Endpoints', () => {
   const mockGetLatestReadings = mockedInflux.__mockGetLatestReadings;
   const mockGetHistory = mockedInflux.__mockGetHistory;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     initDb({ path: ':memory:' });
     runMigrations(getDb());
+    await seedStocks(new StockRepository(getDb()));
     setAuthService(null);
 
     // Create test tokens
