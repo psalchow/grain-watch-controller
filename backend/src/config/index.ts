@@ -37,6 +37,14 @@ interface JWTConfig {
 }
 
 /**
+ * Database configuration.
+ */
+interface DatabaseConfig {
+  /** Absolute or relative path to the SQLite file, or ':memory:' for tests. */
+  path: string;
+}
+
+/**
  * Complete application configuration.
  */
 interface Config {
@@ -52,8 +60,8 @@ interface Config {
   /** InfluxDB connection settings */
   influxdb: InfluxDBConfig;
 
-  /** Path to users JSON file */
-  usersFilePath: string;
+  /** Database connection settings */
+  database: DatabaseConfig;
 }
 
 /**
@@ -161,7 +169,7 @@ function validateConfig(cfg: Config): void {
  * - INFLUXDB_ORG: Organization name (default: 'grainwatch')
  * - INFLUXDB_BUCKET: Bucket name (default: 'grainwatch')
  * - INFLUXDB_MEASUREMENT: Measurement name (default: 'Temp')
- * - USERS_FILE_PATH: Path to users JSON file (default: './data/users.json')
+ * - DATABASE_PATH: Path to SQLite database file (default: './data/grainwatch.db')
  */
 export const config: Config = {
   port: getEnvVarAsInt('PORT', 3000),
@@ -177,7 +185,9 @@ export const config: Config = {
     bucket: getEnvVar('INFLUXDB_BUCKET', 'grainwatch'),
     measurement: getEnvVar('INFLUXDB_MEASUREMENT', 'Temp'),
   },
-  usersFilePath: getEnvVar('USERS_FILE_PATH', './data/users.json'),
+  database: {
+    path: getEnvVar('DATABASE_PATH', './data/grainwatch.db'),
+  },
 };
 
 // Validate configuration on module load (skip in test environment for flexibility)
@@ -185,4 +195,4 @@ if (process.env['NODE_ENV'] !== 'test') {
   validateConfig(config);
 }
 
-export type { Config, InfluxDBConfig, JWTConfig };
+export type { Config, InfluxDBConfig, JWTConfig, DatabaseConfig };

@@ -69,12 +69,12 @@ describe('Configuration', () => {
     expect(config.influxdb.measurement).toBe('TestMeasurement');
   });
 
-  it('should include usersFilePath in config', async () => {
-    process.env['USERS_FILE_PATH'] = '/custom/path/users.json';
+  it('should include database.path in config', async () => {
+    process.env['DATABASE_PATH'] = '/custom/path/grainwatch.db';
     process.env['INFLUXDB_TOKEN'] = 'test-token';
 
     const { config } = await import('../../src/config/index');
 
-    expect(config.usersFilePath).toBe('/custom/path/users.json');
+    expect(config.database.path).toBe('/custom/path/grainwatch.db');
   });
 });
