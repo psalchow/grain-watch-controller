@@ -18,7 +18,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - USERS_FILE_PATH=/app/data/users.json
+      - DATABASE_PATH=/app/data/grainwatch.db
     volumes:
       - ./backend/data:/app/data:rw
     healthcheck:

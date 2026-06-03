@@ -27,7 +27,7 @@ services:
       - INFLUXDB_ORG=${INFLUXDB_ORG:-grainwatch}
       - INFLUXDB_BUCKET=${INFLUXDB_BUCKET:-grainwatch}
       - INFLUXDB_MEASUREMENT=${INFLUXDB_MEASUREMENT:-Temp}
-      - USERS_FILE_PATH=/app/data/users.json
+      - DATABASE_PATH=/app/data/grainwatch.db
     volumes:
       # Persist user data outside the container
       - ./backend/data:/app/data:rw
