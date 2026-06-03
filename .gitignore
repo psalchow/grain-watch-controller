@@ -17,8 +17,10 @@ dist-ssr/
 .env.local
 .env.*.local
 
-# Data directory (user credentials, etc.)
-data/
+# SQLite database files
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
 
 # Logs
 logs/
