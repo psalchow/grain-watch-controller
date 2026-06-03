@@ -1,6 +1,7 @@
 import { createApp } from './app';
 import { config } from './config';
 import { bootstrapApplication } from './bootstrap';
+import { closeDb } from './db';
 
 /**
  * Starts the application server.
@@ -35,6 +36,15 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+const shutdown = (signal: string) => {
+  console.log(`Received ${signal}, shutting down...`);
+  closeDb();
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Start the server
 const serverPromise = startServer();
