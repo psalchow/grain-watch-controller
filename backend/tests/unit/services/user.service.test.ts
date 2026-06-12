@@ -475,40 +475,6 @@ describe('UserService', () => {
     });
   });
 
-  describe('getAllUsers', () => {
-    beforeEach(async () => {
-      await service.createUser({
-        username: 'user1',
-        password: 'password123',
-        role: 'admin',
-        stockAccess: ['*'],
-      });
-
-      await service.createUser({
-        username: 'user2',
-        password: 'password456',
-        role: 'viewer',
-        stockAccess: ['corn-watch-1'],
-      });
-    });
-
-    it('should return all users as profiles', async () => {
-      const profiles = await service.getAllUsers();
-
-      expect(profiles).toHaveLength(2);
-      const usernames = profiles.map((p) => p.username).sort();
-      expect(usernames).toEqual(['user1', 'user2']);
-    });
-
-    it('should not include password hashes', async () => {
-      const profiles = await service.getAllUsers();
-
-      for (const profile of profiles) {
-        expect((profile as unknown as { passwordHash?: unknown }).passwordHash).toBeUndefined();
-      }
-    });
-  });
-
   describe('listFullUsers', () => {
     beforeEach(async () => {
       await service.createUser({

@@ -51,11 +51,11 @@ describe('Application Bootstrap', () => {
       expect(result.defaultAdminUsername).toBe('admin');
 
       // Verify the user was actually created
-      const users = await userService.getAllUsers();
-      expect(users).toHaveLength(1);
-      expect(users[0]?.username).toBe('admin');
-      expect(users[0]?.role).toBe('admin');
-      expect(users[0]?.stockAccess).toEqual(['*']);
+      expect(await userService.countUsers()).toBe(1);
+      const admin = await userService.findUserByUsername('admin');
+      expect(admin?.username).toBe('admin');
+      expect(admin?.role).toBe('admin');
+      expect(admin?.stockAccess).toEqual(['*']);
     });
 
     it('should not create default users when a user already exists', async () => {
@@ -83,7 +83,7 @@ describe('Application Bootstrap', () => {
         .spyOn(servicesModule, 'getUserService')
         .mockReturnValue({
           initializeDefaultUsers: jest.fn().mockResolvedValue(null),
-          getAllUsers: jest.fn().mockResolvedValue([{ username: 'admin' }]),
+          countUsers: jest.fn().mockResolvedValue(1),
         } as unknown as ReturnType<typeof servicesModule.getUserService>);
 
       const result = await bootstrapApplication();
@@ -118,10 +118,10 @@ describe('Application Bootstrap', () => {
     });
 
     it('should return false on validation errors', async () => {
-      // Mock getAllUsers to throw an error
+      // Mock countUsers to throw an error
       const mockError = new Error('Simulated validation error');
       jest
-        .spyOn(getUserService(), 'getAllUsers')
+        .spyOn(getUserService(), 'countUsers')
         .mockRejectedValueOnce(mockError);
 
       // Mock console.error

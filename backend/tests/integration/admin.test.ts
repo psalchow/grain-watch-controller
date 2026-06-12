@@ -304,8 +304,7 @@ describe('Admin Endpoints', () => {
   describe('PUT /api/v1/admin/users/:userId/permissions', () => {
     it('should update user role', async () => {
       // Get existing user ID
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
@@ -320,8 +319,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should update user stockAccess', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
@@ -335,8 +333,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should update both role and stockAccess', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
@@ -352,8 +349,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should return 400 when no fields provided', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
@@ -375,8 +371,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should return 400 for invalid role', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
@@ -402,8 +397,7 @@ describe('Admin Endpoints', () => {
 
   describe('PATCH /api/v1/admin/users/:userId', () => {
     it('should deactivate user', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .patch(`/api/v1/admin/users/${viewer?.id}`)
@@ -419,8 +413,7 @@ describe('Admin Endpoints', () => {
 
     it('should activate user', async () => {
       // First deactivate the user
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
       await userService.updateUser(viewer!.id, { active: false });
 
       const response = await request(app)
@@ -435,8 +428,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should return 400 when active is not provided', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .patch(`/api/v1/admin/users/${viewer?.id}`)
@@ -447,8 +439,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should return 400 for non-boolean active value', async () => {
-      const users = await userService.getAllUsers();
-      const viewer = users.find((u) => u.username === 'testviewer');
+      const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .patch(`/api/v1/admin/users/${viewer?.id}`)
@@ -472,8 +463,7 @@ describe('Admin Endpoints', () => {
     });
 
     it('should prevent self-deactivation', async () => {
-      const users = await userService.getAllUsers();
-      const admin = users.find((u) => u.username === 'testadmin');
+      const admin = await userService.findUserByUsername('testadmin');
 
       // Create token with actual admin user ID
       const selfToken = createToken({

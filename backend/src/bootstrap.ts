@@ -45,8 +45,8 @@ export async function bootstrapApplication(): Promise<BootstrapResult> {
 
 export async function validateBootstrap(): Promise<boolean> {
   try {
-    const users = await getUserService().getAllUsers();
-    return users.length > 0;
+    const count = await getUserService().countUsers();
+    return count > 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Bootstrap validation failed:', message);

@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../types';
 import { users, userStockAccess } from '../schema';
 import type { User } from '../../models';
@@ -14,6 +14,11 @@ export class UserRepository {
   async findByUsername(username: string): Promise<User | null> {
     const row = this.db.select().from(users).where(eq(users.username, username)).get();
     return row ? this.hydrate(row) : null;
+  }
+
+  async count(): Promise<number> {
+    const row = this.db.select({ count: sql<number>`count(*)` }).from(users).get();
+    return row?.count ?? 0;
   }
 
   async findAll(): Promise<User[]> {

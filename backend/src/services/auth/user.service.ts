@@ -107,13 +107,13 @@ export class UserService {
   }
 
   /**
-   * Gets all users as profiles (without password hashes).
+   * Returns the total number of users in the system.
    *
-   * @returns Array of user profiles
+   * Cheaper than loading all users when only the count is needed
+   * (e.g. bootstrap validation).
    */
-  async getAllUsers(): Promise<UserProfile[]> {
-    const users = await this.repo.findAll();
-    return users.map((u) => this.toUserProfile(u));
+  async countUsers(): Promise<number> {
+    return this.repo.count();
   }
 
   /**
