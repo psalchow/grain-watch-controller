@@ -60,23 +60,17 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const users = await this.userService.getAllUsers();
-
-      // Get full user data to include createdAt and active status
       const fullUsers = await this.userService.listFullUsers();
 
-      const enrichedUsers = users.map((profile) => {
-        const fullUser = fullUsers.find((u) => u.id === profile.id);
-        return {
-          id: profile.id,
-          username: profile.username,
-          email: profile.email,
-          role: profile.role,
-          stockAccess: profile.stockAccess,
-          active: fullUser?.active ?? true,
-          createdAt: fullUser?.createdAt ?? new Date().toISOString(),
-        };
-      });
+      const enrichedUsers = fullUsers.map((user) => ({
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        stockAccess: user.stockAccess,
+        active: user.active,
+        createdAt: user.createdAt,
+      }));
 
       res.status(200).json({
         users: enrichedUsers,
