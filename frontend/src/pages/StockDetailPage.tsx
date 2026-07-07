@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
-import { OutdoorConditionsCard } from '@/components/OutdoorConditionsCard';
+import { OutdoorSummary } from '@/components/OutdoorSummary';
 import { StockHistorySection } from '@/components/StockHistorySection';
 import { Button } from '@/components/ui/button';
 import { stocksApi } from '@/api';
@@ -49,7 +49,7 @@ export default function StockDetailPage() {
       <Header />
 
       <main className="container max-w-screen-xl px-4 py-6">
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-6">
           <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
             <ArrowLeft className="h-4 w-4" />
             <span className="ml-1">Back</span>
@@ -61,6 +61,10 @@ export default function StockDetailPage() {
               <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-200">
                 Active
               </span>
+              <OutdoorSummary
+                outdoor={data.outdoor}
+                className="order-last w-full sm:order-none sm:w-auto"
+              />
             </>
           )}
 
@@ -99,9 +103,6 @@ export default function StockDetailPage() {
           </div>
         ) : data && data.devices.length > 0 ? (
           <>
-            <div className="mb-4">
-              <OutdoorConditionsCard outdoor={data.outdoor} />
-            </div>
             <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
               {data.devices.map((device) => (
                 <SensorCard key={device.device} reading={device} />
