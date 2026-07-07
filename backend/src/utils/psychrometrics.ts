@@ -4,9 +4,15 @@
  * Pure functions; callers must ensure inputs are present before calling.
  */
 
-/** Magnus formula constants (WMO). */
+/** Magnus formula constants (WMO/Sonntag), shared by both calculations. */
 const MAGNUS_A = 17.62;
 const MAGNUS_B = 243.12; // °C
+
+/** Saturation vapour pressure at 0 °C, in hPa. */
+const SATURATION_PRESSURE_0C = 6.112; // hPa
+
+/** Gas-law conversion factor for absolute humidity (g·K/(hPa·m³)). */
+const ABSOLUTE_HUMIDITY_FACTOR = 2.1674;
 
 /**
  * Dew point in °C from air temperature and relative humidity.
@@ -29,6 +35,11 @@ export function dewPoint(tempC: number, relHumidity: number): number {
  * @returns Absolute humidity in g/m³
  */
 export function absoluteHumidity(tempC: number, relHumidity: number): number {
-  const saturationPressure = 6.112 * Math.exp((17.67 * tempC) / (tempC + 243.5));
-  return (saturationPressure * relHumidity * 2.1674) / (273.15 + tempC);
+  const saturationPressure =
+    SATURATION_PRESSURE_0C *
+    Math.exp((MAGNUS_A * tempC) / (MAGNUS_B + tempC));
+  return (
+    (saturationPressure * relHumidity * ABSOLUTE_HUMIDITY_FACTOR) /
+    (273.15 + tempC)
+  );
 }
