@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { SensorCard } from '@/components/SensorCard';
+import { OutdoorConditionsCard } from '@/components/OutdoorConditionsCard';
 import { StockHistorySection } from '@/components/StockHistorySection';
 import { Button } from '@/components/ui/button';
 import { stocksApi } from '@/api';
@@ -98,6 +99,9 @@ export default function StockDetailPage() {
           </div>
         ) : data && data.devices.length > 0 ? (
           <>
+            <div className="mb-4">
+              <OutdoorConditionsCard outdoor={data.outdoor} />
+            </div>
             <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
               {data.devices.map((device) => (
                 <SensorCard key={device.device} reading={device} />
