@@ -14,6 +14,9 @@ const SATURATION_PRESSURE_0C = 6.112; // hPa
 /** Gas-law conversion factor for absolute humidity (g·K/(hPa·m³)). */
 const ABSOLUTE_HUMIDITY_FACTOR = 2.1674;
 
+/** Offset to convert degrees Celsius to Kelvin. */
+const CELSIUS_TO_KELVIN = 273.15;
+
 /**
  * Dew point in °C from air temperature and relative humidity.
  *
@@ -40,6 +43,6 @@ export function absoluteHumidity(tempC: number, relHumidity: number): number {
     Math.exp((MAGNUS_A * tempC) / (MAGNUS_B + tempC));
   return (
     (saturationPressure * relHumidity * ABSOLUTE_HUMIDITY_FACTOR) /
-    (273.15 + tempC)
+    (CELSIUS_TO_KELVIN + tempC)
   );
 }
