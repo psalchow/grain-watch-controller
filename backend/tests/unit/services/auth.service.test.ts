@@ -22,6 +22,8 @@ jest.mock('../../../src/config', () => ({
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
+      refreshSecret: 'test-refresh-secret-for-testing-only-must-be-long',
+      refreshExpiresIn: '30d',
     },
   },
 }));
@@ -397,7 +399,130 @@ describe('AuthService', () => {
     });
   });
 
-  describe('refreshToken', () => {
+  describe('generateRefreshToken', () => {
+    const user: User = {
+      id: 'usr_001',
+      username: 'testuser',
+      passwordHash: '$2b$10$hashedpassword',
+      role: 'viewer',
+      stockAccess: ['corn-watch-1'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      active: true,
+    };
+
+    it('should generate a refresh token signed with the refresh secret', () => {
+      const token = authService.generateRefreshToken(user);
+
+      expect(typeof token).toBe('string');
+      const decoded = jwt.verify(
+        token,
+        'test-refresh-secret-for-testing-only-must-be-long'
+      ) as jwt.JwtPayload;
+      expect(decoded.userId).toBe('usr_001');
+      expect(decoded.type).toBe('refresh');
+    });
+
+    it('should not be verifiable with the access-token secret', () => {
+      const token = authService.generateRefreshToken(user);
+
+      expect(() =>
+        jwt.verify(token, 'test-secret-key-for-testing-only-must-be-long-enough')
+      ).toThrow();
+    });
+  });
+
+  describe('verifyRefreshToken', () => {
+    const user: User = {
+      id: 'usr_001',
+      username: 'testuser',
+      passwordHash: '$2b$10$hashedpassword',
+      role: 'viewer',
+      stockAccess: ['corn-watch-1'],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      active: true,
+    };
+
+    it('should return the userId for a valid refresh token', () => {
+      const token = authService.generateRefreshToken(user);
+
+      const result = authService.verifyRefreshToken(token);
+
+      expect(result.userId).toBe('usr_001');
+    });
+
+    it('should throw TOKEN_EXPIRED for an expired refresh token', () => {
+      const expired = jwt.sign(
+        { userId: 'usr_001', type: 'refresh' },
+        'test-refresh-secret-for-testing-only-must-be-long',
+        { expiresIn: '-1s' }
+      );
+
+      try {
+        authService.verifyRefreshToken(expired);
+        fail('should have thrown');
+      } catch (error) {
+        expect((error as AuthenticationError).code).toBe('TOKEN_EXPIRED');
+      }
+    });
+
+    it('should throw INVALID_TOKEN when the type claim is not "refresh"', () => {
+      const wrongType = jwt.sign(
+        { userId: 'usr_001', type: 'access' },
+        'test-refresh-secret-for-testing-only-must-be-long',
+        { expiresIn: '1h' }
+      );
+
+      try {
+        authService.verifyRefreshToken(wrongType);
+        fail('should have thrown');
+      } catch (error) {
+        expect((error as AuthenticationError).code).toBe('INVALID_TOKEN');
+      }
+    });
+
+    it('should throw INVALID_TOKEN for a token signed with the wrong secret', () => {
+      const wrongSecret = jwt.sign(
+        { userId: 'usr_001', type: 'refresh' },
+        'a-totally-different-secret',
+        { expiresIn: '1h' }
+      );
+
+      try {
+        authService.verifyRefreshToken(wrongSecret);
+        fail('should have thrown');
+      } catch (error) {
+        expect((error as AuthenticationError).code).toBe('INVALID_TOKEN');
+      }
+    });
+  });
+
+  describe('login refresh token', () => {
+    beforeEach(async () => {
+      const passwordHash = await bcrypt.hash('password123', 10);
+      await seedUser(repo, {
+        id: 'usr_010',
+        username: 'loginuser',
+        passwordHash,
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: true,
+      });
+    });
+
+    it('should return both access and refresh tokens on login', async () => {
+      const result = await authService.login('loginuser', 'password123');
+
+      expect(result.accessToken).toBeDefined();
+      expect(result.refreshToken).toBeDefined();
+      expect(result.refreshExpiresIn).toBeGreaterThan(0);
+      expect(authService.verifyRefreshToken(result.refreshToken).userId).toBe(
+        'usr_010'
+      );
+    });
+  });
+
+  describe('refreshAccessToken', () => {
     beforeEach(async () => {
       const passwordHash = await bcrypt.hash('password123', 10);
       await seedUser(repo, {
@@ -420,38 +545,75 @@ describe('AuthService', () => {
       });
     });
 
-    it('should generate new token for active user', async () => {
-      const result = await authService.refreshToken('usr_001');
+    it('should issue new access and refresh tokens for a valid refresh token', async () => {
+      const refreshToken = authService.generateRefreshToken({
+        id: 'usr_001',
+        username: 'activeuser',
+        passwordHash: 'x',
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: true,
+      });
+
+      const result = await authService.refreshAccessToken(refreshToken);
 
       expect(result.accessToken).toBeDefined();
+      expect(result.refreshToken).toBeDefined();
       expect(result.tokenType).toBe('Bearer');
-      expect(result.expiresIn).toBe(86400);
-
-      const decoded = authService.verifyToken(result.accessToken);
-      expect(decoded.userId).toBe('usr_001');
+      expect(authService.verifyToken(result.accessToken).userId).toBe('usr_001');
     });
 
-    it('should throw error for non-existent user', async () => {
-      await expect(authService.refreshToken('usr_999')).rejects.toThrow(
-        'User not found'
-      );
+    it('should throw for a non-existent user', async () => {
+      const refreshToken = authService.generateRefreshToken({
+        id: 'usr_999',
+        username: 'ghost',
+        passwordHash: 'x',
+        role: 'viewer',
+        stockAccess: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: true,
+      });
 
       try {
-        await authService.refreshToken('usr_999');
+        await authService.refreshAccessToken(refreshToken);
+        fail('should have thrown');
       } catch (error) {
         expect((error as AuthenticationError).code).toBe('INVALID_CREDENTIALS');
       }
     });
 
-    it('should throw error for disabled user', async () => {
-      await expect(authService.refreshToken('usr_002')).rejects.toThrow(
-        'Account has been disabled'
+    it('should throw ACCOUNT_DISABLED for a disabled user', async () => {
+      const refreshToken = authService.generateRefreshToken({
+        id: 'usr_002',
+        username: 'disableduser',
+        passwordHash: 'x',
+        role: 'viewer',
+        stockAccess: ['corn-watch-1'],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        active: false,
+      });
+
+      try {
+        await authService.refreshAccessToken(refreshToken);
+        fail('should have thrown');
+      } catch (error) {
+        expect((error as AuthenticationError).code).toBe('ACCOUNT_DISABLED');
+      }
+    });
+
+    it('should throw for an expired refresh token', async () => {
+      const expired = jwt.sign(
+        { userId: 'usr_001', type: 'refresh' },
+        'test-refresh-secret-for-testing-only-must-be-long',
+        { expiresIn: '-1s' }
       );
 
       try {
-        await authService.refreshToken('usr_002');
+        await authService.refreshAccessToken(expired);
+        fail('should have thrown');
       } catch (error) {
-        expect((error as AuthenticationError).code).toBe('ACCOUNT_DISABLED');
+        expect((error as AuthenticationError).code).toBe('TOKEN_EXPIRED');
       }
     });
   });

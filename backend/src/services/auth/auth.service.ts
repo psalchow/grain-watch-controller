@@ -35,11 +35,17 @@ export interface LoginResult {
   /** JWT access token */
   accessToken: string;
 
+  /** JWT refresh token (delivered to the client via httpOnly cookie) */
+  refreshToken: string;
+
   /** Token type (always 'Bearer') */
   tokenType: 'Bearer';
 
-  /** Token expiry time in seconds */
+  /** Access token expiry time in seconds */
   expiresIn: number;
+
+  /** Refresh token expiry time in seconds */
+  refreshExpiresIn: number;
 }
 
 /**
@@ -102,6 +108,8 @@ function parseExpiryToSeconds(expiresIn: string): number {
 export class AuthService {
   private readonly jwtSecret: string;
   private readonly jwtExpiresIn: string;
+  private readonly jwtRefreshSecret: string;
+  private readonly jwtRefreshExpiresIn: string;
   private readonly userService: UserService | null;
 
   /**
@@ -115,6 +123,8 @@ export class AuthService {
   constructor(userService?: UserService) {
     this.jwtSecret = config.jwt.secret;
     this.jwtExpiresIn = config.jwt.expiresIn;
+    this.jwtRefreshSecret = config.jwt.refreshSecret;
+    this.jwtRefreshExpiresIn = config.jwt.refreshExpiresIn;
     this.userService = userService ?? null;
   }
 
@@ -156,6 +166,65 @@ export class AuthService {
     return jwt.sign(payload, this.jwtSecret, {
       expiresIn: expiresInSeconds,
     });
+  }
+
+  /**
+   * Generates a long-lived refresh token for a user.
+   *
+   * The refresh token carries only the user id and a `type` claim, and is
+   * signed with a dedicated refresh secret so it cannot be used as an access
+   * token (and vice versa).
+   *
+   * @param user - User to generate the refresh token for
+   * @returns JWT refresh token string
+   */
+  generateRefreshToken(user: User): string {
+    const expiresInSeconds = parseExpiryToSeconds(this.jwtRefreshExpiresIn);
+
+    return jwt.sign(
+      { userId: user.id, type: 'refresh' },
+      this.jwtRefreshSecret,
+      { expiresIn: expiresInSeconds }
+    );
+  }
+
+  /**
+   * Verifies a refresh token and extracts its user id.
+   *
+   * @param token - Refresh token to verify
+   * @returns Object containing the user id encoded in the token
+   * @throws AuthenticationError if the token is invalid, expired, or not a
+   *   refresh token
+   */
+  verifyRefreshToken(token: string): { userId: string } {
+    try {
+      const decoded = jwt.verify(token, this.jwtRefreshSecret) as jwt.JwtPayload;
+
+      if (decoded.type !== 'refresh' || typeof decoded.userId !== 'string') {
+        throw new AuthenticationError(
+          'Invalid refresh token',
+          'INVALID_TOKEN'
+        );
+      }
+
+      return { userId: decoded.userId };
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        throw error;
+      }
+
+      if (error instanceof jwt.TokenExpiredError) {
+        throw new AuthenticationError(
+          'Refresh token has expired',
+          'TOKEN_EXPIRED'
+        );
+      }
+
+      throw new AuthenticationError(
+        'Invalid refresh token',
+        'INVALID_TOKEN'
+      );
+    }
   }
 
   /**
@@ -248,13 +317,23 @@ export class AuthService {
       );
     }
 
-    // Generate token
-    const accessToken = this.generateToken(user);
+    // Generate tokens
+    return this.issueTokens(user);
+  }
 
+  /**
+   * Generates a fresh access and refresh token pair for a user.
+   *
+   * @param user - User to issue tokens for
+   * @returns Login result with access and refresh tokens
+   */
+  private issueTokens(user: User): LoginResult {
     return {
-      accessToken,
+      accessToken: this.generateToken(user),
+      refreshToken: this.generateRefreshToken(user),
       tokenType: 'Bearer',
       expiresIn: parseExpiryToSeconds(this.jwtExpiresIn),
+      refreshExpiresIn: parseExpiryToSeconds(this.jwtRefreshExpiresIn),
     };
   }
 
@@ -319,16 +398,21 @@ export class AuthService {
   }
 
   /**
-   * Refreshes a token for an authenticated user.
+   * Exchanges a valid refresh token for a fresh access/refresh token pair.
    *
-   * Generates a new token with updated expiry while maintaining user claims.
-   * Note: This does not invalidate the old token.
+   * The user is re-loaded from the store so that role, stock access, and
+   * account status changes take effect on refresh. A new refresh token is
+   * issued (rotation). Note: being stateless, the previous refresh token
+   * remains cryptographically valid until it expires.
    *
-   * @param userId - ID of the user to refresh token for
-   * @returns New login result with fresh token
-   * @throws AuthenticationError if user not found or account disabled
+   * @param refreshToken - Refresh token presented by the client
+   * @returns New login result with fresh access and refresh tokens
+   * @throws AuthenticationError if the refresh token is invalid/expired, the
+   *   user no longer exists, or the account is disabled
    */
-  async refreshToken(userId: string): Promise<LoginResult> {
+  async refreshAccessToken(refreshToken: string): Promise<LoginResult> {
+    const { userId } = this.verifyRefreshToken(refreshToken);
+
     const user = await this.requireUserService().findUserById(userId);
 
     if (!user) {
@@ -345,12 +429,6 @@ export class AuthService {
       );
     }
 
-    const accessToken = this.generateToken(user);
-
-    return {
-      accessToken,
-      tokenType: 'Bearer',
-      expiresIn: parseExpiryToSeconds(this.jwtExpiresIn),
-    };
+    return this.issueTokens(user);
   }
 }

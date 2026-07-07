@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authApi } from '@/api';
+import { AUTH_LOGOUT_EVENT } from '@/api/client';
 import { User, LoginRequest } from '../types/api';
 
 interface AuthContextType {
@@ -7,7 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,18 +22,47 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already authenticated on mount
-    const checkAuth = () => {
-      const isAuth = authApi.isAuthenticated();
-      if (!isAuth) {
-        setUser(null);
+    let cancelled = false;
+
+    // On mount, restore the session:
+    // - a still-valid access token gives us the user immediately
+    // - otherwise try a silent refresh (uses the httpOnly refresh cookie)
+    const restoreSession = async () => {
+      const current = authApi.getCurrentUser();
+      if (current && authApi.isAuthenticated()) {
+        if (!cancelled) {
+          setUser(current);
+          setIsLoading(false);
+        }
+        return;
       }
-      // Note: We don't have the user data stored, so we just check token existence
-      // In a real app, you might want to call an API to get user info
-      setIsLoading(false);
+
+      try {
+        const refreshed = await authApi.refresh();
+        if (!cancelled) {
+          setUser(refreshed);
+        }
+      } catch {
+        if (!cancelled) {
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     };
 
-    checkAuth();
+    restoreSession();
+
+    // The API client fires this when a refresh fails and the session ends.
+    const handleForcedLogout = () => setUser(null);
+    window.addEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
+    };
   }, []);
 
   const login = async (credentials: LoginRequest) => {
@@ -40,14 +70,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(response.user);
   };
 
-  const logout = () => {
-    authApi.logout();
+  const logout = async () => {
+    await authApi.logout();
     setUser(null);
   };
 
   const value: AuthContextType = {
     user,
-    isAuthenticated: authApi.isAuthenticated(),
+    isAuthenticated: user !== null,
     isLoading,
     login,
     logout,

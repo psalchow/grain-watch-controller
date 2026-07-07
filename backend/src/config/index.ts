@@ -29,11 +29,28 @@ interface InfluxDBConfig {
  * JWT authentication configuration.
  */
 interface JWTConfig {
-  /** Secret key for signing tokens */
+  /** Secret key for signing access tokens */
   secret: string;
 
-  /** Token expiry duration (e.g., '24h', '7d') */
+  /** Access token expiry duration (e.g., '15m', '1h') */
   expiresIn: string;
+
+  /** Secret key for signing refresh tokens (must differ from `secret`) */
+  refreshSecret: string;
+
+  /** Refresh token expiry duration (e.g., '30d') */
+  refreshExpiresIn: string;
+}
+
+/**
+ * Refresh-token cookie configuration.
+ */
+interface CookieConfig {
+  /** Whether the refresh cookie requires HTTPS (Secure attribute) */
+  secure: boolean;
+
+  /** SameSite attribute for the refresh cookie */
+  sameSite: 'lax' | 'strict' | 'none';
 }
 
 /**
@@ -56,6 +73,9 @@ interface Config {
 
   /** JWT authentication settings */
   jwt: JWTConfig;
+
+  /** Refresh-token cookie settings */
+  cookie: CookieConfig;
 
   /** InfluxDB connection settings */
   influxdb: InfluxDBConfig;
@@ -109,6 +129,23 @@ function getEnvVarAsInt(key: string, defaultValue?: number): number {
 
 
 /**
+ * Retrieves an environment variable as a boolean with a default value.
+ *
+ * Accepts 'true'/'1' as true and 'false'/'0' as false (case-insensitive).
+ *
+ * @param key - Environment variable name
+ * @param defaultValue - Default value if not set
+ * @returns The parsed boolean value
+ */
+function getEnvVarAsBool(key: string, defaultValue: boolean): boolean {
+  const value = process.env[key];
+  if (value === undefined) {
+    return defaultValue;
+  }
+  return value === 'true' || value === '1';
+}
+
+/**
  * Validates the configuration and throws descriptive errors for invalid settings.
  *
  * @param cfg - Configuration object to validate
@@ -124,6 +161,19 @@ function validateConfig(cfg: Config): void {
     }
     if (cfg.jwt.secret.length < 32) {
       errors.push('JWT_SECRET must be at least 32 characters in production');
+    }
+    if (
+      cfg.jwt.refreshSecret === 'development-refresh-secret-change-in-production'
+    ) {
+      errors.push('JWT_REFRESH_SECRET must be set in production environment');
+    }
+    if (cfg.jwt.refreshSecret.length < 32) {
+      errors.push(
+        'JWT_REFRESH_SECRET must be at least 32 characters in production'
+      );
+    }
+    if (cfg.jwt.refreshSecret === cfg.jwt.secret) {
+      errors.push('JWT_REFRESH_SECRET must be different from JWT_SECRET');
     }
   }
 
@@ -176,7 +226,19 @@ export const config: Config = {
   nodeEnv: getEnvVar('NODE_ENV', 'development'),
   jwt: {
     secret: getEnvVar('JWT_SECRET', 'development-secret-change-in-production'),
-    expiresIn: getEnvVar('JWT_EXPIRES_IN', '24h'),
+    expiresIn: getEnvVar('JWT_EXPIRES_IN', '15m'),
+    refreshSecret: getEnvVar(
+      'JWT_REFRESH_SECRET',
+      'development-refresh-secret-change-in-production'
+    ),
+    refreshExpiresIn: getEnvVar('JWT_REFRESH_EXPIRES_IN', '30d'),
+  },
+  cookie: {
+    secure: getEnvVarAsBool(
+      'COOKIE_SECURE',
+      getEnvVar('NODE_ENV', 'development') === 'production'
+    ),
+    sameSite: getEnvVar('COOKIE_SAMESITE', 'lax') as CookieConfig['sameSite'],
   },
   influxdb: {
     url: getEnvVar('INFLUXDB_URL', 'http://localhost:8086'),
@@ -195,4 +257,4 @@ if (process.env['NODE_ENV'] !== 'test') {
   validateConfig(config);
 }
 
-export type { Config, InfluxDBConfig, JWTConfig, DatabaseConfig };
+export type { Config, InfluxDBConfig, JWTConfig, CookieConfig, DatabaseConfig };

@@ -60,6 +60,53 @@ describe('Configuration', () => {
     );
   });
 
+  it('should use default access and refresh token expiries', async () => {
+    delete process.env['JWT_EXPIRES_IN'];
+    delete process.env['JWT_REFRESH_EXPIRES_IN'];
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+
+    const { config } = await import('../../src/config/index');
+
+    expect(config.jwt.expiresIn).toBe('15m');
+    expect(config.jwt.refreshExpiresIn).toBe('30d');
+  });
+
+  it('should default cookie settings by environment', async () => {
+    process.env['NODE_ENV'] = 'development';
+    delete process.env['COOKIE_SECURE'];
+    delete process.env['COOKIE_SAMESITE'];
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+
+    const { config } = await import('../../src/config/index');
+
+    expect(config.cookie.secure).toBe(false);
+    expect(config.cookie.sameSite).toBe('lax');
+  });
+
+  it('should require refresh secret to be set in production', async () => {
+    process.env['NODE_ENV'] = 'production';
+    process.env['JWT_SECRET'] = 'a-sufficiently-long-production-secret-value';
+    delete process.env['JWT_REFRESH_SECRET'];
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+    process.env['INFLUXDB_URL'] = 'http://localhost:8086';
+
+    await expect(import('../../src/config/index')).rejects.toThrow(
+      /JWT_REFRESH_SECRET must be set in production/
+    );
+  });
+
+  it('should require refresh secret to differ from access secret in production', async () => {
+    process.env['NODE_ENV'] = 'production';
+    process.env['JWT_SECRET'] = 'a-sufficiently-long-production-secret-value';
+    process.env['JWT_REFRESH_SECRET'] = 'a-sufficiently-long-production-secret-value';
+    process.env['INFLUXDB_TOKEN'] = 'test-token';
+    process.env['INFLUXDB_URL'] = 'http://localhost:8086';
+
+    await expect(import('../../src/config/index')).rejects.toThrow(
+      /JWT_REFRESH_SECRET must be different from JWT_SECRET/
+    );
+  });
+
   it('should include influxdb measurement in config', async () => {
     process.env['INFLUXDB_MEASUREMENT'] = 'TestMeasurement';
     process.env['INFLUXDB_TOKEN'] = 'test-token';

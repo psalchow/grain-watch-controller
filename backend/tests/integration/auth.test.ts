@@ -22,6 +22,12 @@ jest.mock('../../src/config', () => ({
     jwt: {
       secret: 'test-secret-key-for-testing-only-must-be-long-enough',
       expiresIn: '24h',
+      refreshSecret: 'test-refresh-secret-for-testing-only-must-be-long',
+      refreshExpiresIn: '30d',
+    },
+    cookie: {
+      secure: false,
+      sameSite: 'lax',
     },
     influxdb: {
       url: 'http://localhost:8086',
@@ -120,6 +126,24 @@ describe('Auth Endpoints', () => {
       expect(decoded).toHaveProperty('username', 'testadmin');
     });
 
+    it('should set an httpOnly refresh_token cookie on login', async () => {
+      const response = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          username: 'testadmin',
+          password: 'testpassword123',
+        });
+
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      expect(cookies).toBeDefined();
+      const refreshCookie = cookies.find((c) =>
+        c.startsWith('refresh_token=')
+      );
+      expect(refreshCookie).toBeDefined();
+      expect(refreshCookie!.toLowerCase()).toContain('httponly');
+      expect(refreshCookie).not.toContain('refresh_token=;');
+    });
+
     it('should login viewer successfully', async () => {
       const response = await request(app)
         .post('/api/v1/auth/login')
@@ -207,101 +231,107 @@ describe('Auth Endpoints', () => {
   });
 
   describe('POST /api/v1/auth/refresh', () => {
-    let validToken: string;
-
-    beforeAll(async () => {
-      // Get a valid token for testing
+    /** Extracts the refresh_token cookie value from a login response. */
+    async function loginAndGetRefreshCookie(): Promise<string> {
       const loginResponse = await request(app)
         .post('/api/v1/auth/login')
-        .send({
-          username: 'testadmin',
-          password: 'testpassword123',
-        });
-      validToken = loginResponse.body.token;
-    });
+        .send({ username: 'testadmin', password: 'testpassword123' });
+      const cookies = loginResponse.headers['set-cookie'] as unknown as string[];
+      const cookie = cookies.find((c) => c.startsWith('refresh_token='))!;
+      return cookie.split(';')[0]!;
+    }
 
-    it('should refresh token successfully with valid token', async () => {
+    it('should refresh the access token using only the refresh cookie', async () => {
+      const refreshCookie = await loginAndGetRefreshCookie();
+
       const response = await request(app)
         .post('/api/v1/auth/refresh')
-        .set('Authorization', `Bearer ${validToken}`);
+        .set('Cookie', refreshCookie);
 
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('token');
       expect(response.body).toHaveProperty('expiresIn');
 
-      // Verify new token is valid
       const decoded = jwt.verify(
         response.body.token,
         'test-secret-key-for-testing-only-must-be-long-enough'
       );
-      expect(decoded).toHaveProperty('userId');
       expect(decoded).toHaveProperty('username', 'testadmin');
       expect(decoded).toHaveProperty('role', 'admin');
-
-      // Note: Token may be identical to validToken if generated within the same second
-      // (JWT iat is in seconds, not milliseconds)
     });
 
-    it('should return 401 for missing Authorization header', async () => {
-      const response = await request(app)
-        .post('/api/v1/auth/refresh');
+    it('should rotate the refresh cookie on refresh', async () => {
+      const refreshCookie = await loginAndGetRefreshCookie();
 
-      expect(response.status).toBe(401);
-    });
-
-    it('should return 401 for invalid token', async () => {
       const response = await request(app)
         .post('/api/v1/auth/refresh')
-        .set('Authorization', 'Bearer invalid-token');
+        .set('Cookie', refreshCookie);
+
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      const rotated = cookies.find((c) => c.startsWith('refresh_token='));
+      expect(rotated).toBeDefined();
+      expect(rotated!.toLowerCase()).toContain('httponly');
+    });
+
+    it('should refresh even when no access token is present', async () => {
+      // No Authorization header at all — only the refresh cookie.
+      const refreshCookie = await loginAndGetRefreshCookie();
+
+      const response = await request(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', refreshCookie);
+
+      expect(response.status).toBe(200);
+    });
+
+    it('should return 401 when the refresh cookie is missing', async () => {
+      const response = await request(app).post('/api/v1/auth/refresh');
 
       expect(response.status).toBe(401);
     });
 
-    it('should return 401 for expired token', async () => {
-      // Create an expired token
-      const expiredToken = jwt.sign(
-        {
-          userId: 'usr_001',
-          username: 'testadmin',
-          role: 'admin',
-          stockAccess: ['*'],
-        },
-        'test-secret-key-for-testing-only-must-be-long-enough',
+    it('should return 401 for an invalid refresh cookie', async () => {
+      const response = await request(app)
+        .post('/api/v1/auth/refresh')
+        .set('Cookie', 'refresh_token=invalid-token');
+
+      expect(response.status).toBe(401);
+    });
+
+    it('should return 401 for an expired refresh cookie', async () => {
+      const expired = jwt.sign(
+        { userId: 'usr_001', type: 'refresh' },
+        'test-refresh-secret-for-testing-only-must-be-long',
         { expiresIn: '-1s' }
       );
 
       const response = await request(app)
         .post('/api/v1/auth/refresh')
-        .set('Authorization', `Bearer ${expiredToken}`);
+        .set('Cookie', `refresh_token=${expired}`);
 
       expect(response.status).toBe(401);
     });
+  });
 
-    it('should return 401 for token with wrong secret', async () => {
-      const wrongSecretToken = jwt.sign(
-        {
-          userId: 'usr_001',
-          username: 'testadmin',
-          role: 'admin',
-          stockAccess: ['*'],
-        },
-        'wrong-secret-key',
-        { expiresIn: '1h' }
-      );
+  describe('POST /api/v1/auth/logout', () => {
+    it('should clear the refresh cookie and return 204', async () => {
+      const response = await request(app).post('/api/v1/auth/logout');
 
-      const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .set('Authorization', `Bearer ${wrongSecretToken}`);
-
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(204);
+      const cookies = response.headers['set-cookie'] as unknown as string[];
+      expect(cookies).toBeDefined();
+      const cleared = cookies.find((c) => c.startsWith('refresh_token='));
+      expect(cleared).toBeDefined();
+      // Cleared cookie has an empty value.
+      expect(cleared).toMatch(/^refresh_token=;/);
     });
 
-    it('should return 401 for malformed Authorization header', async () => {
+    it('should succeed without any valid access token', async () => {
       const response = await request(app)
-        .post('/api/v1/auth/refresh')
-        .set('Authorization', 'InvalidFormat');
+        .post('/api/v1/auth/logout')
+        .set('Authorization', 'Bearer expired-or-invalid');
 
-      expect(response.status).toBe(401);
+      expect(response.status).toBe(204);
     });
   });
 });

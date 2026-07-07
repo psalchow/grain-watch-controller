@@ -10,6 +10,7 @@ import express, { Express } from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import { errorHandler, notFoundHandler } from './middleware';
 import { createApiRouter } from './routes';
 
@@ -138,6 +139,9 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   // Parse URL-encoded request bodies
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+  // Parse cookies (required for the httpOnly refresh-token cookie)
+  app.use(cookieParser());
 
   // ==========================================================================
   // Health Check Endpoint

@@ -8,6 +8,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService, AuthenticationError } from '../services/auth';
 import { LoginRequest } from '../middleware';
+import { config } from '../config';
+
+/** Name of the cookie carrying the refresh token. */
+const REFRESH_COOKIE_NAME = 'refresh_token';
+
+/** Path the refresh cookie is scoped to (only the auth endpoints need it). */
+const REFRESH_COOKIE_PATH = '/api/v1/auth';
 
 /**
  * Controller class for authentication-related endpoints.
@@ -25,6 +32,44 @@ export class AuthController {
    */
   constructor(authService: AuthService) {
     this.authService = authService;
+  }
+
+  /**
+   * Sets the httpOnly refresh-token cookie on the response.
+   *
+   * @param res - Express response object
+   * @param refreshToken - Refresh token value
+   * @param maxAgeSeconds - Cookie lifetime in seconds
+   */
+  private setRefreshCookie(
+    res: Response,
+    refreshToken: string,
+    maxAgeSeconds: number
+  ): void {
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
+      httpOnly: true,
+      secure: config.cookie.secure,
+      sameSite: config.cookie.sameSite,
+      path: REFRESH_COOKIE_PATH,
+      maxAge: maxAgeSeconds * 1000,
+    });
+  }
+
+  /**
+   * Clears the refresh-token cookie on the response.
+   *
+   * Cookie attributes must match those used when setting it, otherwise the
+   * browser will not remove it.
+   *
+   * @param res - Express response object
+   */
+  private clearRefreshCookie(res: Response): void {
+    res.clearCookie(REFRESH_COOKIE_NAME, {
+      httpOnly: true,
+      secure: config.cookie.secure,
+      sameSite: config.cookie.sameSite,
+      path: REFRESH_COOKIE_PATH,
+    });
   }
 
   /**
@@ -73,6 +118,13 @@ export class AuthController {
       // Decode the token to get user details for the response
       const decoded = this.authService.verifyToken(loginResult.accessToken);
 
+      // Deliver the refresh token as an httpOnly cookie (never in the body)
+      this.setRefreshCookie(
+        res,
+        loginResult.refreshToken,
+        loginResult.refreshExpiresIn
+      );
+
       res.status(200).json({
         token: loginResult.accessToken,
         expiresIn: `${loginResult.expiresIn}s`,
@@ -114,14 +166,18 @@ export class AuthController {
    *
    * @returns JSON response with new token details on success
    *
+   * The refresh token is read from the httpOnly `refresh_token` cookie, so no
+   * Authorization header is required — this allows refreshing after the access
+   * token has already expired. A rotated refresh cookie is set on success.
+   *
    * @example
-   * Headers:
-   * Authorization: Bearer <current-token>
+   * Cookie:
+   * refresh_token=<current-refresh-token>
    *
    * Response (200):
    * {
    *   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-   *   "expiresIn": "24h"
+   *   "expiresIn": "900s"
    * }
    */
   async refreshToken(
@@ -130,9 +186,26 @@ export class AuthController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = req.user!;
+      const refreshToken = req.cookies?.[REFRESH_COOKIE_NAME] as
+        | string
+        | undefined;
 
-      const refreshResult = await this.authService.refreshToken(user.id);
+      if (!refreshToken) {
+        throw new AuthenticationError(
+          'Missing refresh token',
+          'INVALID_TOKEN'
+        );
+      }
+
+      const refreshResult =
+        await this.authService.refreshAccessToken(refreshToken);
+
+      // Rotate the refresh cookie
+      this.setRefreshCookie(
+        res,
+        refreshResult.refreshToken,
+        refreshResult.refreshExpiresIn
+      );
 
       res.status(200).json({
         token: refreshResult.accessToken,
@@ -140,6 +213,8 @@ export class AuthController {
       });
     } catch (error) {
       if (error instanceof AuthenticationError) {
+        // Clear the (invalid/expired) cookie so the client stops retrying
+        this.clearRefreshCookie(res);
         const statusCode = this.getAuthErrorStatusCode(error.code);
         res.status(statusCode).json({
           error: {
@@ -153,6 +228,24 @@ export class AuthController {
 
       next(error);
     }
+  }
+
+  /**
+   * Handles logout requests.
+   *
+   * POST /api/v1/auth/logout
+   *
+   * Clears the refresh-token cookie. This is a public endpoint: it always
+   * succeeds regardless of whether a valid access token is present, so the
+   * client can always end its session (including after the access token has
+   * expired).
+   *
+   * @param _req - Express request (unused)
+   * @param res - Express response object
+   */
+  logout(_req: Request, res: Response): void {
+    this.clearRefreshCookie(res);
+    res.status(204).send();
   }
 
   /**

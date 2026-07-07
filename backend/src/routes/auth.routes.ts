@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { AuthController } from '../controllers';
-import { validateBody, loginSchema, authenticate, getAuthService } from '../middleware';
+import { validateBody, loginSchema, getAuthService } from '../middleware';
 
 /**
  * Creates the authentication router with all auth-related endpoints.
@@ -47,24 +47,32 @@ export function createAuthRouter(): Router {
   /**
    * POST /refresh
    *
-   * Refresh JWT token for an authenticated user.
+   * Exchange the refresh-token cookie for a new access token. No Authorization
+   * header is required, so this works even after the access token has expired.
    *
-   * Headers:
-   * - Authorization: Bearer <current-token>
+   * Cookie:
+   * - refresh_token: <current refresh token>
    *
    * Response (200):
    * - token: New JWT access token
    * - expiresIn: Token expiry duration
    *
    * Errors:
-   * - 401: Invalid or expired token
+   * - 401: Missing, invalid, or expired refresh token
    * - 403: Account disabled
    */
   router.post(
     '/refresh',
-    authenticate,
     (req, res, next) => controller.refreshToken(req, res, next)
   );
+
+  /**
+   * POST /logout
+   *
+   * Clear the refresh-token cookie. Public endpoint that always returns 204,
+   * so logout works regardless of access-token state.
+   */
+  router.post('/logout', (req, res) => controller.logout(req, res));
 
   return router;
 }
