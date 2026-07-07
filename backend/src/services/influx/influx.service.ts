@@ -97,6 +97,7 @@ export class InfluxDBService {
   private readonly measurement: string;
   private readonly outdoorTemperatureMeasurement: string;
   private readonly outdoorHumidityMeasurement: string;
+  private readonly outdoorLookback: string;
 
   /**
    * Creates a new InfluxDB service instance.
@@ -111,6 +112,7 @@ export class InfluxDBService {
     this.measurement = config.influxdb.measurement;
     this.outdoorTemperatureMeasurement = config.influxdb.outdoorTemperatureMeasurement;
     this.outdoorHumidityMeasurement = config.influxdb.outdoorHumidityMeasurement;
+    this.outdoorLookback = config.influxdb.outdoorLookback;
   }
 
   /**
@@ -243,7 +245,7 @@ export class InfluxDBService {
       SELECT LAST(${this.escapeMeasurement(field)}) AS "value"
       FROM ${this.escapeMeasurement(measurement)}
       WHERE "device" = '${escapedGroup}'
-        AND time > now() - 26w
+        AND time > now() - ${this.outdoorLookback}
     `;
 
     const [tempResult, humidityResult] = await Promise.all([

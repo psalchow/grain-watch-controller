@@ -29,6 +29,12 @@ interface InfluxDBConfig {
 
   /** Measurement name for outdoor humidity data */
   outdoorHumidityMeasurement: string;
+
+  /**
+   * Look-back window for the latest outdoor reading query as an InfluxQL
+   * duration (e.g. '1h', '26w'). Short in production, long in development.
+   */
+  outdoorLookback: string;
 }
 
 /**
@@ -195,6 +201,13 @@ function validateConfig(cfg: Config): void {
     errors.push(`INFLUXDB_URL must be a valid URL, got: ${cfg.influxdb.url}`);
   }
 
+  // Validate outdoor look-back duration (interpolated into InfluxQL)
+  if (!/^\d+[smhdw]$/.test(cfg.influxdb.outdoorLookback)) {
+    errors.push(
+      `INFLUXDB_OUTDOOR_LOOKBACK must be a valid InfluxQL duration (e.g. '1h', '26w'), got: ${cfg.influxdb.outdoorLookback}`
+    );
+  }
+
   // Validate JWT expiry format (basic check)
   const expiryPattern = /^\d+[smhdw]$/;
   if (!expiryPattern.test(cfg.jwt.expiresIn)) {
@@ -259,6 +272,10 @@ export const config: Config = {
     outdoorHumidityMeasurement: getEnvVar(
       'INFLUXDB_OUTDOOR_HUMIDITY_MEASUREMENT',
       'outdoor-humidity',
+    ),
+    outdoorLookback: getEnvVar(
+      'INFLUXDB_OUTDOOR_LOOKBACK',
+      getEnvVar('NODE_ENV', 'development') === 'production' ? '1h' : '26w',
     ),
   },
   database: {

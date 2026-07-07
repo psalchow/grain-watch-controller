@@ -7,6 +7,7 @@ jest.mock('../../src/config', () => ({
       measurement: 'Temp',
       outdoorTemperatureMeasurement: 'outdoor-temperature',
       outdoorHumidityMeasurement: 'outdoor-humidity',
+      outdoorLookback: '1h',
     },
   },
 }));
@@ -73,6 +74,8 @@ describe('InfluxDBService.getOutdoorReading', () => {
     expect(calls.some((q) => q.includes('"device" = \'corn-watch-1\''))).toBe(true);
     expect(calls.some((q) => q.includes('outdoor-temperature'))).toBe(true);
     expect(calls.some((q) => q.includes('outdoor-humidity'))).toBe(true);
+    expect(calls.every((q) => q.includes('now() - 1h'))).toBe(true);
+    expect(calls.some((q) => q.includes('26w'))).toBe(false);
   });
 
   it('returns nulls when a measurement has no series', async () => {

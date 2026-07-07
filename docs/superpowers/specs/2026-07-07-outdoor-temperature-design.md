@@ -40,7 +40,9 @@ New method `InfluxDBService.getOutdoorReading(deviceGroup: string)`.
   - `SELECT LAST("temp") AS "temp", LAST("measurementTimeS") AS "time" FROM "outdoor-temperature" WHERE "device" = '<deviceGroup>' AND time > now() - 26w`
   - analogous for `outdoor-humidity` with `LAST("humidity")`.
 - Reuse the existing escaping helpers (`escapeString`, `escapeMeasurement`).
-- Reuse the same 26-week look-back window used by `getLatestReadings`.
+- Look-back window is configurable via `INFLUXDB_OUTDOOR_LOOKBACK` (InfluxQL
+  duration). Default `1h` in production, `26w` in development. Validated against
+  `^\d+[smhdw]$` since it is interpolated into the query.
 - Timestamp handling: mirror the existing `measurementTimeS` (seconds → ms → ISO)
   approach used in `getLatestReadings`. If `measurementTimeS` is not present on the
   outdoor measurements, fall back to the point's own `time` column.
