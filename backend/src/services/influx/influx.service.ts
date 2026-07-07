@@ -34,6 +34,23 @@ export interface DeviceReading {
   measurementTime: string | null;
 }
 
+/**
+ * Latest outdoor reading for a device group.
+ */
+export interface OutdoorReading {
+  /** Outdoor temperature in Celsius */
+  temperature: number | null;
+
+  /** Outdoor relative humidity percentage (0-100) */
+  humidity: number | null;
+
+  /** Temperature measurement timestamp (ISO 8601), or null */
+  temperatureTime: string | null;
+
+  /** Humidity measurement timestamp (ISO 8601), or null */
+  humidityTime: string | null;
+}
+
 /** Single aggregated data point in a series. */
 export interface SeriesPoint {
   /** ISO 8601 UTC timestamp of the bucket start. */
@@ -78,6 +95,8 @@ export class InfluxDBService {
   private readonly token: string;
   private readonly bucket: string;
   private readonly measurement: string;
+  private readonly outdoorTemperatureMeasurement: string;
+  private readonly outdoorHumidityMeasurement: string;
 
   /**
    * Creates a new InfluxDB service instance.
@@ -90,6 +109,8 @@ export class InfluxDBService {
     this.token = config.influxdb.token;
     this.bucket = config.influxdb.bucket;
     this.measurement = config.influxdb.measurement;
+    this.outdoorTemperatureMeasurement = config.influxdb.outdoorTemperatureMeasurement;
+    this.outdoorHumidityMeasurement = config.influxdb.outdoorHumidityMeasurement;
   }
 
   /**
@@ -203,6 +224,73 @@ export class InfluxDBService {
     }
 
     return Array.from(deviceMap.values());
+  }
+
+  /**
+   * Retrieves the latest outdoor temperature and humidity for a device group.
+   *
+   * The two values live in separate measurements and are filtered by the
+   * `device` tag. Each `LAST()` query returns the timestamp of the point in
+   * its `time` column, which is used to report the reading age.
+   *
+   * @param deviceGroup - Device group identifier (e.g., 'corn-watch-1')
+   * @returns Latest outdoor reading; individual values are null when absent
+   */
+  async getOutdoorReading(deviceGroup: string): Promise<OutdoorReading> {
+    const escapedGroup = this.escapeString(deviceGroup);
+
+    const buildQuery = (measurement: string, field: string): string => `
+      SELECT LAST(${this.escapeMeasurement(field)}) AS "value"
+      FROM ${this.escapeMeasurement(measurement)}
+      WHERE "device" = '${escapedGroup}'
+        AND time > now() - 26w
+    `;
+
+    const [tempResult, humidityResult] = await Promise.all([
+      this.executeQuery(buildQuery(this.outdoorTemperatureMeasurement, 'temp')),
+      this.executeQuery(buildQuery(this.outdoorHumidityMeasurement, 'humidity')),
+    ]);
+
+    const temp = this.parseLastPoint(tempResult);
+    const humidity = this.parseLastPoint(humidityResult);
+
+    return {
+      temperature: temp.value,
+      humidity: humidity.value,
+      temperatureTime: temp.time,
+      humidityTime: humidity.time,
+    };
+  }
+
+  /**
+   * Extracts the single value and timestamp from a `LAST()` query result.
+   */
+  private parseLastPoint(
+    result: InfluxQueryResult,
+  ): { value: number | null; time: string | null } {
+    for (const queryResult of result.results) {
+      if (!queryResult.series) continue;
+
+      for (const series of queryResult.series) {
+        if (!series.values || series.values.length === 0) continue;
+
+        const valueIdx = series.columns.indexOf('value');
+        const timeIdx = series.columns.indexOf('time');
+        const row = series.values[0];
+        if (!row || valueIdx === -1) continue;
+
+        const rawValue = row[valueIdx];
+        const rawTime = timeIdx !== -1 ? row[timeIdx] : null;
+
+        return {
+          value: typeof rawValue === 'number' ? rawValue : null,
+          time:
+            rawTime != null ? new Date(rawTime as string).toISOString() : null,
+        };
+      }
+    }
+
+    return { value: null, time: null };
   }
 
   /**

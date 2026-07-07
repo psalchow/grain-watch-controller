@@ -23,6 +23,12 @@ interface InfluxDBConfig {
 
   /** Measurement name for sensor data */
   measurement: string;
+
+  /** Measurement name for outdoor temperature data */
+  outdoorTemperatureMeasurement: string;
+
+  /** Measurement name for outdoor humidity data */
+  outdoorHumidityMeasurement: string;
 }
 
 /**
@@ -246,6 +252,14 @@ export const config: Config = {
     org: getEnvVar('INFLUXDB_ORG', 'grainwatch'),
     bucket: getEnvVar('INFLUXDB_BUCKET', 'grainwatch'),
     measurement: getEnvVar('INFLUXDB_MEASUREMENT', 'Temp'),
+    outdoorTemperatureMeasurement: getEnvVar(
+      'INFLUXDB_OUTDOOR_TEMPERATURE_MEASUREMENT',
+      'outdoor-temperature',
+    ),
+    outdoorHumidityMeasurement: getEnvVar(
+      'INFLUXDB_OUTDOOR_HUMIDITY_MEASUREMENT',
+      'outdoor-humidity',
+    ),
   },
   database: {
     path: getEnvVar('DATABASE_PATH', './data/grainwatch.db'),
