@@ -63,7 +63,7 @@ export default function StockDetailPage() {
               </span>
               <OutdoorSummary
                 outdoor={data.outdoor}
-                className="order-last w-full sm:order-none sm:w-auto"
+                className="order-last w-full lg:order-none lg:w-auto"
               />
             </>
           )}
