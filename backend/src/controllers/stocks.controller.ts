@@ -1,8 +1,43 @@
 import { Request, Response, NextFunction } from 'express';
-import { InfluxDBService, SeriesPoint, StockService } from '../services';
+import { InfluxDBService, SeriesPoint, StockService, OutdoorReading } from '../services';
 import { NotFoundError } from '../middleware';
 import { hasStockAccess } from '../models';
 import { getRange, Resolution } from '../utils/timeRange';
+import { dewPoint, absoluteHumidity } from '../utils/psychrometrics';
+
+interface OutdoorConditions {
+  temperature: number | null;
+  humidity: number | null;
+  dewPoint: number | null;
+  absoluteHumidity: number | null;
+  lastMeasurement: string | null;
+}
+
+const round1 = (value: number): number => Math.round(value * 10) / 10;
+
+function buildOutdoorConditions(reading: OutdoorReading): OutdoorConditions {
+  const { temperature, humidity } = reading;
+  const canDerive = temperature !== null && humidity !== null;
+
+  const times = [reading.temperatureTime, reading.humidityTime].filter(
+    (t): t is string => t !== null,
+  );
+  const lastMeasurement = times.reduce<string | null>(
+    (latest, t) =>
+      latest === null || new Date(t) > new Date(latest) ? t : latest,
+    null,
+  );
+
+  return {
+    temperature: temperature !== null ? round1(temperature) : null,
+    humidity: humidity !== null ? Math.round(humidity) : null,
+    dewPoint: canDerive ? round1(dewPoint(temperature, humidity)) : null,
+    absoluteHumidity: canDerive
+      ? round1(absoluteHumidity(temperature, humidity))
+      : null,
+    lastMeasurement,
+  };
+}
 
 export class StocksController {
   constructor(
@@ -51,7 +86,10 @@ export class StocksController {
         throw new NotFoundError(`Stock not found: ${stockId}`);
       }
 
-      const readings = await this.influxService.getLatestReadings(metadata.deviceGroup);
+      const [readings, outdoorReading] = await Promise.all([
+        this.influxService.getLatestReadings(metadata.deviceGroup),
+        this.influxService.getOutdoorReading(metadata.deviceGroup),
+      ]);
 
       if (readings.length === 0) {
         throw new NotFoundError(`No readings found for stock: ${stockId}`);
@@ -82,6 +120,7 @@ export class StocksController {
         stockName: metadata?.name ?? stockId,
         timestamp: latestTimestamp ?? new Date().toISOString(),
         devices,
+        outdoor: buildOutdoorConditions(outdoorReading),
       });
     } catch (error) {
       next(error);

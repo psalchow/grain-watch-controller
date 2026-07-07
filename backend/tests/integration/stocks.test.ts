@@ -33,6 +33,8 @@ jest.mock('../../src/config', () => ({
       org: 'test-org',
       bucket: 'testdb',
       measurement: 'Temp',
+      outdoorTemperatureMeasurement: 'outdoor-temperature',
+      outdoorHumidityMeasurement: 'outdoor-humidity',
     },
   },
 }));
@@ -41,15 +43,18 @@ jest.mock('../../src/config', () => ({
 jest.mock('../../src/services/influx/influx.service', () => {
   const mockGetLatestReadings = jest.fn();
   const mockGetHistory = jest.fn();
+  const mockGetOutdoorReading = jest.fn();
 
   return {
     InfluxDBService: jest.fn().mockImplementation(() => ({
       getLatestReadings: mockGetLatestReadings,
       getHistory: mockGetHistory,
+      getOutdoorReading: mockGetOutdoorReading,
       testConnection: jest.fn().mockResolvedValue(true),
     })),
     __mockGetLatestReadings: mockGetLatestReadings,
     __mockGetHistory: mockGetHistory,
+    __mockGetOutdoorReading: mockGetOutdoorReading,
   };
 });
 
@@ -74,6 +79,7 @@ describe('Stock Endpoints', () => {
   const mockedInflux = jest.requireMock('../../src/services/influx/influx.service');
   const mockGetLatestReadings = mockedInflux.__mockGetLatestReadings;
   const mockGetHistory = mockedInflux.__mockGetHistory;
+  const mockGetOutdoorReading = mockedInflux.__mockGetOutdoorReading;
 
   beforeAll(async () => {
     initDb({ path: ':memory:' });
@@ -112,6 +118,13 @@ describe('Stock Endpoints', () => {
     jest.clearAllMocks();
     mockGetLatestReadings.mockReset();
     mockGetHistory.mockReset();
+    mockGetOutdoorReading.mockReset();
+    mockGetOutdoorReading.mockResolvedValue({
+      temperature: 12.4,
+      humidity: 78,
+      temperatureTime: '2026-01-16T09:00:00.000Z',
+      humidityTime: '2026-01-16T09:00:30.000Z',
+    });
 
     // Set up default mock responses
     mockGetLatestReadings.mockResolvedValue([
@@ -202,6 +215,46 @@ describe('Stock Endpoints', () => {
       expect(response.body.devices[0].temperature).toHaveProperty('bottom');
       expect(response.body.devices[0]).toHaveProperty('humidity');
       expect(response.body.devices[0]).toHaveProperty('batteryMV');
+    });
+
+    it('includes outdoor conditions with derived values', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('outdoor');
+      expect(response.body.outdoor).toMatchObject({
+        temperature: 12.4,
+        humidity: 78,
+        lastMeasurement: '2026-01-16T09:00:30.000Z',
+      });
+      expect(typeof response.body.outdoor.dewPoint).toBe('number');
+      expect(typeof response.body.outdoor.absoluteHumidity).toBe('number');
+      expect(response.body.outdoor.dewPoint).toBeCloseTo(8.7, 0);
+      expect(response.body.outdoor.absoluteHumidity).toBeCloseTo(8.5, 0);
+    });
+
+    it('returns null outdoor values when no outdoor data exists', async () => {
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: null,
+        humidity: null,
+        temperatureTime: null,
+        humidityTime: null,
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor).toEqual({
+        temperature: null,
+        humidity: null,
+        dewPoint: null,
+        absoluteHumidity: null,
+        lastMeasurement: null,
+      });
     });
 
     it('should return 403 for unauthorised stock', async () => {

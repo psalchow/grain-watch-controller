@@ -71,4 +71,4 @@ export type {
   LoginResult,
   DecodedToken,
 } from './auth';
-export type { DeviceReading, SeriesPoint, HistoryReadings } from './influx';
+export type { DeviceReading, SeriesPoint, HistoryReadings, OutdoorReading } from './influx';
