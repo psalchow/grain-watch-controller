@@ -49,11 +49,20 @@ export interface DeviceReading {
   lastMeasurement: string | null; // ISO 8601
 }
 
+export interface OutdoorConditions {
+  temperature: number | null; // °C
+  humidity: number | null; // %
+  dewPoint: number | null; // °C
+  absoluteHumidity: number | null; // g/m³
+  lastMeasurement: string | null; // ISO 8601
+}
+
 export interface LatestReadingsResponse {
   stockId: string;
   stockName: string;
   timestamp: string; // ISO 8601
   devices: DeviceReading[];
+  outdoor: OutdoorConditions;
 }
 
 // Temperature/Humidity Time Series
