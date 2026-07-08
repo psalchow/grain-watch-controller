@@ -185,8 +185,8 @@ All under `authenticate` + `requireStockAccess`. If the hall's
 - Multiple fans per hall.
 - Configuring fan settings through an admin UI (config via migration/seed for now).
 
-## 6. Open item to confirm during implementation
-Confirm on the physical device that with the stated settings the Shelly:
-publishes `{prefix}/status/switch:0` on change and a retained `{prefix}/online`
-LWT, and accepts `on`/`off` on `{prefix}/command/switch:0`. Adjust topics if the
-device differs.
+## 6. Confirmed device behaviour
+Verified on the physical device with the stated settings: the Shelly accepts
+`on`/`off` on `{prefix}/command/switch:0`, publishes `{prefix}/status/switch:0`
+on change, and publishes a retained `{prefix}/online` LWT. The topic contract in
+§2 is authoritative — no further device confirmation needed.
