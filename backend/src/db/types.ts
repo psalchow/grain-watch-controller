@@ -15,6 +15,9 @@ export interface Stock {
   hasHumidity: boolean;
   active: boolean;
   createdAt: string;
+  fanControlEnabled: boolean;
+  fanTopicPrefix?: string;
+  fanSwitchId: number;
 }
 
 export { drizzle, schema };

@@ -14,6 +14,9 @@ export const SEED_STOCKS: Stock[] = [
     hasHumidity: true,
     active: true,
     createdAt: SEED_TIMESTAMP,
+    fanControlEnabled: true,
+    fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control',
+    fanSwitchId: 0,
   },
   {
     id: 'grain-watch-2',
@@ -25,6 +28,8 @@ export const SEED_STOCKS: Stock[] = [
     hasHumidity: false,
     active: false,
     createdAt: SEED_TIMESTAMP,
+    fanControlEnabled: false,
+    fanSwitchId: 0,
   },
 ];
 

@@ -8,6 +8,13 @@
       "when": 1780433714353,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783551745814,
+      "tag": "0001_fan_control",
+      "breakpoints": true
     }
   ]
 }

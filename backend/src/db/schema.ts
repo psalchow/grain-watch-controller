@@ -34,9 +34,43 @@ export const stocks = sqliteTable('stocks', {
   hasHumidity: integer('has_humidity', { mode: 'boolean' }).notNull(),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
+  fanControlEnabled: integer('fan_control_enabled', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  fanTopicPrefix: text('fan_topic_prefix'),
+  fanSwitchId: integer('fan_switch_id').notNull().default(0),
 });
+
+export const fanState = sqliteTable('fan_state', {
+  stockId: text('stock_id')
+    .primaryKey()
+    .references(() => stocks.id, { onDelete: 'cascade' }),
+  desiredOn: integer('desired_on', { mode: 'boolean' }).notNull().default(false),
+  since: text('since'),
+  lastCommandAt: text('last_command_at'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const fanEvents = sqliteTable(
+  'fan_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    stockId: text('stock_id')
+      .notNull()
+      .references(() => stocks.id, { onDelete: 'cascade' }),
+    ts: text('ts').notNull(),
+    kind: text('kind').notNull(),
+    payload: text('payload'),
+    source: text('source').notNull(),
+  },
+  (table) => ({
+    stockTsIdx: index('fan_events_stock_ts_idx').on(table.stockId, table.ts),
+  })
+);
 
 export type DbUser = typeof users.$inferSelect;
 export type DbUserInsert = typeof users.$inferInsert;
 export type DbStock = typeof stocks.$inferSelect;
 export type DbStockInsert = typeof stocks.$inferInsert;
+export type DbFanState = typeof fanState.$inferSelect;
+export type DbFanEvent = typeof fanEvents.$inferSelect;

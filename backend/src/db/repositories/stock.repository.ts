@@ -31,6 +31,9 @@ export class StockRepository {
           hasHumidity: s.hasHumidity,
           active: s.active,
           createdAt: s.createdAt,
+          fanControlEnabled: s.fanControlEnabled,
+          fanTopicPrefix: s.fanTopicPrefix ?? null,
+          fanSwitchId: s.fanSwitchId,
         }))
       )
       .onConflictDoNothing({ target: stocks.id })
@@ -47,9 +50,14 @@ export class StockRepository {
       hasHumidity: row.hasHumidity,
       active: row.active,
       createdAt: row.createdAt,
+      fanControlEnabled: row.fanControlEnabled,
+      fanSwitchId: row.fanSwitchId,
     };
     if (row.description !== null) {
       stock.description = row.description;
+    }
+    if (row.fanTopicPrefix !== null) {
+      stock.fanTopicPrefix = row.fanTopicPrefix;
     }
     return stock;
   }
