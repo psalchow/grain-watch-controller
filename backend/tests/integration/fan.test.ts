@@ -25,13 +25,15 @@ function token(): string {
 
 const published: Array<{ topic: string; message: string }> = [];
 
+let manager: FanControlManager;
+
 beforeEach(async () => {
   initDb({ path: ':memory:' });
   runMigrations(getDb());
   await seedStocks(new StockRepository(getDb()));
   resetServiceSingletonsForTests();
   published.length = 0;
-  const manager = new FanControlManager({
+  manager = new FanControlManager({
     stocks: [{ stockId: 'grain-watch-1', topicPrefix: '/p', switchId: 0 }],
     mqtt: { publish: (topic, message) => published.push({ topic, message }), subscribe: () => {}, onMessage: () => {} },
     stateRepo: new FanStateRepository(getDb()),
@@ -42,7 +44,7 @@ beforeEach(async () => {
   setFanManager(manager);
 });
 
-afterEach(() => { setFanManager(null); closeDb(); });
+afterEach(() => { manager.shutdown(); setFanManager(null); closeDb(); });
 
 function app() { return finaliseApp(createApp({ enableLogging: false })); }
 
