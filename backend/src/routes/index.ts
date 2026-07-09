@@ -9,6 +9,7 @@ import { Router } from 'express';
 import { createAuthRouter } from './auth.routes';
 import { createStocksRouter } from './stocks.routes';
 import { createAdminRouter } from './admin.routes';
+import { createFanRouter } from './fan.routes';
 
 /**
  * Creates the main API router with all route modules mounted.
@@ -29,6 +30,9 @@ export function createApiRouter(): Router {
   // Mount stock data routes
   router.use('/stocks', createStocksRouter());
 
+  // Mount fan control routes (after stocks so /stocks/:id/fan* falls through)
+  router.use('/stocks', createFanRouter());
+
   // Mount admin routes
   router.use('/admin', createAdminRouter());
 
@@ -39,3 +43,4 @@ export function createApiRouter(): Router {
 export { createAuthRouter } from './auth.routes';
 export { createStocksRouter } from './stocks.routes';
 export { createAdminRouter } from './admin.routes';
+export { createFanRouter } from './fan.routes';

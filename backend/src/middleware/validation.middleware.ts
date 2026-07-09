@@ -339,3 +339,16 @@ export const historyQuerySchema = z.object({
 
 /** Type inferred from historyQuerySchema */
 export type HistoryQuery = z.infer<typeof historyQuerySchema>;
+
+/**
+ * Fan command request body schema.
+ */
+export const fanCommandSchema = z.object({
+  action: z.enum(['on', 'off'], {
+    required_error: 'Action is required',
+    invalid_type_error: 'Action must be one of: on, off',
+  }),
+});
+
+/** Type inferred from fanCommandSchema */
+export type FanCommandRequest = z.infer<typeof fanCommandSchema>;

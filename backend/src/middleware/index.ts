@@ -25,6 +25,7 @@ export {
   userIdParamsSchema,
   userRoleEnum,
   historyQuerySchema,
+  fanCommandSchema,
 } from './validation.middleware';
 
 export type {
@@ -35,4 +36,5 @@ export type {
   UserIdParams,
   UserRole,
   HistoryQuery,
+  FanCommandRequest,
 } from './validation.middleware';

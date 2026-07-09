@@ -121,6 +121,7 @@ export class StocksController {
         timestamp: latestTimestamp ?? new Date().toISOString(),
         devices,
         outdoor: buildOutdoorConditions(outdoorReading),
+        fanControlEnabled: metadata.fanControlEnabled,
       });
     } catch (error) {
       next(error);
