@@ -124,4 +124,16 @@ describe('Configuration', () => {
 
     expect(config.database.path).toBe('/custom/path/grainwatch.db');
   });
+
+  describe('fan/mqtt config', () => {
+    it('provides mqtt and fan defaults', async () => {
+      jest.resetModules();
+      process.env['NODE_ENV'] = 'development';
+      const { config } = await import('../../src/config');
+      expect(config.fan.keepAliveMs).toBe(900000);
+      expect(config.fan.watchdogMs).toBe(10000);
+      expect(config.fan.retentionDays).toBe(90);
+      expect(config.mqtt.url).toBe('mqtt://localhost:1883');
+    });
+  });
 });

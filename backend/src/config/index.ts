@@ -73,6 +73,28 @@ interface DatabaseConfig {
   path: string;
 }
 
+/** MQTT broker connection configuration (backend-wide). */
+interface MqttConfig {
+  /** Broker URL, e.g. 'mqtt://host:1883' or 'mqtts://host:8883' */
+  url: string;
+  /** Broker username (optional) */
+  username?: string;
+  /** Broker password (optional) */
+  password?: string;
+}
+
+/** Fan-control timing configuration. */
+interface FanConfig {
+  /** Interval to re-assert the desired ON state (ms). Must be < Shelly Auto OFF (1 h). */
+  keepAliveMs: number;
+  /** Time to wait for a Shelly success after an ON command before switching off (ms). */
+  watchdogMs: number;
+  /** Days to retain fan_events rows. */
+  retentionDays: number;
+  /** Interval of the retention sweep (ms). */
+  retentionSweepMs: number;
+}
+
 /**
  * Complete application configuration.
  */
@@ -94,6 +116,12 @@ interface Config {
 
   /** Database connection settings */
   database: DatabaseConfig;
+
+  /** MQTT broker settings */
+  mqtt: MqttConfig;
+
+  /** Fan-control timing settings */
+  fan: FanConfig;
 }
 
 /**
@@ -201,6 +229,16 @@ function validateConfig(cfg: Config): void {
     errors.push(`INFLUXDB_URL must be a valid URL, got: ${cfg.influxdb.url}`);
   }
 
+  // Validate MQTT URL format
+  try {
+    new URL(cfg.mqtt.url);
+  } catch {
+    errors.push(`MQTT_URL must be a valid URL, got: ${cfg.mqtt.url}`);
+  }
+  if (cfg.fan.keepAliveMs >= 3600000) {
+    errors.push('FAN_KEEPALIVE_INTERVAL_MS must be under 3600000 (Shelly Auto OFF is 1 h)');
+  }
+
   // Validate outdoor look-back duration (interpolated into InfluxQL)
   if (!/^\d+[smhdw]$/.test(cfg.influxdb.outdoorLookback)) {
     errors.push(
@@ -281,6 +319,17 @@ export const config: Config = {
   database: {
     path: getEnvVar('DATABASE_PATH', './data/grainwatch.db'),
   },
+  mqtt: {
+    url: getEnvVar('MQTT_URL', 'mqtt://localhost:1883'),
+    ...(process.env['MQTT_USERNAME'] ? { username: process.env['MQTT_USERNAME'] } : {}),
+    ...(process.env['MQTT_PASSWORD'] ? { password: process.env['MQTT_PASSWORD'] } : {}),
+  },
+  fan: {
+    keepAliveMs: getEnvVarAsInt('FAN_KEEPALIVE_INTERVAL_MS', 900000),
+    watchdogMs: getEnvVarAsInt('FAN_WATCHDOG_TIMEOUT_MS', 10000),
+    retentionDays: getEnvVarAsInt('FAN_EVENT_RETENTION_DAYS', 90),
+    retentionSweepMs: getEnvVarAsInt('FAN_RETENTION_SWEEP_INTERVAL_MS', 21600000),
+  },
 };
 
 // Validate configuration on module load (skip in test environment for flexibility)
@@ -288,4 +337,4 @@ if (process.env['NODE_ENV'] !== 'test') {
   validateConfig(config);
 }
 
-export type { Config, InfluxDBConfig, JWTConfig, CookieConfig, DatabaseConfig };
+export type { Config, InfluxDBConfig, JWTConfig, CookieConfig, DatabaseConfig, MqttConfig, FanConfig };
