@@ -11,6 +11,12 @@ const API_BASE_URL =
  * Subscribes to the fan SSE stream for a stock. Sends the bearer token as a
  * header (so it never lands in server logs), refreshes it on a 401, and
  * exposes the latest snapshot plus a connected flag.
+ *
+ * Reconnect strategy: on 401 the effect aborts the current connection, calls
+ * apiClient.refresh(), then increments `retry` to re-run the effect so the
+ * token header is re-evaluated fresh. A refresh is attempted at most once per
+ * disconnected period; the guard resets on every successful open so a later
+ * token expiry can trigger another single refresh.
  */
 export function useFanStream(
   stockId: string | undefined,
@@ -18,7 +24,8 @@ export function useFanStream(
 ): { snapshot: FanSnapshot | null; connected: boolean } {
   const [snapshot, setSnapshot] = useState<FanSnapshot | null>(null);
   const [connected, setConnected] = useState(false);
-  const refreshedRef = useRef(false);
+  const [retry, setRetry] = useState(0);
+  const refreshAttempts = useRef(0);
 
   useEffect(() => {
     if (!stockId || !enabled) return;
@@ -26,15 +33,26 @@ export function useFanStream(
 
     void fetchEventSource(`${API_BASE_URL}/stocks/${stockId}/fan/stream`, {
       signal: controller.signal,
+      // Token is re-evaluated on every effect run so reconnects after a
+      // refresh pick up the new token rather than the expired one.
       headers: { Authorization: `Bearer ${apiClient.getToken() ?? ''}` },
       openWhenHidden: true,
       onopen: async (res) => {
-        if (res.status === 401 && !refreshedRef.current) {
-          refreshedRef.current = true;
-          await apiClient.refresh();
-          throw new Error('retry-after-refresh');
+        if (res.status === 401) {
+          if (refreshAttempts.current < 1) {
+            refreshAttempts.current += 1;
+            await apiClient.refresh();
+            controller.abort();
+            setRetry((n) => n + 1); // re-run effect → fresh token header
+          } else {
+            // Second consecutive 401: give up to avoid an infinite refresh loop.
+            setConnected(false);
+          }
+          return;
         }
-        refreshedRef.current = false;
+        // Successful open: reset the refresh guard so a future expiry can
+        // trigger another single refresh cycle.
+        refreshAttempts.current = 0;
         setConnected(true);
       },
       onmessage: (ev) => {
@@ -51,7 +69,7 @@ export function useFanStream(
       controller.abort();
       setConnected(false);
     };
-  }, [stockId, enabled]);
+  }, [stockId, enabled, retry]);
 
   return { snapshot, connected };
 }
