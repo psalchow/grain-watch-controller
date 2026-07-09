@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, Fan, RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
+import { FanStatusCard } from '@/components/FanStatusCard';
 import { SensorCard } from '@/components/SensorCard';
 import { OutdoorSummary } from '@/components/OutdoorSummary';
 import { StockHistorySection } from '@/components/StockHistorySection';
 import { Button } from '@/components/ui/button';
 import { stocksApi } from '@/api';
+import { useFanStream } from '@/hooks/useFanStream';
 import type { LatestReadingsResponse, Resolution } from '@/types/api';
 
 export default function StockDetailPage() {
@@ -18,6 +20,9 @@ export default function StockDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [resolution, setResolution] = useState<Resolution>('day');
   const [refreshNonce, setRefreshNonce] = useState(0);
+
+  const fanEnabled = data?.fanControlEnabled ?? false;
+  const { snapshot: fanSnapshot, connected: fanConnected } = useFanStream(stockId, fanEnabled);
 
   const loadData = useCallback(async (showRefreshing = false) => {
     if (!stockId) return;
@@ -103,6 +108,19 @@ export default function StockDetailPage() {
           </div>
         ) : data && data.devices.length > 0 ? (
           <>
+            {fanEnabled && (
+              <div className="mb-4">
+                <FanStatusCard status={fanSnapshot?.status ?? null} connected={fanConnected} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => navigate(`/stocks/${stockId}/fan`)}
+                >
+                  <Fan className="mr-2 h-4 w-4" /> Lüfter steuern
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
               {data.devices.map((device) => (
                 <SensorCard key={device.device} reading={device} />

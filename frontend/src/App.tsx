@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import StockDetailPage from './pages/StockDetailPage';
+import FanControlPage from './pages/FanControlPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -64,6 +65,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <StockDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/stocks/:stockId/fan"
+        element={
+          <ProtectedRoute>
+            <FanControlPage />
           </ProtectedRoute>
         }
       />
