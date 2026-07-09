@@ -63,6 +63,7 @@ export interface LatestReadingsResponse {
   timestamp: string; // ISO 8601
   devices: DeviceReading[];
   outdoor: OutdoorConditions;
+  fanControlEnabled?: boolean;
 }
 
 // Temperature/Humidity Time Series

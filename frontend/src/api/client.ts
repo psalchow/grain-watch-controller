@@ -159,6 +159,11 @@ class ApiClient {
     }
   }
 
+  /** Forces a token refresh (used by non-axios transports such as SSE). */
+  async refresh(): Promise<string> {
+    return this.refreshAccessToken();
+  }
+
   /**
    * Check if a (non-expired) access token is present
    */

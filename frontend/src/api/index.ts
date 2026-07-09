@@ -6,3 +6,4 @@
 export { authApi } from './auth';
 export { stocksApi } from './stocks';
 export { apiClient } from './client';
+export { fanApi } from './fan';
