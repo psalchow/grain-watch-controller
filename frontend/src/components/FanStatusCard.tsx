@@ -37,7 +37,7 @@ export function FanStatusCard({
       <div className="mt-2 flex flex-wrap gap-2">
         {status?.lastAlert && (
           <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-            <AlertTriangle className="h-3 w-3" /> {status.lastAlert.message}
+            <AlertTriangle className="h-3 w-3" /> Alarm: {status.lastAlert.message}
           </span>
         )}
         {status?.lastWarning && (
