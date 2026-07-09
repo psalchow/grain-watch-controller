@@ -1,3 +1,5 @@
+import { selectFanStocks } from '../../../src/services/fan/fan.manager';
+import type { Stock } from '../../../src/db/types';
 import { createTestDb } from '../../setup/db';
 import { StockRepository, FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
 import { FanControlManager } from '../../../src/services/fan/fan.manager';
@@ -78,5 +80,21 @@ describe('FanControlManager', () => {
     expect(manager.isFanStock('grain-watch-1')).toBe(true);
     expect(manager.isFanStock('grain-watch-2')).toBe(false);
     expect(manager.getController('grain-watch-2')).toBeNull();
+  });
+});
+
+describe('selectFanStocks', () => {
+  const base: Stock = {
+    id: 'x', name: 'X', deviceCount: 5, deviceGroup: 'g', devicePrefix: '1',
+    hasHumidity: false, active: true, createdAt: 'x', fanControlEnabled: false, fanSwitchId: 0,
+  };
+
+  it('keeps only fan-enabled stocks that have a topic prefix', () => {
+    const result = selectFanStocks([
+      { ...base, id: 'a', fanControlEnabled: true, fanTopicPrefix: '/pa', fanSwitchId: 0 },
+      { ...base, id: 'b', fanControlEnabled: false },
+      { ...base, id: 'c', fanControlEnabled: true }, // no prefix -> excluded
+    ]);
+    expect(result).toEqual([{ stockId: 'a', topicPrefix: '/pa', switchId: 0 }]);
   });
 });

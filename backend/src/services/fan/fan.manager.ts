@@ -1,6 +1,16 @@
 import type { FanStateRepository, FanEventsRepository } from '../../db/repositories/fan.repository';
+import type { Stock } from '../../db/types';
 import { FanController } from './fan.controller';
 import { parseShellyMonitorMessage } from './shelly-message';
+
+/** Selects the MQTT wiring config for every fan-enabled stock. Pure. */
+export function selectFanStocks(
+  stocks: Stock[],
+): Array<{ stockId: string; topicPrefix: string; switchId: number }> {
+  return stocks
+    .filter((s) => s.fanControlEnabled && s.fanTopicPrefix)
+    .map((s) => ({ stockId: s.id, topicPrefix: s.fanTopicPrefix as string, switchId: s.fanSwitchId }));
+}
 
 export interface FanManagerDeps {
   stocks: Array<{ stockId: string; topicPrefix: string; switchId: number }>;

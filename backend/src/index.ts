@@ -1,6 +1,6 @@
 import { createApp } from './app';
 import { config } from './config';
-import { bootstrapApplication } from './bootstrap';
+import { bootstrapApplication, shutdownFanControl } from './bootstrap';
 import { closeDb } from './db';
 
 /**
@@ -39,6 +39,7 @@ async function startServer() {
 
 const shutdown = (signal: string) => {
   console.log(`Received ${signal}, shutting down...`);
+  shutdownFanControl();
   closeDb();
   process.exit(0);
 };

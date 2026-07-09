@@ -1,6 +1,6 @@
 import { FanControlManager } from './fan.manager';
 
-export { FanControlManager } from './fan.manager';
+export { FanControlManager, selectFanStocks } from './fan.manager';
 export { FanController } from './fan.controller';
 export * from './types';
 
