@@ -13,7 +13,14 @@ import {
 } from '../../src/services';
 import { bootstrapApplication, validateBootstrap } from '../../src/bootstrap';
 
-// Override config.database.path to use in-memory SQLite for all tests
+// Override config.database.path to use in-memory SQLite for all tests.
+// NOTE: `mqtt` and `fan` are intentionally omitted from this mock.
+// Their absence causes initFanControl() to short-circuit (graceful-degradation guard),
+// which prevents the unit test from opening a real MQTT socket or leaking
+// FanControlManager retention-sweep timers across the 7+ bootstrapApplication() calls.
+// WARNING: do NOT add `mqtt`/`fan` here unless you also mock
+// `createMqttService` from `../../src/services/mqtt` and call manager.shutdown()
+// in afterEach — otherwise the suite will open sockets and leak timers.
 jest.mock('../../src/config', () => ({
   config: {
     port: 3000,

@@ -59,9 +59,11 @@ export async function initFanControl(): Promise<void> {
     console.log('Fan control: no fan-enabled stocks, skipping MQTT init');
     return;
   }
-  // config.mqtt / config.fan may be absent in test environments that mock config minimally
+  // Graceful degradation: if the broker or fan section is absent from the configuration
+  // (e.g. the service is deployed without MQTT credentials), skip fan control entirely
+  // rather than crashing bootstrap.  A warning is emitted so the omission is visible.
   if (!config.mqtt || !config.fan) {
-    console.log('Fan control: MQTT/fan config not available, skipping MQTT init');
+    console.warn('Fan control: MQTT/fan configuration missing; skipping fan control.');
     return;
   }
   const mqtt = createMqttService(config.mqtt);
