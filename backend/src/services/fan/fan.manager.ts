@@ -25,7 +25,7 @@ export interface FanManagerDeps {
   now?: () => Date;
 }
 
-interface HallWiring {
+interface StockFanWiring {
   stockId: string;
   topicPrefix: string;
   commandTopic: string;
@@ -33,7 +33,7 @@ interface HallWiring {
 }
 
 export class FanControlManager {
-  private readonly halls = new Map<string, HallWiring>();
+  private readonly fanStocks = new Map<string, StockFanWiring>();
   private retentionTimer: ReturnType<typeof setInterval> | null = null;
   private readonly now: () => Date;
 
@@ -49,45 +49,45 @@ export class FanControlManager {
         timings: { keepAliveMs: deps.timings.keepAliveMs, watchdogMs: deps.timings.watchdogMs },
         now: this.now,
       });
-      this.halls.set(s.stockId, { stockId: s.stockId, topicPrefix: s.topicPrefix, commandTopic, controller });
+      this.fanStocks.set(s.stockId, { stockId: s.stockId, topicPrefix: s.topicPrefix, commandTopic, controller });
     }
   }
 
   init(): void {
     this.deps.mqtt.onMessage((topic, payload) => this.route(topic, payload));
-    for (const hall of this.halls.values()) {
-      this.deps.mqtt.subscribe(`${hall.topicPrefix}/monitor/#`);
-      this.deps.mqtt.subscribe(`${hall.topicPrefix}/status/#`);
-      this.deps.mqtt.subscribe(`${hall.topicPrefix}/online`);
-      hall.controller.recover();
+    for (const wiring of this.fanStocks.values()) {
+      this.deps.mqtt.subscribe(`${wiring.topicPrefix}/monitor/#`);
+      this.deps.mqtt.subscribe(`${wiring.topicPrefix}/status/#`);
+      this.deps.mqtt.subscribe(`${wiring.topicPrefix}/online`);
+      wiring.controller.recover();
     }
     this.retentionTimer = setInterval(() => this.sweepRetention(), this.deps.timings.retentionSweepMs);
   }
 
   isFanStock(stockId: string): boolean {
-    return this.halls.has(stockId);
+    return this.fanStocks.has(stockId);
   }
 
   getController(stockId: string): FanController | null {
-    return this.halls.get(stockId)?.controller ?? null;
+    return this.fanStocks.get(stockId)?.controller ?? null;
   }
 
   shutdown(): void {
     if (this.retentionTimer) { clearInterval(this.retentionTimer); this.retentionTimer = null; }
-    for (const hall of this.halls.values()) hall.controller.stop();
+    for (const wiring of this.fanStocks.values()) wiring.controller.stop();
   }
 
   private route(topic: string, payload: string): void {
-    for (const hall of this.halls.values()) {
-      if (!topic.startsWith(`${hall.topicPrefix}/`)) continue;
-      const suffix = topic.slice(hall.topicPrefix.length + 1);
+    for (const wiring of this.fanStocks.values()) {
+      if (!topic.startsWith(`${wiring.topicPrefix}/`)) continue;
+      const suffix = topic.slice(wiring.topicPrefix.length + 1);
       if (suffix.startsWith('monitor/')) {
         const msg = parseShellyMonitorMessage(payload);
-        if (msg) hall.controller.handleShellyMessage(msg);
+        if (msg) wiring.controller.handleShellyMessage(msg);
       } else if (suffix.startsWith('status/')) {
-        hall.controller.handleStatus(payload);
+        wiring.controller.handleStatus(payload);
       } else if (suffix === 'online') {
-        hall.controller.handleOnline(payload.trim() === 'true');
+        wiring.controller.handleOnline(payload.trim() === 'true');
       }
       return;
     }
