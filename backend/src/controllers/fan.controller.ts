@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { NotFoundError } from '../middleware';
 import { getFanManager } from '../services/fan';
 import { FanController } from '../services/fan';
@@ -20,11 +21,15 @@ export class FanHttpController {
     }
   }
 
-  sendCommand(req: Request, res: Response, next: NextFunction): void {
+  sendCommand(
+    req: Request<ParamsDictionary, unknown, FanCommandRequest>,
+    res: Response,
+    next: NextFunction
+  ): void {
     try {
       const stockId = req.params['stockId'] as string;
       const controller = this.requireController(stockId);
-      const { action } = req.body as FanCommandRequest;
+      const { action } = req.body;
       controller.command(action, 'user');
       res.status(200).json({
         status: controller.getStatus(),

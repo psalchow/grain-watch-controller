@@ -7,6 +7,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
 import { UserService, UserServiceError, CreateUserData, UpdateUserData } from '../services';
 import { CreateUserRequest } from '../middleware';
 
@@ -187,13 +188,13 @@ export class AdminController {
    * }
    */
   async updateUserPermissions(
-    req: Request,
+    req: Request<ParamsDictionary, unknown, { role?: string; stockAccess?: string[] }>,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     try {
       const userId = req.params['userId'] as string;
-      const { role, stockAccess } = req.body as { role?: string; stockAccess?: string[] };
+      const { role, stockAccess } = req.body;
 
       // Validate that at least one field is provided
       if (role === undefined && stockAccess === undefined) {
@@ -279,13 +280,13 @@ export class AdminController {
    * }
    */
   async updateUserStatus(
-    req: Request,
+    req: Request<ParamsDictionary, unknown, { active?: boolean }>,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     try {
       const userId = req.params['userId'] as string;
-      const { active } = req.body as { active?: boolean };
+      const { active } = req.body;
 
       // Validate that active is provided
       if (active === undefined) {
