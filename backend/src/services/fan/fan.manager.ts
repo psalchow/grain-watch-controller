@@ -64,10 +64,6 @@ export class FanControlManager {
     this.retentionTimer = setInterval(() => this.sweepRetention(), this.deps.timings.retentionSweepMs);
   }
 
-  isFanStock(stockId: string): boolean {
-    return this.fanStocks.has(stockId);
-  }
-
   getController(stockId: string): FanController | null {
     return this.fanStocks.get(stockId)?.controller ?? null;
   }

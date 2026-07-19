@@ -74,11 +74,10 @@ describe('FanControlManager', () => {
     expect(f.published).toContainEqual({ topic: '/corn-watch/actors/corn-watch-1/fan-control/command/switch:0', message: 'on' });
   });
 
-  it('reports non-fan stocks as unknown', async () => {
+  it('exposes a controller for fan stocks and none for non-fan stocks', async () => {
     const { manager } = await setup();
     manager.init();
-    expect(manager.isFanStock('grain-watch-1')).toBe(true);
-    expect(manager.isFanStock('grain-watch-2')).toBe(false);
+    expect(manager.getController('grain-watch-1')).not.toBeNull();
     expect(manager.getController('grain-watch-2')).toBeNull();
   });
 });
