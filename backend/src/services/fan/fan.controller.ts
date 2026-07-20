@@ -13,7 +13,7 @@ export interface FanControllerDeps {
 type ChangeListener = (status: FanStatus) => void;
 
 /**
- * Per-hall fan state machine. Owns desired state, watchdog and keep-alive
+ * Per-stock fan state machine. Owns desired state, watchdog and keep-alive
  * timers, consumes Shelly monitor messages, and persists an event log.
  */
 export class FanController {
