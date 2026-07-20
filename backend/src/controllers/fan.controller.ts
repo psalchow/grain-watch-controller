@@ -4,6 +4,7 @@ import { NotFoundError } from '../middleware';
 import { getFanManager } from '../services/fan';
 import { FanController } from '../services/fan';
 import type { FanCommandRequest } from '../middleware';
+import type { FanStatus } from '../services/fan';
 
 const RECENT_EVENT_LIMIT = 50;
 
@@ -51,15 +52,16 @@ export class FanHttpController {
         Connection: 'keep-alive',
       });
 
-      const send = (): void => {
+      const send = (status: FanStatus): void => {
         res.write(`data: ${JSON.stringify({
-          status: controller.getStatus(),
+          status,
           events: controller.getRecentEvents(RECENT_EVENT_LIMIT),
         })}\n\n`);
       };
 
-      send();
-      const unsubscribe = controller.onChange(() => send());
+      // Initial snapshot, then push on every status change (reusing the emitted status).
+      send(controller.getStatus());
+      const unsubscribe = controller.onChange(send);
       const ping = globalThis.setInterval(() => res.write(': ping\n\n'), 25000);
 
       req.on('close', () => {
