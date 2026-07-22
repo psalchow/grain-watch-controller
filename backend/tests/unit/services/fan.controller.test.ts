@@ -33,7 +33,7 @@ describe('FanController', () => {
   it('goes OFF -> TURN_ON_PENDING -> ON on success', async () => {
     const { controller, published } = await makeController();
     expect(controller.getStatus().state).toBe('OFF');
-    controller.command('on', 'user');
+    controller.command('on');
     expect(controller.getStatus().state).toBe('TURN_ON_PENDING');
     expect(published).toEqual(['on']);
     controller.handleShellyMessage(successMsg(true));
@@ -43,7 +43,7 @@ describe('FanController', () => {
 
   it('watchdog switches off and faults when no success arrives', async () => {
     const { controller, published } = await makeController();
-    controller.command('on', 'user');
+    controller.command('on');
     jest.advanceTimersByTime(10000);
     expect(published).toEqual(['on', 'off']);
     expect(controller.getStatus().state).toBe('FAULT');
@@ -52,7 +52,7 @@ describe('FanController', () => {
 
   it('re-asserts ON via keep-alive while desired on', async () => {
     const { controller, published } = await makeController();
-    controller.command('on', 'user');
+    controller.command('on');
     controller.handleShellyMessage(successMsg(true));
     jest.advanceTimersByTime(900000);
     expect(published).toEqual(['on', 'on']);
@@ -60,7 +60,7 @@ describe('FanController', () => {
 
   it('alert -> FAULT, desired off, stops keep-alive', async () => {
     const { controller, published } = await makeController();
-    controller.command('on', 'user');
+    controller.command('on');
     controller.handleShellyMessage(successMsg(true));
     controller.handleShellyMessage({ type: 'alert', message: 'no follow', switchState: true, inputState: false, timestamp: 2 });
     expect(controller.getStatus().state).toBe('FAULT');
@@ -71,7 +71,7 @@ describe('FanController', () => {
 
   it('warning only sets overlay, no state change', async () => {
     const { controller } = await makeController();
-    controller.command('on', 'user');
+    controller.command('on');
     controller.handleShellyMessage(successMsg(true));
     controller.handleShellyMessage({ type: 'warning', message: 'manual', switchState: true, inputState: true, timestamp: 3 });
     expect(controller.getStatus().state).toBe('ON');
@@ -80,9 +80,9 @@ describe('FanController', () => {
 
   it('command off -> TURN_OFF_PENDING -> OFF on success(false)', async () => {
     const { controller, published } = await makeController();
-    controller.command('on', 'user');
+    controller.command('on');
     controller.handleShellyMessage(successMsg(true));
-    controller.command('off', 'user');
+    controller.command('off');
     expect(controller.getStatus().state).toBe('TURN_OFF_PENDING');
     expect(published).toEqual(['on', 'off']);
     controller.handleShellyMessage(successMsg(false));
@@ -109,7 +109,7 @@ describe('FanController', () => {
     const { controller } = await makeController();
     const seen: string[] = [];
     controller.onChange((s) => seen.push(s.state));
-    controller.command('on', 'user');
+    controller.command('on');
     expect(seen).toContain('TURN_ON_PENDING');
   });
 });

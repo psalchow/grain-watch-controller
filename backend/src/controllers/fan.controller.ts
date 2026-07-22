@@ -31,7 +31,7 @@ export class FanHttpController {
       const stockId = req.params['stockId'] as string;
       const controller = this.requireController(stockId);
       const { action } = req.body;
-      controller.command(action, 'user');
+      controller.command(action);
       res.status(200).json({
         status: controller.getStatus(),
         events: controller.getRecentEvents(RECENT_EVENT_LIMIT),

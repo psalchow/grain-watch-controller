@@ -64,12 +64,12 @@ export class FanController {
   }
 
   /** User-initiated switch request from the API. */
-  command(action: 'on' | 'off', source: 'user'): void {
+  command(action: 'on' | 'off'): void {
     if (action === 'on') {
       this.since = this.now().toISOString();
-      this.beginTurnOn(source, true);
+      this.beginTurnOn('user', true);
     } else {
-      this.beginTurnOff(source);
+      this.beginTurnOff();
     }
   }
 
@@ -172,14 +172,14 @@ export class FanController {
   }
 
   /** Enters TURN_OFF_PENDING, stops timers, publishes 'off'. */
-  private beginTurnOff(source: 'user'): void {
+  private beginTurnOff(): void {
     this.desiredOn = false;
     this.since = null;
     this.persistState();
     this.clearWatchdog();
     this.clearKeepAlive();
     this.setState('TURN_OFF_PENDING');
-    this.log('command', { action: 'off' }, source);
+    this.log('command', { action: 'off' }, 'user');
     this.deps.publish('off');
   }
 

@@ -52,7 +52,7 @@ describe('FanControlManager', () => {
   it('routes a monitor success message to the controller', async () => {
     const { manager, f } = await setup();
     manager.init();
-    manager.getController('grain-watch-1')!.command('on', 'user');
+    manager.getController('grain-watch-1')!.command('on');
     f.emit(
       '/corn-watch/actors/corn-watch-1/fan-control/monitor/status',
       '{"type":"success","message":"ok","switchState":true,"inputState":true,"timestamp":1}'
@@ -70,7 +70,7 @@ describe('FanControlManager', () => {
   it('publishes to the command topic when the controller acts', async () => {
     const { manager, f } = await setup();
     manager.init();
-    manager.getController('grain-watch-1')!.command('on', 'user');
+    manager.getController('grain-watch-1')!.command('on');
     expect(f.published).toContainEqual({ topic: '/corn-watch/actors/corn-watch-1/fan-control/command/switch:0', message: 'on' });
   });
 
