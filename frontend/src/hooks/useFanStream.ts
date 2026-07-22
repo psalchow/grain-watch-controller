@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchEventSource } from '@microsoft/fetch-event-source';
-import { apiClient } from '../api/client';
+import { apiClient } from '@/api';
 import type { FanSnapshot } from '../types/fan';
 
 const API_BASE_URL =
@@ -13,7 +13,7 @@ const API_BASE_URL =
  * exposes the latest snapshot plus a connected flag.
  *
  * Reconnect strategy: on 401 the effect aborts the current connection, calls
- * apiClient.refresh(), then increments `retry` to re-run the effect so the
+ * apiClient.refreshAccessToken(), then increments `retry` to re-run the effect so the
  * token header is re-evaluated fresh. A refresh is attempted at most once per
  * disconnected period; the guard resets on every successful open so a later
  * token expiry can trigger another single refresh.
@@ -41,7 +41,7 @@ export function useFanStream(
         if (res.status === 401) {
           if (refreshAttempts.current < 1) {
             refreshAttempts.current += 1;
-            await apiClient.refresh();
+            await apiClient.refreshAccessToken();
             controller.abort();
             setRetry((n) => n + 1); // re-run effect → fresh token header
           } else {

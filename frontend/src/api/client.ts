@@ -101,8 +101,9 @@ class ApiClient {
   /**
    * Refreshes the access token, coalescing concurrent callers onto a single
    * in-flight request. The refresh token travels in the httpOnly cookie.
+   * Public so non-axios transports (e.g. the SSE stream) can trigger a refresh.
    */
-  private refreshAccessToken(): Promise<string> {
+  refreshAccessToken(): Promise<string> {
     if (!this.refreshPromise) {
       this.refreshPromise = this.client
         .post<{ token: string; expiresIn: string }>('/auth/refresh')
@@ -159,10 +160,6 @@ class ApiClient {
     }
   }
 
-  /** Forces a token refresh (used by non-axios transports such as SSE). */
-  async refresh(): Promise<string> {
-    return this.refreshAccessToken();
-  }
 
   /**
    * Check if a (non-expired) access token is present
