@@ -9,8 +9,6 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthService, AuthenticationError, authService as defaultAuthService } from '../services';
 import { UserRole, UserProfile, hasStockAccess } from '../models';
 
-// Import the Express type augmentation to ensure the Request.user property is recognised
-import '../types/express.d.ts';
 
 /**
  * Shared AuthService instance for middleware.

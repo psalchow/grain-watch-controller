@@ -70,8 +70,9 @@ COPY --from=builder --chown=appuser:nodejs /app/node_modules ./node_modules
 # Copy compiled application
 COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
 
-# Copy database migrations
+# Copy database migrations (both locations for path compatibility)
 COPY --from=builder --chown=appuser:nodejs /app/drizzle ./drizzle
+COPY --from=builder --chown=appuser:nodejs /app/drizzle ./dist/drizzle
 
 # Copy package.json for version info and npm scripts
 COPY --chown=appuser:nodejs package.json ./
@@ -93,4 +94,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["node", "dist/index.js"]
+CMD ["node", "dist/src/index.js"]
