@@ -74,29 +74,41 @@ A faithful reproduction of the fan-control side of `switch-monitoring.mjs`.
   - `{prefix}/monitor/alert` → `type: "alert"`.
 
 **State (`src/shelly.ts`, pure state machine):**
-- `switchOutput: boolean` — the Shelly output (= fan physically running).
-- `inputState: boolean` — contactor auxiliary contact (detached input).
+- `switchOutput: boolean` — the Shelly output (= the current switch status).
+- `inputState: boolean` — contactor auxiliary contact (detached input; = the
+  contactor/fan actually engaged).
 - `desiredInputState: boolean` — expected input after a switch command.
 - `online: boolean`.
-- Config: `gracePeriodMs` (default 3000), `contactorDelayMs` (default 500),
-  `autoOffMs` (default 3600000), `faultContactorWontEngage: boolean`.
+- `contactorBehaviour: 'follow' | 'wontEngage'` — how the contactor reacts on
+  the **next** switch command. **Default `'follow'`** (everything works, no
+  fault). Set to `'wontEngage'` beforehand to arm the failure case. Stays set
+  until the user changes it back.
+- Config: `gracePeriodMs` (default 3000), `contactorDelayMs` (internal, default
+  500 — well within grace so the normal case yields `success`), `autoOffMs`
+  (default 3600000, env-configurable for faster observation).
+
+Rationale for the pre-armed fault: the 3 s grace window is too short to react in
+the UI, so faults are **not** produced by racing the timer. Instead the default
+is a correctly-following contactor (→ `success`), and the failure mode is
+selected in advance and takes effect on the next switch.
 
 **Behaviour:**
-- On `command on|off`: set `switchOutput`, publish `status/switch:0`, set
-  `desiredInputState = switchOutput`, start the grace timer; when turning ON,
-  (re)arm the auto-off timer (a repeated ON — the backend keep-alive — resets it).
-- Contactor follow: unless `faultContactorWontEngage`, `inputState` follows
-  `switchOutput` after `contactorDelayMs`. With the fault active, `inputState`
+- On `command on|off` (from MQTT) or a manual output switch (from the UI): set
+  `switchOutput`, publish `status/switch:0`, set `desiredInputState =
+  switchOutput`, start the grace timer; when turning ON, (re)arm the auto-off
+  timer (a repeated ON — the backend keep-alive — resets it).
+- Contactor follow: with `contactorBehaviour === 'follow'`, `inputState` follows
+  `switchOutput` after `contactorDelayMs`. With `'wontEngage'`, `inputState`
   stays `false` on an ON command.
 - Grace timer expiry: if `inputState === desiredInputState` → publish `success`.
   Else → publish `alert`; and if `desiredInputState` was ON (input failed to
   engage) → set output OFF, publish `status/switch:0`, publish `safety_shutoff`.
-- Manual contactor change from the UI (input toggled with no matching command)
+- Manual contactor switch from the UI (input toggled with no matching command)
   → publish `warning` ("Input changed without switch command").
 - Auto-off expiry: set output OFF, publish `status/switch:0` (models the Shelly
-  1 h Auto OFF). `autoOffMs` is env-configurable for faster observation.
-- Every published monitor/status/online message and every state change is
-  pushed to the web UI over WebSocket.
+  1 h Auto OFF).
+- Every published/received MQTT message and every state change is pushed to the
+  web UI over WebSocket.
 
 **`src/server.ts`:** serves `public/index.html`; a WebSocket pushes the current
 emulator state and receives control commands (manual switch, toggle
@@ -104,16 +116,28 @@ fault-mode, manual contactor toggle, toggle online, set delays).
 
 ### 4.3 Web UI (`public/index.html`, served on `:8080`)
 Vanilla HTML/CSS/JS, one WebSocket to the emulator. No build step.
-- **Display:** output (animated "fan running" indicator), contactor/input
-  state, `online`, last monitor message (type + text + timestamp), grace and
-  auto-off countdowns.
-- **Controls:**
-  - Switch output ON / OFF (simulates switching the Shelly directly).
-  - "Schütz manuell schalten" — toggles `inputState` without a command → `warning`.
-  - "Schütz zieht nicht an" — toggles `faultContactorWontEngage`; the next ON
-    command then yields `alert` + `safety_shutoff`.
-  - "Shelly offline" — toggles `online` (publishes `online=false`).
-  - Optional numeric inputs for `contactorDelayMs` / `autoOffMs`.
+
+**Display:**
+- **Schalt-Status (Shelly output):** current output ON/OFF, prominent, with an
+  animated "fan running" indicator when ON.
+- **Schütz / Lüfter (input):** whether the contactor is engaged.
+- **Armed contactor behaviour** for the next switch (`follow` / `wontEngage`)
+  and `online` status.
+- **Last monitor message:** type + text + timestamp.
+- **MQTT message log:** live, scrolling list of MQTT traffic — both received
+  commands and published messages — each with direction, topic, payload and
+  time.
+
+**Controls:**
+- **Shelly manuell schalten** — output ON / OFF directly (as if switched at the
+  device); goes through the same path as an MQTT command.
+- **Lüfter/Schütz manuell schalten** — toggles `inputState` without a matching
+  command → `warning`.
+- **Schütz-Verhalten beim nächsten Schalten** — selector Normal (`follow`,
+  default) / "Zieht nicht an" (`wontEngage`); armed in advance so the next ON
+  yields `alert` + `safety_shutoff`.
+- **Shelly offline** — toggles `online` (publishes `online=false`).
+- Optional numeric input for `autoOffMs` (to observe auto-off quickly).
 
 ### 4.4 InfluxDB + seeder (`sim/influx-seed`)
 - **influxdb** container (`influxdb:2.7-alpine`) initialised in setup mode:
