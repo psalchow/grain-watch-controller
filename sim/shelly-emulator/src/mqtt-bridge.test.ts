@@ -37,6 +37,6 @@ describe('mqtt bridge', () => {
 
     const msg = await waitFor(() => received.find((m) => m.includes('"success"')));
     expect(JSON.parse(msg)).toMatchObject({ type: 'success', switchState: true, inputState: true });
-    client.end();
+    await new Promise<void>((r) => client.end(false, () => r()));
   });
 });

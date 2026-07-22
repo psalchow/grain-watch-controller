@@ -13,7 +13,7 @@ export interface Broker {
 
 export function startBroker(port: number): Promise<Broker> {
   const aedes = new Aedes();
-  const server: Server = createServer(aedes.handle);
+  const server: Server = createServer(aedes.handle.bind(aedes));
   const trafficListeners: Array<(e: TrafficEntry) => void> = [];
 
   // Every publish flowing through the broker (client commands = 'in',
