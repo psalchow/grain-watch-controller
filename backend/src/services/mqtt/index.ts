@@ -5,32 +5,25 @@ export { MqttService } from './mqtt.service';
 export type { MqttClientLike } from './mqtt.service';
 
 /**
- * Creates a live MQTT client adapted to MqttClientLike.
- * Auto-reconnect is enabled by the mqtt library defaults.
+ * Creates an MqttService backed by a live MQTT connection.
+ * Auto-reconnect is handled by the mqtt library (reconnectPeriod).
  */
-export function createMqttClient(cfg: {
+export function createMqttService(cfg: {
   url: string;
   username?: string;
   password?: string;
-}): MqttClientLike {
+}): MqttService {
   const client = mqtt.connect(cfg.url, {
     ...(cfg.username !== undefined ? { username: cfg.username } : {}),
     ...(cfg.password !== undefined ? { password: cfg.password } : {}),
     reconnectPeriod: 5000,
   });
-  return {
+  const adapter: MqttClientLike = {
     publish: (topic, message) => client.publish(topic, message),
     subscribe: (topic) => client.subscribe(topic),
     on: ((event: string, cb: (...args: unknown[]) => void) =>
       client.on(event as 'message' | 'connect', cb as never)) as MqttClientLike['on'],
     end: () => client.end(),
   };
-}
-
-export function createMqttService(cfg: {
-  url: string;
-  username?: string;
-  password?: string;
-}): MqttService {
-  return new MqttService(createMqttClient(cfg));
+  return new MqttService(adapter);
 }
