@@ -69,7 +69,8 @@ services:
     image: node:24-alpine
     working_dir: /app
     # npm install (not ci): frontend is an npm workspace with no standalone lockfile.
-    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    # --no-package-lock: the bind-mounted ./frontend must not have its lockfile rewritten on each run.
+    command: sh -c "npm install --no-package-lock && npm run dev -- --host 0.0.0.0 --port 5173"
     environment:
       - VITE_API_BASE_URL=http://localhost:3000/api/v1
     volumes:
