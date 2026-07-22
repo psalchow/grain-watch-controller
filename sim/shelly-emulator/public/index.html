@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shelly-Emulator — Halle 8</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    header { padding: 12px 20px; background: #1e293b; font-weight: 600; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+    .card { background: #1e293b; border-radius: 10px; padding: 16px; }
+    .card h2 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+    .fan { font-size: 48px; text-align: center; transition: transform .2s; }
+    .fan.on { animation: spin 1.2s linear infinite; color: #22c55e; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    .pill { padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+    .on-bg { background: #14532d; color: #bbf7d0; } .off-bg { background: #3f3f46; color: #d4d4d8; }
+    button { background: #334155; color: #e2e8f0; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; font-size: 14px; }
+    button:hover { background: #475569; }
+    button.danger { background: #7f1d1d; } button.danger:hover { background: #991b1b; }
+    select { background: #334155; color: #e2e8f0; border: 0; border-radius: 8px; padding: 8px; }
+    #log { grid-column: 1 / -1; font-family: ui-monospace, monospace; font-size: 12px; height: 240px; overflow: auto; background: #0b1220; padding: 10px; border-radius: 8px; }
+    .log-in { color: #93c5fd; } .log-out { color: #86efac; }
+  </style>
+</head>
+<body>
+  <header>Shelly 1 (Gen 3) — Emulator · Halle 8</header>
+  <main>
+    <div class="card">
+      <h2>Schalt-Status (Shelly-Output)</h2>
+      <div id="fan" class="fan">✷</div>
+      <div class="row">Output: <span id="output" class="pill off-bg">–</span></div>
+      <div class="row">Schütz / Lüfter (Input): <span id="input" class="pill off-bg">–</span></div>
+      <div class="row">Online: <span id="online" class="pill off-bg">–</span></div>
+      <div class="row">Letzte Meldung: <span id="lastMonitor">–</span></div>
+    </div>
+    <div class="card">
+      <h2>Steuerung</h2>
+      <div class="row">
+        <button onclick="send({action:'switch',on:true})">Shelly EIN</button>
+        <button onclick="send({action:'switch',on:false})">Shelly AUS</button>
+      </div>
+      <div class="row">
+        <button onclick="send({action:'manualContactor'})">Lüfter/Schütz manuell schalten</button>
+      </div>
+      <div class="row">
+        Schütz beim nächsten Schalten:
+        <select id="behaviour" onchange="send({action:'contactorBehaviour',value:this.value})">
+          <option value="follow">Normal (folgt)</option>
+          <option value="wontEngage">Zieht nicht an</option>
+        </select>
+      </div>
+      <div class="row">
+        <button class="danger" id="onlineBtn" onclick="toggleOnline()">Shelly offline schalten</button>
+      </div>
+    </div>
+    <div id="log"></div>
+  </main>
+  <script>
+    let ws, online = true;
+    const $ = (id) => document.getElementById(id);
+    function connect() {
+      ws = new WebSocket(`ws://${location.host}`);
+      ws.onmessage = (ev) => {
+        const m = JSON.parse(ev.data);
+        if (m.kind === 'snapshot') render(m.snapshot);
+        else if (m.kind === 'traffic') addLog(m.entry);
+      };
+      ws.onclose = () => setTimeout(connect, 1000);
+    }
+    function send(msg) { ws && ws.readyState === 1 && ws.send(JSON.stringify(msg)); }
+    function toggleOnline() { online = !online; send({ action: 'online', value: online }); }
+    function pill(el, on, onText, offText) {
+      el.textContent = on ? onText : offText;
+      el.className = 'pill ' + (on ? 'on-bg' : 'off-bg');
+    }
+    function render(s) {
+      pill($('output'), s.switchOutput, 'EIN', 'AUS');
+      pill($('input'), s.inputState, 'angezogen', 'abgefallen');
+      pill($('online'), s.online, 'online', 'offline');
+      online = s.online;
+      $('onlineBtn').textContent = s.online ? 'Shelly offline schalten' : 'Shelly online schalten';
+      $('behaviour').value = s.contactorBehaviour;
+      $('fan').className = 'fan' + (s.switchOutput ? ' on' : '');
+      $('lastMonitor').textContent = s.lastMonitor ? `${s.lastMonitor.type} — ${s.lastMonitor.message}` : '–';
+    }
+    function addLog(e) {
+      const div = document.createElement('div');
+      div.className = e.dir === 'in' ? 'log-in' : 'log-out';
+      const t = new Date(e.ts).toLocaleTimeString();
+      div.textContent = `${t} ${e.dir === 'in' ? '⇢' : '⇠'} ${e.topic}  ${e.payload}`;
+      const log = $('log');
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }
+    connect();
+  </script>
+</body>
+</html>
