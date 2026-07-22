@@ -64,7 +64,7 @@ export default function FanControlPage() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="container max-w-screen-md px-4 py-6">
+      <main className="container max-w-3xl px-4 py-6">
         <div className="mb-6 flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate(`/stocks/${stockId}`)}>
             <ArrowLeft className="h-4 w-4" />
