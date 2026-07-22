@@ -1,0 +1,82 @@
+# Local simulation stack for the fan-control feature. Run: docker compose -f docker-compose.sim.yml up --build
+services:
+  influxdb:
+    image: influxdb:2.7-alpine
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=adminpassword
+      - DOCKER_INFLUXDB_INIT_ORG=grainwatch
+      - DOCKER_INFLUXDB_INIT_BUCKET=grainwatch
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=test-token
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [sim-net]
+
+  influx-seed:
+    build: { context: ./sim/influx-seed }
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=test-token
+      - INFLUXDB_ORG=grainwatch
+      - INFLUXDB_BUCKET=grainwatch
+    depends_on:
+      influxdb: { condition: service_healthy }
+    networks: [sim-net]
+    restart: "no"
+
+  shelly-emulator:
+    build: { context: ./sim/shelly-emulator }
+    environment:
+      - MQTT_PORT=1883
+      - UI_PORT=8080
+      - SHELLY_TOPIC_PREFIX=/corn-watch/actors/corn-watch-1/fan-control
+      # Lower to observe auto-off quickly, e.g. 120000 (2 min). Default 1 h.
+      - SHELLY_AUTO_OFF_MS=3600000
+    ports:
+      - "8080:8080"
+    networks: [sim-net]
+
+  backend:
+    build: { context: ./backend }
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - JWT_SECRET=dev-secret-change-in-production-please-32
+      - MQTT_URL=mqtt://shelly-emulator:1883
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=test-token
+      - INFLUXDB_ORG=grainwatch
+      - INFLUXDB_BUCKET=grainwatch
+      - INFLUXDB_MEASUREMENT=Temp
+      - DATABASE_PATH=/app/data/grainwatch.db
+      # Short so keep-alive re-asserts are observable within minutes.
+      - FAN_KEEPALIVE_INTERVAL_MS=30000
+    ports:
+      - "3000:3000"
+    depends_on:
+      influxdb: { condition: service_healthy }
+    networks: [sim-net]
+
+  frontend:
+    image: node:24-alpine
+    working_dir: /app
+    # npm install (not ci): frontend is an npm workspace with no standalone lockfile.
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3000/api/v1
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    networks: [sim-net]
+
+networks:
+  sim-net:
+    driver: bridge
