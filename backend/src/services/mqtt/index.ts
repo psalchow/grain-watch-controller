@@ -22,7 +22,7 @@ export function createMqttService(cfg: {
     publish: (topic, message) => client.publish(topic, message),
     subscribe: (topic) => client.subscribe(topic),
     on: ((event: string, cb: (...args: unknown[]) => void) =>
-      client.on(event as 'message' | 'connect', cb as never)) as MqttClientLike['on'],
+      client.on(event as 'message', cb as never)) as MqttClientLike['on'],
     end: () => client.end(),
   };
   return new MqttService(adapter);

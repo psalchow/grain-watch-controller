@@ -56,6 +56,8 @@ export class FanControlManager {
 
   init(): void {
     this.deps.mqtt.onMessage((topic, payload) => this.route(topic, payload));
+    // Subscribe once: the mqtt client queues these until it connects and
+    // re-subscribes automatically on reconnect (resubscribe default).
     for (const wiring of this.fanStocks.values()) {
       this.deps.mqtt.subscribe(`${wiring.topicPrefix}/monitor/#`);
       this.deps.mqtt.subscribe(`${wiring.topicPrefix}/status/#`);
