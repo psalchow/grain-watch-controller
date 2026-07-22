@@ -57,17 +57,15 @@ export class FanController {
   recover(): void {
     const persisted = this.deps.stateRepo.get(this.deps.stockId);
     if (persisted?.desiredOn) {
-      this.since = persisted.since;
       this.log('recovery', { resumedDesiredOn: true }, 'backend');
-      this.beginTurnOn('backend', false);
+      this.beginTurnOn('backend', false, persisted.since);
     }
   }
 
   /** User-initiated switch request from the API. */
   command(action: 'on' | 'off'): void {
     if (action === 'on') {
-      this.since = this.now().toISOString();
-      this.beginTurnOn('user', true);
+      this.beginTurnOn('user', true, this.now().toISOString());
     } else {
       this.beginTurnOff();
     }
@@ -161,8 +159,9 @@ export class FanController {
   // --- internals ---
 
   /** Enters TURN_ON_PENDING, publishes 'on', arms the watchdog and keep-alive. */
-  private beginTurnOn(source: 'user' | 'backend', persist: boolean): void {
+  private beginTurnOn(source: 'user' | 'backend', persist: boolean, since: string | null): void {
     this.desiredOn = true;
+    this.since = since;
     if (persist) this.persistState();
     this.setState('TURN_ON_PENDING');
     this.log('command', { action: 'on' }, source);
