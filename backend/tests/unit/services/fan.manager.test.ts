@@ -8,13 +8,16 @@ function fakeMqtt() {
   const published: Array<{ topic: string; message: string }> = [];
   const subscribed: string[] = [];
   let handler: ((t: string, p: string) => void) | null = null;
+  let ended = false;
   return {
     published, subscribed,
     emit: (t: string, p: string) => handler?.(t, p),
+    isEnded: () => ended,
     mqtt: {
       publish: (topic: string, message: string) => { published.push({ topic, message }); },
       subscribe: (topic: string) => { subscribed.push(topic); },
       onMessage: (l: (t: string, p: string) => void) => { handler = l; },
+      end: () => { ended = true; },
     },
   };
 }
@@ -79,6 +82,13 @@ describe('FanControlManager', () => {
     manager.init();
     expect(manager.getController('grain-watch-1')).not.toBeNull();
     expect(manager.getController('grain-watch-2')).toBeNull();
+  });
+
+  it('closes the MQTT connection on shutdown', async () => {
+    const { manager, f } = await setup();
+    manager.init();
+    manager.shutdown();
+    expect(f.isEnded()).toBe(true);
   });
 });
 

@@ -35,7 +35,7 @@ beforeEach(async () => {
   published.length = 0;
   manager = new FanControlManager({
     stocks: [{ stockId: 'grain-watch-1', topicPrefix: '/p', switchId: 0 }],
-    mqtt: { publish: (topic, message) => published.push({ topic, message }), subscribe: () => {}, onMessage: () => {} },
+    mqtt: { publish: (topic, message) => published.push({ topic, message }), subscribe: () => {}, onMessage: () => {}, end: () => {} },
     stateRepo: new FanStateRepository(getDb()),
     eventsRepo: new FanEventsRepository(getDb()),
     timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000 },

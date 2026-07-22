@@ -18,6 +18,7 @@ export interface FanManagerDeps {
     publish(topic: string, message: string): void;
     subscribe(topic: string): void;
     onMessage(listener: (topic: string, payload: string) => void): void;
+    end(): void;
   };
   stateRepo: FanStateRepository;
   eventsRepo: FanEventsRepository;
@@ -71,6 +72,7 @@ export class FanControlManager {
   shutdown(): void {
     if (this.retentionTimer) { clearInterval(this.retentionTimer); this.retentionTimer = null; }
     for (const wiring of this.fanStocks.values()) wiring.controller.stop();
+    this.deps.mqtt.end();
   }
 
   private route(topic: string, payload: string): void {
