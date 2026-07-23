@@ -35,7 +35,7 @@ WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 
 # Copy source files
-COPY package.json package-lock.json tsconfig.json ./
+COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY drizzle ./drizzle
 
@@ -70,9 +70,8 @@ COPY --from=builder --chown=appuser:nodejs /app/node_modules ./node_modules
 # Copy compiled application
 COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
 
-# Copy database migrations (both locations for path compatibility)
+# Copy database migrations (migrate.ts resolves ../../drizzle from dist/db → /app/drizzle)
 COPY --from=builder --chown=appuser:nodejs /app/drizzle ./drizzle
-COPY --from=builder --chown=appuser:nodejs /app/drizzle ./dist/drizzle
 
 # Copy package.json for version info and npm scripts
 COPY --chown=appuser:nodejs package.json ./
@@ -88,10 +87,10 @@ EXPOSE 3000
 
 # Health check - verify the service is responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/api/v1/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))" || exit 1
+    CMD node -e "require('http').get('http://localhost:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))" || exit 1
 
 # Use dumb-init to handle signals properly (graceful shutdown)
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["node", "dist/src/index.js"]
+CMD ["node", "dist/index.js"]
