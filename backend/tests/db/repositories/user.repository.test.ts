@@ -23,6 +23,7 @@ describe('UserRepository', () => {
     stockAccess: ['*'],
     createdAt: '2026-06-02T00:00:00.000Z',
     active: true,
+    mustChangePassword: false,
   };
 
   it('returns null for unknown id', async () => {

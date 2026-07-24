@@ -15,6 +15,13 @@
       "when": 1783551745814,
       "tag": "0001_fan_control",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784931795620,
+      "tag": "0002_must_change_password",
+      "breakpoints": true
     }
   ]
 }

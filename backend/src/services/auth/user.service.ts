@@ -45,6 +45,9 @@ export interface CreateUserData {
 
   /** Stock IDs the user can access (use ['*'] for all stocks) */
   stockAccess: string[];
+
+  /** Whether the user must change their password on next login */
+  mustChangePassword?: boolean;
 }
 
 /**
@@ -68,6 +71,9 @@ export interface UpdateUserData {
 
   /** Account active status (optional) */
   active?: boolean;
+
+  /** Whether the user must change their password on next login */
+  mustChangePassword?: boolean;
 }
 
 /** Salt rounds for bcrypt password hashing */
@@ -162,6 +168,7 @@ export class UserService {
       stockAccess: data.stockAccess,
       createdAt: new Date().toISOString(),
       active: true,
+      mustChangePassword: data.mustChangePassword ?? false,
     };
     const trimmedEmail = data.email?.trim();
     if (trimmedEmail !== undefined && trimmedEmail.length > 0) {
@@ -211,6 +218,8 @@ export class UserService {
     if (updates.role !== undefined) patch.role = updates.role;
     if (updates.active !== undefined) patch.active = updates.active;
     if (updates.stockAccess !== undefined) patch.stockAccess = updates.stockAccess;
+    if (updates.mustChangePassword !== undefined)
+      patch.mustChangePassword = updates.mustChangePassword;
     if (updates.password) {
       patch.passwordHash = await bcrypt.hash(updates.password, BCRYPT_SALT_ROUNDS);
     }
@@ -293,6 +302,8 @@ export class UserService {
       stockAccess: user.stockAccess,
     };
     if (user.email !== undefined) profile.email = user.email;
+    if (user.mustChangePassword !== undefined)
+      profile.mustChangePassword = user.mustChangePassword;
     return profile;
   }
 

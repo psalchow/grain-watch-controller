@@ -49,6 +49,7 @@ export class UserRepository {
           role: user.role,
           createdAt: user.createdAt,
           active: user.active,
+          mustChangePassword: user.mustChangePassword ?? false,
         })
         .run();
       if (user.stockAccess.length > 0) {
@@ -67,6 +68,7 @@ export class UserRepository {
       email?: string | null;
       role?: 'admin' | 'viewer';
       active?: boolean;
+      mustChangePassword?: boolean;
       stockAccess?: string[];
     }
   ): Promise<void> {
@@ -82,6 +84,8 @@ export class UserRepository {
       if (patch.email !== undefined) scalarUpdates['email'] = patch.email;
       if (patch.role !== undefined) scalarUpdates['role'] = patch.role;
       if (patch.active !== undefined) scalarUpdates['active'] = patch.active;
+      if (patch.mustChangePassword !== undefined)
+        scalarUpdates['mustChangePassword'] = patch.mustChangePassword;
 
       if (Object.keys(scalarUpdates).length > 0) {
         tx.update(users).set(scalarUpdates).where(eq(users.id, id)).run();
@@ -121,6 +125,7 @@ export class UserRepository {
       stockAccess,
       createdAt: row.createdAt,
       active: row.active,
+      mustChangePassword: row.mustChangePassword,
     };
     if (row.email !== null) {
       user.email = row.email;

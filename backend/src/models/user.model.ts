@@ -42,6 +42,9 @@ export interface User {
 
   /** Whether the account is enabled */
   active: boolean;
+
+  /** Whether the user must change their password on next login */
+  mustChangePassword?: boolean;
 }
 
 /**
@@ -63,6 +66,9 @@ export interface UserProfile {
 
   /** Stock IDs the user can access */
   stockAccess: string[];
+
+  /** Whether the user must change their password on next login */
+  mustChangePassword?: boolean;
 }
 
 /**

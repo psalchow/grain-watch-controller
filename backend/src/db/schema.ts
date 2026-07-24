@@ -8,6 +8,9 @@ export const users = sqliteTable('users', {
   role: text('role', { enum: ['admin', 'viewer'] }).notNull(),
   createdAt: text('created_at').notNull(),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  mustChangePassword: integer('must_change_password', { mode: 'boolean' })
+    .notNull()
+    .default(false),
 });
 
 export const userStockAccess = sqliteTable(
