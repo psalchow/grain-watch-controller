@@ -6,8 +6,8 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { AuthService, AuthenticationError } from '../services/auth';
-import { LoginRequest } from '../middleware';
+import { AuthService, AuthenticationError, UserServiceError } from '../services/auth';
+import { LoginRequest, ChangePasswordRequest } from '../middleware';
 import { config } from '../config';
 
 /** Name of the cookie carrying the refresh token. */
@@ -247,6 +247,48 @@ export class AuthController {
   logout(_req: Request, res: Response): void {
     this.clearRefreshCookie(res);
     res.status(204).send();
+  }
+
+  /**
+   * Handles self-service password changes.
+   *
+   * POST /api/v1/auth/change-password (authenticated)
+   *
+   * @param req - Express request with authenticated user and validated body
+   * @param res - Express response object
+   * @param next - Express next function for error handling
+   */
+  async changePassword(
+    req: Request<object, unknown, ChangePasswordRequest>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const user = req.user;
+      if (!user) {
+        res.status(401).json({
+          error: { code: 'UNAUTHORIZED', message: 'Authentication required', details: 'You must be logged in to change your password' },
+        });
+        return;
+      }
+
+      const { currentPassword, newPassword } = req.body;
+      await this.authService.changePassword(user.id, currentPassword, newPassword);
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof AuthenticationError) {
+        const statusCode = this.getAuthErrorStatusCode(error.code);
+        res.status(statusCode).json({
+          error: { code: this.mapErrorCode(error.code), message: error.message, details: this.getErrorDetails(error.code) },
+        });
+        return;
+      }
+      if (error instanceof UserServiceError) {
+        res.status(400).json({ error: { code: error.code, message: error.message, details: 'The provided input data is invalid' } });
+        return;
+      }
+      next(error);
+    }
   }
 
   /**

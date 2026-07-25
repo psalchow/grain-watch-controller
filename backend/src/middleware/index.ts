@@ -19,6 +19,8 @@ export {
   validateQuery,
   validateParams,
   loginSchema,
+  changePasswordSchema,
+  resetPasswordSchema,
   createUserSchema,
   updateUserSchema,
   stockIdParamsSchema,
@@ -30,6 +32,8 @@ export {
 
 export type {
   LoginRequest,
+  ChangePasswordRequest,
+  ResetPasswordRequest,
   CreateUserRequest,
   UpdateUserRequest,
   StockIdParams,

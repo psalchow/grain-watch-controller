@@ -403,6 +403,42 @@ export class AuthService {
   }
 
   /**
+   * Changes a user's password after verifying their current one.
+   *
+   * Clears the mustChangePassword flag on success.
+   *
+   * @param userId - ID of the user changing their password
+   * @param currentPassword - The user's current plain text password
+   * @param newPassword - The desired new plain text password
+   * @throws AuthenticationError if the user is missing or the current password is wrong
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<void> {
+    const userService = this.requireUserService();
+    const user = await userService.findUserById(userId);
+
+    if (!user) {
+      throw new AuthenticationError('User not found', 'INVALID_CREDENTIALS');
+    }
+
+    const valid = await this.comparePasswords(currentPassword, user.passwordHash);
+    if (!valid) {
+      throw new AuthenticationError(
+        'Current password is incorrect',
+        'INVALID_CREDENTIALS'
+      );
+    }
+
+    await userService.updateUser(userId, {
+      password: newPassword,
+      mustChangePassword: false,
+    });
+  }
+
+  /**
    * Exchanges a valid refresh token for a fresh access/refresh token pair.
    *
    * The user is re-loaded from the store so that role, stock access, and

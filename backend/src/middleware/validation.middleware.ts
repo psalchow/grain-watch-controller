@@ -187,6 +187,36 @@ export const loginSchema = z.object({
 export type LoginRequest = z.infer<typeof loginSchema>;
 
 /**
+ * Self-service password change request body schema.
+ */
+export const changePasswordSchema = z.object({
+  currentPassword: z
+    .string({ required_error: 'Current password is required' })
+    .min(1, 'Current password is required')
+    .max(100, 'Password must be at most 100 characters'),
+  newPassword: z
+    .string({ required_error: 'New password is required' })
+    .min(8, 'Password must be at least 8 characters')
+    .max(100, 'Password must be at most 100 characters'),
+});
+
+/** Type inferred from changePasswordSchema */
+export type ChangePasswordRequest = z.infer<typeof changePasswordSchema>;
+
+/**
+ * Admin password reset request body schema.
+ */
+export const resetPasswordSchema = z.object({
+  newPassword: z
+    .string({ required_error: 'New password is required' })
+    .min(8, 'Password must be at least 8 characters')
+    .max(100, 'Password must be at most 100 characters'),
+});
+
+/** Type inferred from resetPasswordSchema */
+export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
+
+/**
  * User role enum for validation.
  */
 export const userRoleEnum = z.enum(['admin', 'viewer'], {

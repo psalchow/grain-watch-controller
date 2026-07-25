@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { AuthController } from '../controllers';
-import { validateBody, loginSchema, getAuthService } from '../middleware';
+import { validateBody, loginSchema, changePasswordSchema, authenticate, getAuthService } from '../middleware';
 
 /**
  * Creates the authentication router with all auth-related endpoints.
@@ -73,6 +73,22 @@ export function createAuthRouter(): Router {
    * so logout works regardless of access-token state.
    */
   router.post('/logout', (req, res) => controller.logout(req, res));
+
+  /**
+   * POST /change-password
+   *
+   * Change the authenticated user's own password. Clears the
+   * mustChangePassword flag on success.
+   *
+   * Response: 204 No Content
+   * Errors: 400 validation, 401 unauthenticated or wrong current password
+   */
+  router.post(
+    '/change-password',
+    authenticate,
+    validateBody(changePasswordSchema),
+    (req, res, next) => controller.changePassword(req, res, next)
+  );
 
   return router;
 }
