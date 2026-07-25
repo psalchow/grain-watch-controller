@@ -20,6 +20,40 @@ export interface User {
   username: string;
   role: 'admin' | 'viewer';
   stockAccess: string[]; // ['*'] for admin, specific stock IDs for viewers
+  mustChangePassword?: boolean;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+// Admin user management
+export interface AdminUser {
+  id: string;
+  username: string;
+  email?: string;
+  role: 'admin' | 'viewer';
+  stockAccess: string[];
+  active: boolean;
+  createdAt: string;
+}
+
+export interface AdminUsersResponse {
+  users: AdminUser[];
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  email?: string;
+  role: 'admin' | 'viewer';
+  stockAccess: string[];
+}
+
+export interface UpdatePermissionsRequest {
+  role?: 'admin' | 'viewer';
+  stockAccess?: string[];
 }
 
 // Grain Stocks

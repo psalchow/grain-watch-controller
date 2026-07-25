@@ -1,6 +1,6 @@
 import axios from './client';
 import { apiClient } from './client';
-import { LoginRequest, LoginResponse, User } from '../types/api';
+import { LoginRequest, LoginResponse, User, ChangePasswordRequest } from '../types/api';
 import { decodeJwtPayload, isTokenValid } from '../lib/token';
 
 /**
@@ -28,6 +28,7 @@ function userFromToken(token: string | null): User | null {
     username: payload.username,
     role: payload.role as User['role'],
     stockAccess: payload.stockAccess as string[],
+    mustChangePassword: payload.mustChangePassword === true,
   };
 }
 
@@ -74,6 +75,13 @@ export const authApi = {
       // Ignore network/errors — always clear the local token below.
     }
     apiClient.clearToken();
+  },
+
+  /**
+   * Change the current user's own password.
+   */
+  async changePassword(data: ChangePasswordRequest): Promise<void> {
+    await axios.post('/auth/change-password', data);
   },
 
   /**
