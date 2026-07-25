@@ -99,6 +99,9 @@ export interface JWTPayload {
   /** Stock IDs the user can access */
   stockAccess: string[];
 
+  /** Whether the user must change their password on next login */
+  mustChangePassword?: boolean;
+
   /** Token issued at timestamp (Unix epoch seconds) */
   iat: number;
 

@@ -133,6 +133,7 @@ export class AuthController {
           username: decoded.username,
           role: decoded.role,
           stockAccess: decoded.stockAccess,
+          mustChangePassword: decoded.mustChangePassword,
         },
       });
     } catch (error) {

@@ -71,6 +71,7 @@ export function authenticate(
       username: decoded.username,
       role: decoded.role,
       stockAccess: decoded.stockAccess,
+      mustChangePassword: decoded.mustChangePassword,
     };
 
     req.user = userProfile;

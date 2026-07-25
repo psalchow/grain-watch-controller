@@ -485,6 +485,7 @@ describe('Authentication Middleware', () => {
         username: 'customuser',
         role: 'admin',
         stockAccess: ['*'],
+        mustChangePassword: false,
       });
 
       setAuthService(mockAuthService);
@@ -511,6 +512,7 @@ describe('Authentication Middleware', () => {
         username: 'customuser',
         role: 'admin',
         stockAccess: ['*'],
+        mustChangePassword: false,
       });
 
       setAuthService(mockAuthService);

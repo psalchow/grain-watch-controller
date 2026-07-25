@@ -63,6 +63,9 @@ export interface DecodedToken {
 
   /** Stock IDs the user can access */
   stockAccess: string[];
+
+  /** Whether the user must change their password on next login */
+  mustChangePassword: boolean;
 }
 
 /** Salt rounds for bcrypt password hashing */
@@ -158,6 +161,7 @@ export class AuthService {
       username: user.username,
       role: user.role,
       stockAccess: user.stockAccess,
+      mustChangePassword: user.mustChangePassword ?? false,
     };
 
     // Convert expiry to seconds for type compatibility
@@ -256,6 +260,7 @@ export class AuthService {
         username: decoded.username,
         role: decoded.role as UserRole,
         stockAccess: decoded.stockAccess as string[],
+        mustChangePassword: decoded.mustChangePassword === true,
       };
     } catch (error) {
       if (error instanceof AuthenticationError) {
