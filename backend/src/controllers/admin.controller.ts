@@ -124,6 +124,7 @@ export class AdminController {
         password,
         role,
         stockAccess,
+        mustChangePassword: true,
       };
 
       // Only add email if provided
@@ -349,6 +350,42 @@ export class AdminController {
         return;
       }
 
+      next(error);
+    }
+  }
+
+  /**
+   * Resets a user's password and forces a change on their next login.
+   *
+   * POST /api/v1/admin/users/:userId/reset-password
+   *
+   * @param req - Express request with userId param and validated body
+   * @param res - Express response object
+   * @param next - Express next function for error handling
+   */
+  async resetPassword(
+    req: Request<ParamsDictionary, unknown, { newPassword: string }>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const userId = req.params['userId'] as string;
+      const { newPassword } = req.body;
+
+      await this.userService.updateUser(userId, {
+        password: newPassword,
+        mustChangePassword: true,
+      });
+
+      res.status(204).send();
+    } catch (error) {
+      if (error instanceof UserServiceError) {
+        const statusCode = this.getUserErrorStatusCode(error.code);
+        res.status(statusCode).json({
+          error: { code: error.code, message: error.message, details: this.getUserErrorDetails(error.code) },
+        });
+        return;
+      }
       next(error);
     }
   }

@@ -285,6 +285,7 @@ export class UserService {
       password: 'changeme123',
       role: 'admin',
       stockAccess: ['*'],
+      mustChangePassword: true,
     });
   }
 

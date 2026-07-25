@@ -15,6 +15,7 @@ import {
   validateBody,
   validateParams,
   createUserSchema,
+  resetPasswordSchema,
   userIdParamsSchema,
   getAuthService,
 } from '../middleware';
@@ -158,6 +159,22 @@ export function createAdminRouter(): Router {
     validateParams(userIdParamsSchema),
     validateBody(updateStatusSchema),
     (req, res, next) => controller.updateUserStatus(req, res, next)
+  );
+
+  /**
+   * POST /users/:userId/reset-password
+   *
+   * Reset a user's password to a temporary value and force a change on next
+   * login.
+   *
+   * Response: 204 No Content
+   * Errors: 400 validation, 401 unauthenticated, 403 admin required, 404 not found
+   */
+  router.post(
+    '/users/:userId/reset-password',
+    validateParams(userIdParamsSchema),
+    validateBody(resetPasswordSchema),
+    (req, res, next) => controller.resetPassword(req, res, next)
   );
 
   return router;
