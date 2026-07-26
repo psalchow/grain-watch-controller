@@ -1,12 +1,15 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
 import StockDetailPage from './pages/StockDetailPage';
 import FanControlPage from './pages/FanControlPage';
+import AccountPage from './pages/AccountPage';
+import { shouldForcePasswordChange } from './lib/access';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -18,6 +21,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (shouldForcePasswordChange(user, location.pathname)) {
+    return <Navigate to="/account" replace />;
   }
 
   return <>{children}</>;
@@ -73,6 +80,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <FanControlPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <ProtectedRoute>
+            <AccountPage />
           </ProtectedRoute>
         }
       />

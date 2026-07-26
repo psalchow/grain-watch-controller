@@ -9,6 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
+  reloadUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -75,12 +76,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
   };
 
+  const reloadUser = async () => {
+    const refreshed = await authApi.refresh();
+    setUser(refreshed);
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: user !== null,
     isLoading,
     login,
     logout,
+    reloadUser,
   };
 
   return (
