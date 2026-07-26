@@ -1,4 +1,4 @@
-import { LogOut, Wheat, UserCog } from 'lucide-react';
+import { LogOut, Wheat, UserCog, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,15 @@ export function Header() {
             <UserCog className="h-4 w-4 mr-2" />
             Account
           </Link>
+          {user?.role === 'admin' && (
+            <Link
+              to="/admin/users"
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Users
+            </Link>
+          )}
           <Button variant="ghost" size="sm" onClick={logout}>
             <LogOut className="h-4 w-4 mr-2" />
             Logout

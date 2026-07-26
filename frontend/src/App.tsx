@@ -5,7 +5,8 @@ import HomePage from './pages/HomePage';
 import StockDetailPage from './pages/StockDetailPage';
 import FanControlPage from './pages/FanControlPage';
 import AccountPage from './pages/AccountPage';
-import { shouldForcePasswordChange } from './lib/access';
+import AdminUsersPage from './pages/AdminUsersPage';
+import { shouldForcePasswordChange, isAdmin } from './lib/access';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -25,6 +26,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (shouldForcePasswordChange(user, location.pathname)) {
     return <Navigate to="/account" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAdmin(user)) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
@@ -89,6 +112,14 @@ function AppRoutes() {
           <ProtectedRoute>
             <AccountPage />
           </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/users"
+        element={
+          <AdminRoute>
+            <AdminUsersPage />
+          </AdminRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
