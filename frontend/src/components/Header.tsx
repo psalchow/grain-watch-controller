@@ -20,13 +20,15 @@ export function Header() {
               {user.username}
             </span>
           )}
-          <Link
-            to="/account"
-            className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
-          >
-            <UserCog className="h-4 w-4 mr-2" />
-            Account
-          </Link>
+          {user && (
+            <Link
+              to="/account"
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              <UserCog className="h-4 w-4 mr-2" />
+              Account
+            </Link>
+          )}
           {user?.role === 'admin' && (
             <Link
               to="/admin/users"

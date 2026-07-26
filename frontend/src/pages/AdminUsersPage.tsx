@@ -39,6 +39,7 @@ export default function AdminUsersPage() {
   useEffect(() => { load(); }, [load]);
 
   const toggleActive = async (user: AdminUser) => {
+    setError(null);
     try {
       await adminApi.setActive(user.id, !user.active);
       await load();

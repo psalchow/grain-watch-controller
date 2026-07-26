@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Wheat, Loader2, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/api';
@@ -8,21 +9,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export default function AccountPage() {
   const { user, logout, reloadUser } = useAuth();
+  const navigate = useNavigate();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
   const forced = !!user?.mustChangePassword;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccess(false);
 
-    if (!currentPassword || !newPassword) {
+    if (!currentPassword || !newPassword || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
@@ -39,10 +39,7 @@ export default function AccountPage() {
     try {
       await authApi.changePassword({ currentPassword, newPassword });
       await reloadUser();
-      setSuccess(true);
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      navigate('/');
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err
@@ -73,10 +70,6 @@ export default function AccountPage() {
             {error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
             )}
-            {success && (
-              <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">Password changed successfully</div>
-            )}
-
             <div className="space-y-2">
               <label htmlFor="currentPassword" className="text-sm font-medium">Current password</label>
               <Input id="currentPassword" type="password" value={currentPassword}
