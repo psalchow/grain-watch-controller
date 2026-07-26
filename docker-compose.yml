@@ -11,7 +11,7 @@ services:
   # ---------------------------------------------------------------------------
   grainwatch-controller:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: grainwatch-controller
     restart: unless-stopped

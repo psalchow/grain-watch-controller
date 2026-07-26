@@ -1,0 +1,66 @@
+# =============================================================================
+# Docker Ignore File (repository root)
+# =============================================================================
+# Keeps the build context small for the combined PWA + BFF image built from the
+# repository root. Dependencies and build output are recreated inside the image.
+# =============================================================================
+
+# Dependencies - reinstalled in Docker build
+node_modules/
+**/node_modules/
+
+# Build output - rebuilt in Docker
+dist/
+**/dist/
+*.tsbuildinfo
+
+# Git repository
+.git/
+.gitignore
+
+# IDE and editor configuration
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment files - secrets must not be baked into the image
+**/.env
+**/.env.*
+!**/.env.example
+
+# Documentation - not needed at runtime
+docs/
+*.md
+
+# Tests and coverage
+**/tests/
+**/coverage/
+
+# Simulation / local tooling
+sim/
+
+# Runtime data - mounted at runtime
+**/data/
+
+# Logs
+**/logs/
+*.log
+npm-debug.log*
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Claude/AI configuration
+.claude/
+CLAUDE.md
+
+# Docker files themselves
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Build scripts - not needed inside the image
+scripts/

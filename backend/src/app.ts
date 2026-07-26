@@ -11,6 +11,8 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
+import path from 'path';
 import { errorHandler, notFoundHandler } from './middleware';
 import { createApiRouter } from './routes';
 
@@ -43,6 +45,53 @@ interface CreateAppOptions {
 
   /** Morgan log format (defaults to 'combined') */
   logFormat?: string;
+}
+
+/**
+ * Resolves the directory holding the built PWA, when present.
+ *
+ * The backend serves the frontend as static files only when a build has been
+ * bundled alongside it (i.e. in the production Docker image). When the directory
+ * is absent — as in local development and tests — the service runs API-only and
+ * this returns null.
+ *
+ * @returns Absolute path to the frontend dist directory, or null when unavailable
+ */
+function resolveFrontendDistPath(): string | null {
+  const distPath = process.env['FRONTEND_DIST_PATH'] ?? '/app/public';
+  return fs.existsSync(path.join(distPath, 'index.html')) ? distPath : null;
+}
+
+/**
+ * Builds the Helmet configuration.
+ *
+ * When the PWA is served from this origin we relax the Content-Security-Policy
+ * so the bundled assets and the vite-plugin-pwa service-worker registration can
+ * load. Otherwise Helmet's stricter defaults apply.
+ *
+ * @param serveFrontend - Whether the PWA is served from this origin
+ * @returns Helmet middleware
+ */
+function createHelmet(serveFrontend: boolean) {
+  if (!serveFrontend) {
+    return helmet();
+  }
+
+  return helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        // 'unsafe-inline' covers the vite-plugin-pwa service-worker registration
+        // snippet; tighten to hashes later if required.
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        manifestSrc: ["'self'"],
+        workerSrc: ["'self'"],
+      },
+    },
+  });
 }
 
 /**
@@ -110,12 +159,15 @@ function getDefaultCorsOptions(): CorsOptions {
 export function createApp(options: CreateAppOptions = {}): Express {
   const app = express();
 
+  // Serve the bundled PWA only when a build is present (production image).
+  const frontendDistPath = resolveFrontendDistPath();
+
   // ==========================================================================
   // Security Middleware
   // ==========================================================================
 
-  // Set security HTTP headers
-  app.use(helmet());
+  // Set security HTTP headers (CSP relaxed when serving the PWA from this origin)
+  app.use(createHelmet(frontendDistPath !== null));
 
   // Configure CORS
   const corsOptions = options.cors ?? getDefaultCorsOptions();
@@ -172,6 +224,29 @@ export function createApp(options: CreateAppOptions = {}): Express {
    * - /api/v1/admin/* - Admin user management endpoints
    */
   app.use('/api/v1', createApiRouter());
+
+  // ==========================================================================
+  // Static Frontend (PWA)
+  // ==========================================================================
+
+  /**
+   * Serve the bundled PWA and provide an SPA fallback.
+   *
+   * Static assets are served with content-hashed filenames. Any remaining GET
+   * request that is not an API call or the health probe returns index.html so
+   * client-side routing works on deep links and page reloads. API 404s still
+   * fall through to notFoundHandler rather than being masked by index.html.
+   */
+  if (frontendDistPath) {
+    app.use(express.static(frontendDistPath, { index: false }));
+
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path === '/health') {
+        return next();
+      }
+      res.sendFile(path.join(frontendDistPath, 'index.html'));
+    });
+  }
 
   return app;
 }
