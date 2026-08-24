@@ -77,4 +77,32 @@ describe('fan endpoints', () => {
     const res = await request(app()).get('/api/v1/stocks/grain-watch-1/fan');
     expect(res.status).toBe(401);
   });
+
+  it('GET /fan/stream sends SSE headers that survive an nginx reverse proxy', async () => {
+    // The stream never completes, so read the headers off the response event
+    // and abort rather than awaiting the request.
+    const req = request(app())
+      .get('/api/v1/stocks/grain-watch-1/fan/stream')
+      .set('Authorization', `Bearer ${token()}`)
+      .buffer(false);
+
+    const headers = await new Promise<Record<string, string>>(
+      (resolve, reject) => {
+        req.on('response', (res) => {
+          // Aborting below resets the socket; swallow the reset so it does not
+          // surface as an unhandled error event once the test has finished.
+          res.on('error', () => {});
+          resolve(res.headers as Record<string, string>);
+        });
+        req.on('error', reject);
+        req.end();
+      }
+    );
+    req.abort();
+
+    expect(headers['content-type']).toContain('text/event-stream');
+    expect(headers['cache-control']).toContain('no-cache');
+    // Without this nginx buffers the stream and status changes stall.
+    expect(headers['x-accel-buffering']).toBe('no');
+  });
 });

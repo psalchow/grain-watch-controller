@@ -50,6 +50,9 @@ export class FanHttpController {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
+        // nginx buffers proxied responses by default, which stalls the stream
+        // behind a reverse proxy. Ignored by everything else.
+        'X-Accel-Buffering': 'no',
       });
 
       const send = (status: FanStatus): void => {
