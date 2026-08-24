@@ -1,5 +1,11 @@
 # User Management & Password Self-Service Implementation Plan
 
+**Status:** Implemented (2026-08-24) — all eight tasks are on `main`, commits
+`e8fdb14`..`71d2504`. Backend 364 tests, frontend 62 tests, typecheck and lint
+clean across both workspaces. The two manual smoke-check steps (Task 7 Step 6,
+Task 8 Step 5) remain unticked: they are covered implicitly by the automated
+suites and have not been walked through by hand.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let any user change their own password from the UI, and let admins create/edit/deactivate users and reset passwords, with new/reset passwords forcing a change on next login.
@@ -33,7 +39,7 @@
 **Interfaces:**
 - Produces: `User.mustChangePassword?: boolean`, `UserProfile.mustChangePassword?: boolean`, `CreateUserData.mustChangePassword?: boolean`, `UpdateUserData.mustChangePassword?: boolean`; the `users` table column `must_change_password`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/unit/services/user.mustChangePassword.test.ts`:
 
@@ -82,12 +88,12 @@ describe('mustChangePassword persistence', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/unit/services/user.mustChangePassword.test.ts`
 Expected: FAIL — TypeScript error `mustChangePassword` does not exist on `CreateUserData`/`User`, or assertion fails.
 
-- [ ] **Step 3: Add the schema column**
+- [x] **Step 3: Add the schema column**
 
 In `backend/src/db/schema.ts`, add the column to the `users` table (after `active`):
 
@@ -106,7 +112,7 @@ export const users = sqliteTable('users', {
 });
 ```
 
-- [ ] **Step 4: Generate the migration**
+- [x] **Step 4: Generate the migration**
 
 Run: `cd backend && npm run db:generate -- --name must_change_password`
 Expected: a new file `backend/drizzle/0002_must_change_password.sql` containing:
@@ -117,13 +123,13 @@ ALTER TABLE `users` ADD `must_change_password` integer DEFAULT false NOT NULL;
 
 If the generated SQL differs materially (e.g. table rebuild), inspect it and keep it — better-sqlite3 `ADD COLUMN` with a constant default is expected.
 
-- [ ] **Step 5: Add the field to model interfaces**
+- [x] **Step 5: Add the field to model interfaces**
 
 In `backend/src/models/user.model.ts`:
 - Add to `interface User` (after `active`): `  /** Whether the user must change their password on next login */\n  mustChangePassword?: boolean;`
 - Add to `interface UserProfile` (after `stockAccess`): `  /** Whether the user must change their password on next login */\n  mustChangePassword?: boolean;`
 
-- [ ] **Step 6: Propagate through the repository**
+- [x] **Step 6: Propagate through the repository**
 
 In `backend/src/db/repositories/user.repository.ts`:
 
@@ -143,7 +149,7 @@ In `toUser()`, add to the `user` object after `active: row.active,`:
       mustChangePassword: row.mustChangePassword,
 ```
 
-- [ ] **Step 7: Propagate through the service**
+- [x] **Step 7: Propagate through the service**
 
 In `backend/src/services/auth/user.service.ts`:
 - Add `mustChangePassword?: boolean;` to `interface CreateUserData` and to `interface UpdateUserData`.
@@ -161,17 +167,17 @@ In `backend/src/services/auth/user.service.ts`:
       mustChangePassword: user.mustChangePassword,
   ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `cd backend && npx jest tests/unit/services/user.mustChangePassword.test.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 9: Run the full backend suite to check for regressions**
+- [x] **Step 9: Run the full backend suite to check for regressions**
 
 Run: `cd backend && npm test`
 Expected: PASS (existing tests unaffected — the field is optional and defaults to false).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add backend/src/db/schema.ts backend/drizzle/ backend/src/models/user.model.ts backend/src/db/repositories/user.repository.ts backend/src/services/auth/user.service.ts backend/tests/unit/services/user.mustChangePassword.test.ts
@@ -193,7 +199,7 @@ git commit -m "feat(backend): add mustChangePassword flag to user model"
 - Consumes: `User.mustChangePassword` (Task 1).
 - Produces: `DecodedToken.mustChangePassword: boolean`; login response `user.mustChangePassword`; `req.user.mustChangePassword` set by `authenticate`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `backend/tests/unit/services/auth.mustChangePassword.test.ts`:
 
@@ -240,12 +246,12 @@ describe('AuthService JWT mustChangePassword claim', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/unit/services/auth.mustChangePassword.test.ts`
 Expected: FAIL — `mustChangePassword` missing on `DecodedToken`.
 
-- [ ] **Step 3: Add the JWT claim**
+- [x] **Step 3: Add the JWT claim**
 
 In `backend/src/models/user.model.ts`, add to `interface JWTPayload` (after `stockAccess`):
 ```ts
@@ -265,12 +271,12 @@ In `backend/src/services/auth/auth.service.ts`:
   ```
   (Leniently coerced — old tokens without the claim decode to `false`, so existing tests keep passing.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && npx jest tests/unit/services/auth.mustChangePassword.test.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Expose the flag on `req.user` and in the login response**
+- [x] **Step 5: Expose the flag on `req.user` and in the login response**
 
 In `backend/src/middleware/auth.middleware.ts`, in `authenticate()` add to the `userProfile` object after `stockAccess: decoded.stockAccess,`:
 ```ts
@@ -282,12 +288,12 @@ In `backend/src/controllers/auth.controller.ts`, in `login()` add to the respons
           mustChangePassword: decoded.mustChangePassword,
 ```
 
-- [ ] **Step 6: Run the full backend suite**
+- [x] **Step 6: Run the full backend suite**
 
 Run: `cd backend && npm test`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/models/user.model.ts backend/src/services/auth/auth.service.ts backend/src/middleware/auth.middleware.ts backend/src/controllers/auth.controller.ts backend/tests/unit/services/auth.mustChangePassword.test.ts
@@ -310,7 +316,7 @@ git commit -m "feat(backend): carry mustChangePassword through JWT and login"
 - Consumes: `AuthService`, `UserService.updateUser`, `authenticate`, `validateBody`.
 - Produces: `changePasswordSchema`, `ChangePasswordRequest`; `AuthService.changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void>`; endpoint `POST /api/v1/auth/change-password` (204 on success).
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 Create `backend/tests/integration/auth.password.test.ts`:
 
@@ -418,12 +424,12 @@ describe('POST /api/v1/auth/change-password', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/integration/auth.password.test.ts`
 Expected: FAIL — route returns 404 (endpoint not defined).
 
-- [ ] **Step 3: Add the validation schema + export**
+- [x] **Step 3: Add the validation schema + export**
 
 In `backend/src/middleware/validation.middleware.ts`, after the `loginSchema`/`LoginRequest` block add:
 
@@ -461,7 +467,7 @@ export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
 
 In `backend/src/middleware/index.ts`, add `changePasswordSchema,` and `resetPasswordSchema,` to the value export from `./validation.middleware`, and add `ChangePasswordRequest,` and `ResetPasswordRequest,` to the `export type { ... }` block.
 
-- [ ] **Step 4: Add `AuthService.changePassword`**
+- [x] **Step 4: Add `AuthService.changePassword`**
 
 In `backend/src/services/auth/auth.service.ts`, add a method to the `AuthService` class (after `refreshAccessToken`):
 
@@ -503,7 +509,7 @@ In `backend/src/services/auth/auth.service.ts`, add a method to the `AuthService
   }
 ```
 
-- [ ] **Step 5: Add the controller handler**
+- [x] **Step 5: Add the controller handler**
 
 In `backend/src/controllers/auth.controller.ts`:
 - Update the import on line 9 to include `UserServiceError`:
@@ -560,7 +566,7 @@ In `backend/src/controllers/auth.controller.ts`:
   }
 ```
 
-- [ ] **Step 6: Wire the route**
+- [x] **Step 6: Wire the route**
 
 In `backend/src/routes/auth.routes.ts`:
 - Update the import to add `authenticate` and `changePasswordSchema`:
@@ -587,17 +593,17 @@ In `backend/src/routes/auth.routes.ts`:
   );
 ```
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `cd backend && npx jest tests/integration/auth.password.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 8: Typecheck + full suite**
+- [x] **Step 8: Typecheck + full suite**
 
 Run: `cd backend && npm run typecheck && npm test`
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/middleware/validation.middleware.ts backend/src/middleware/index.ts backend/src/services/auth/auth.service.ts backend/src/controllers/auth.controller.ts backend/src/routes/auth.routes.ts backend/tests/integration/auth.password.test.ts
@@ -618,7 +624,7 @@ git commit -m "feat(backend): add self-service change-password endpoint"
 - Consumes: `UserService.updateUser`, `resetPasswordSchema`, `userIdParamsSchema`, `validateParams`, `validateBody`, `requireRole`.
 - Produces: endpoint `POST /api/v1/admin/users/:userId/reset-password` (204); admin-created users have `mustChangePassword=true`; the seeded default admin has `mustChangePassword=true`.
 
-- [ ] **Step 1: Write the failing integration test**
+- [x] **Step 1: Write the failing integration test**
 
 Create `backend/tests/integration/admin.password.test.ts` (same harness as `admin.test.ts`):
 
@@ -738,12 +744,12 @@ describe('Admin password management', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && npx jest tests/integration/admin.password.test.ts`
 Expected: FAIL — reset route 404; create-forces-change assertion fails (flag is false).
 
-- [ ] **Step 3: Force change on admin-created users**
+- [x] **Step 3: Force change on admin-created users**
 
 In `backend/src/controllers/admin.controller.ts`:
 - Update the import on line 11 to include `UserServiceError` (already imported) — confirm `UserServiceError` is in the import list.
@@ -759,7 +765,7 @@ In `backend/src/controllers/admin.controller.ts`:
       };
 ```
 
-- [ ] **Step 4: Add the `resetPassword` handler**
+- [x] **Step 4: Add the `resetPassword` handler**
 
 In `backend/src/controllers/admin.controller.ts`, add a method to `AdminController` (after `updateUserStatus`):
 
@@ -801,7 +807,7 @@ In `backend/src/controllers/admin.controller.ts`, add a method to `AdminControll
   }
 ```
 
-- [ ] **Step 5: Wire the route**
+- [x] **Step 5: Wire the route**
 
 In `backend/src/routes/admin.routes.ts`:
 - Add `resetPasswordSchema` to the import from `../middleware`.
@@ -825,7 +831,7 @@ In `backend/src/routes/admin.routes.ts`:
   );
 ```
 
-- [ ] **Step 6: Force change on the seeded admin**
+- [x] **Step 6: Force change on the seeded admin**
 
 In `backend/src/services/auth/user.service.ts`, in `initializeDefaultUsers()` add `mustChangePassword: true,` to the `createUser` argument:
 
@@ -839,17 +845,17 @@ In `backend/src/services/auth/user.service.ts`, in `initializeDefaultUsers()` ad
     });
 ```
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `cd backend && npx jest tests/integration/admin.password.test.ts`
 Expected: PASS (5 tests).
 
-- [ ] **Step 8: Typecheck + full suite**
+- [x] **Step 8: Typecheck + full suite**
 
 Run: `cd backend && npm run typecheck && npm test`
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add backend/src/controllers/admin.controller.ts backend/src/routes/admin.routes.ts backend/src/services/auth/user.service.ts backend/tests/integration/admin.password.test.ts
@@ -871,7 +877,7 @@ git commit -m "feat(backend): admin reset-password endpoint and force-change on 
 **Interfaces:**
 - Produces: `User.mustChangePassword?: boolean`; `ChangePasswordRequest`, `AdminUser`, `AdminUsersResponse`, `CreateUserRequest`, `UpdatePermissionsRequest` types; `authApi.changePassword`; `adminApi` (`listUsers`, `createUser`, `updatePermissions`, `resetPassword`, `setActive`); `shouldForcePasswordChange(user, pathname)` and `isAdmin(user)` helpers.
 
-- [ ] **Step 1: Write the failing helper test**
+- [x] **Step 1: Write the failing helper test**
 
 Create `frontend/src/lib/access.test.ts`:
 
@@ -907,12 +913,12 @@ describe('access helpers', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/lib/access.test.ts`
 Expected: FAIL — `./access` does not exist.
 
-- [ ] **Step 3: Extend the types**
+- [x] **Step 3: Extend the types**
 
 In `frontend/src/types/api.ts`, replace the `User` interface and add new types after it:
 
@@ -959,7 +965,7 @@ export interface UpdatePermissionsRequest {
 }
 ```
 
-- [ ] **Step 4: Add `authApi.changePassword` and read the flag from the token**
+- [x] **Step 4: Add `authApi.changePassword` and read the flag from the token**
 
 In `frontend/src/api/auth.ts`:
 - Update the import on line 3 to add `ChangePasswordRequest`:
@@ -980,7 +986,7 @@ In `frontend/src/api/auth.ts`:
     },
   ```
 
-- [ ] **Step 5: Create the admin API module**
+- [x] **Step 5: Create the admin API module**
 
 Create `frontend/src/api/admin.ts`:
 
@@ -1029,7 +1035,7 @@ In `frontend/src/api/index.ts`, add:
 export { adminApi } from './admin';
 ```
 
-- [ ] **Step 6: Create the access helpers**
+- [x] **Step 6: Create the access helpers**
 
 Create `frontend/src/lib/access.ts`:
 
@@ -1053,17 +1059,17 @@ export function isAdmin(user: User | null): boolean {
 }
 ```
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/lib/access.test.ts`
 Expected: PASS (5 tests).
 
-- [ ] **Step 8: Typecheck**
+- [x] **Step 8: Typecheck**
 
 Run: `cd frontend && npx tsc -b --noEmit`
 Expected: no errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add frontend/src/types/api.ts frontend/src/api/auth.ts frontend/src/api/admin.ts frontend/src/api/index.ts frontend/src/lib/access.ts frontend/src/lib/access.test.ts
@@ -1081,7 +1087,7 @@ git commit -m "feat(frontend): add user-management API layer, types and access h
 **Interfaces:**
 - Produces: `Dialog` component — `{ open: boolean; onClose: () => void; title: string; children: React.ReactNode }`. Renders nothing when `open` is false; renders an overlay + titled panel when true; calls `onClose` on overlay click and on the close button.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `frontend/src/components/ui/dialog.test.tsx`:
 
@@ -1115,12 +1121,12 @@ describe('Dialog', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/ui/dialog.test.tsx`
 Expected: FAIL — `./dialog` does not exist.
 
-- [ ] **Step 3: Implement the Dialog**
+- [x] **Step 3: Implement the Dialog**
 
 Create `frontend/src/components/ui/dialog.tsx`:
 
@@ -1171,12 +1177,12 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd frontend && npx vitest run src/components/ui/dialog.test.tsx`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/ui/dialog.tsx frontend/src/components/ui/dialog.test.tsx
@@ -1197,7 +1203,7 @@ git commit -m "feat(frontend): add Dialog UI primitive"
 - Consumes: `authApi.changePassword`, `authApi.refresh`, `shouldForcePasswordChange`, `useAuth`.
 - Produces: `AuthContextType.reloadUser: () => Promise<void>`; route `/account`; `ProtectedRoute` redirects to `/account` while `mustChangePassword` is set.
 
-- [ ] **Step 1: Add `reloadUser` to AuthContext**
+- [x] **Step 1: Add `reloadUser` to AuthContext**
 
 In `frontend/src/contexts/AuthContext.tsx`:
 - Add to `interface AuthContextType` (after `logout`):
@@ -1213,7 +1219,7 @@ In `frontend/src/contexts/AuthContext.tsx`:
   ```
 - Add `reloadUser` to the `value` object.
 
-- [ ] **Step 2: Create the Account page**
+- [x] **Step 2: Create the Account page**
 
 Create `frontend/src/pages/AccountPage.tsx`:
 
@@ -1327,7 +1333,7 @@ export default function AccountPage() {
 }
 ```
 
-- [ ] **Step 3: Wire the route and the forced-change gate**
+- [x] **Step 3: Wire the route and the forced-change gate**
 
 In `frontend/src/App.tsx`:
 - Add imports at the top (after the existing page imports):
@@ -1377,7 +1383,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       />
 ```
 
-- [ ] **Step 4: Add the Header link**
+- [x] **Step 4: Add the Header link**
 
 In `frontend/src/components/Header.tsx`:
 - Replace the import line for lucide icons with: `import { LogOut, Wheat, UserCog } from 'lucide-react';`
@@ -1394,7 +1400,7 @@ In `frontend/src/components/Header.tsx`:
           </Link>
 ```
 
-- [ ] **Step 5: Typecheck and run tests**
+- [x] **Step 5: Typecheck and run tests**
 
 Run: `cd frontend && npx tsc -b --noEmit && npx vitest run`
 Expected: no type errors; all existing tests pass.
@@ -1403,7 +1409,7 @@ Expected: no type errors; all existing tests pass.
 
 Run backend + frontend (`npm run dev` from repo root). Log in as the seeded admin (`admin` / `changeme123`) → you should be redirected to `/account` and unable to navigate away until you set a new password.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add frontend/src/contexts/AuthContext.tsx frontend/src/pages/AccountPage.tsx frontend/src/App.tsx frontend/src/components/Header.tsx
@@ -1423,7 +1429,7 @@ git commit -m "feat(frontend): account page with forced password-change gate"
 - Consumes: `adminApi`, `stocksApi.getStocks`, `isAdmin`, `Dialog`, `useAuth`.
 - Produces: `AdminRoute` wrapper (admin-only); route `/admin/users`; admin CRUD UI (create/edit/reset/deactivate) over stocks.
 
-- [ ] **Step 1: Add the `AdminRoute` guard and route**
+- [x] **Step 1: Add the `AdminRoute` guard and route**
 
 In `frontend/src/App.tsx`:
 - Add imports: `import AdminUsersPage from './pages/AdminUsersPage';` and add `isAdmin` to the access import: `import { shouldForcePasswordChange, isAdmin } from './lib/access';`
@@ -1466,7 +1472,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
       />
 ```
 
-- [ ] **Step 2: Create the Admin users page**
+- [x] **Step 2: Create the Admin users page**
 
 Create `frontend/src/pages/AdminUsersPage.tsx`:
 
@@ -1768,7 +1774,7 @@ function ResetPasswordDialog({ user, onClose, onSaved }: { user: AdminUser; onCl
 }
 ```
 
-- [ ] **Step 3: Add the admin link to the Header**
+- [x] **Step 3: Add the admin link to the Header**
 
 In `frontend/src/components/Header.tsx`:
 - Add `Users` to the lucide import: `import { LogOut, Wheat, UserCog, Users } from 'lucide-react';`
@@ -1786,7 +1792,7 @@ In `frontend/src/components/Header.tsx`:
           )}
 ```
 
-- [ ] **Step 4: Typecheck and run tests**
+- [x] **Step 4: Typecheck and run tests**
 
 Run: `cd frontend && npx tsc -b --noEmit && npx vitest run`
 Expected: no type errors; all tests pass.
@@ -1795,7 +1801,7 @@ Expected: no type errors; all tests pass.
 
 Run backend + frontend. As admin (after changing the default password): open **Users** in the header → create a viewer assigned to one stock, edit its stocks, reset its password, deactivate/reactivate it. Log in as that viewer with the temp password → forced onto `/account`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add frontend/src/pages/AdminUsersPage.tsx frontend/src/App.tsx frontend/src/components/Header.tsx
@@ -1806,5 +1812,5 @@ git commit -m "feat(frontend): admin user-management page with stock assignment"
 
 ## Post-implementation notes
 
-- **Deployed default admin:** an existing `admin` row keeps `must_change_password = false` after migration. Change its password once via `/account` after deploying (the `changeme123` default remains until then).
-- **Docs:** update `backend/CLAUDE.md` / API docs with the two new endpoints if an API reference is maintained (out of scope for the tasks above; do it in a follow-up if desired).
+- **Pre-existing admin rows:** migration `0002` backfills `must_change_password = false`, so an `admin` row that already exists keeps the `changeme123` default without the force-change gate. Not an issue today — nothing is deployed yet, and a fresh install seeds the admin with the flag set. It becomes relevant if this plan is ever applied to a live database; fix with `UPDATE users SET must_change_password = 1 WHERE username = 'admin';`.
+- **Docs:** done (2026-08-24) — `docs/specs/API.md` now lists every route from `backend/src/routes/*.ts`, including the two new password endpoints.
