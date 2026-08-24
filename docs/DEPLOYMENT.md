@@ -1,6 +1,13 @@
 # Deployment Guide
 
-This guide covers deploying the Grainwatch Controller BFF service, with a focus on Synology NAS deployment alongside existing infrastructure (InfluxDB, MQTT Broker, Sink Service).
+This guide covers deploying Grainwatch to a Synology NAS alongside the existing
+infrastructure (InfluxDB, MQTT broker, sink service).
+
+The production image is a **single container serving both the PWA and the API**.
+The React frontend is built into static assets and served by the Express backend
+from the same origin, so port 3000 delivers the whole application — there is no
+separate frontend container and no CORS configuration needed in the default
+same-origin setup.
 
 ## Contents
 
@@ -9,11 +16,12 @@ This guide covers deploying the Grainwatch Controller BFF service, with a focus 
 - [Docker Build](#docker-build)
 - [Local Development](#local-development)
 - [Synology NAS Deployment](#synology-nas-deployment)
-- [Initial Setup](#initial-setup)
+- [First Start](#first-start)
 - [Health Monitoring](#health-monitoring)
 - [Troubleshooting](#troubleshooting)
 - [Security Considerations](#security-considerations)
 - [Rollback Procedures](#rollback-procedures)
+- [Upgrade Procedure](#upgrade-procedure)
 
 ---
 
@@ -21,7 +29,7 @@ This guide covers deploying the Grainwatch Controller BFF service, with a focus 
 
 ### Development Machine
 
-- Node.js 24 LTS or higher
+- Node.js 22 or higher (the Docker image builds on Node 24 Alpine)
 - Docker 20.10 or higher
 - Docker Compose v2
 
@@ -34,96 +42,122 @@ This guide covers deploying the Grainwatch Controller BFF service, with a focus 
 
 ### Network Requirements
 
-- Access to InfluxDB instance (typically on the same Docker network)
-- Port 3000 available (or configure alternative port)
-- Optional: Reverse proxy configuration for HTTPS
+- Access to the InfluxDB instance (typically on the same Docker network)
+- Access to the MQTT broker, if fan control is used for any stock
+- Port 3000 available (or configure an alternative host port)
+- Optional: reverse proxy configuration for HTTPS
 
 ---
 
 ## Environment Configuration
 
-### Step 1: Create Environment File
+### Step 1: Create the Environment File
 
-Copy the example environment file:
+The compose file reads `./backend/.env` relative to itself, so the environment
+file lives in the `backend` directory:
 
 ```bash
-cp .env.example .env
+cp backend/.env.example backend/.env
 ```
 
 ### Step 2: Configure Variables
 
-Edit `.env` with your production values:
+Edit `backend/.env` with your production values. The minimum viable production
+configuration:
 
 ```bash
 # Server
 PORT=3000
 NODE_ENV=production
 
-# JWT - REQUIRED: Generate a secure secret
-# Use: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+# JWT — REQUIRED: generate two distinct secrets
+# node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 JWT_SECRET=<your-64-character-secret-here>
-JWT_EXPIRES_IN=24h
+JWT_REFRESH_SECRET=<a-second-distinct-64-character-secret>
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=30d
 
-# InfluxDB - Match your existing setup
-INFLUXDB_HOST=influxdb          # Container name or IP address
-INFLUXDB_PORT=8086
-INFLUXDB_DATABASE=cornwatch
+# Refresh cookie — Secure requires HTTPS, so keep the reverse proxy in mind
+COOKIE_SECURE=true
+COOKIE_SAMESITE=lax
+
+# InfluxDB 2.x (v1 compatibility API)
+INFLUXDB_URL=http://influxdb:8086
+INFLUXDB_TOKEN=<your-influxdb-api-token>
+INFLUXDB_ORG=grainwatch
+INFLUXDB_BUCKET=grainwatch
 INFLUXDB_MEASUREMENT=Temp
-INFLUXDB_USERNAME=<if-required>
-INFLUXDB_PASSWORD=<if-required>
 
-# User storage
-USERS_FILE_PATH=/app/data/users.json
+# SQLite user database (inside the container; back this path with a volume)
+DATABASE_PATH=/app/data/grainwatch.db
 
-# Docker network (must match existing network)
+# MQTT — only needed when a stock has fan control configured
+MQTT_URL=mqtt://mqtt-broker:1883
+MQTT_USERNAME=
+MQTT_PASSWORD=
+
+# Docker network (must match your existing network)
 DOCKER_NETWORK=grainwatch-network
 ```
 
 ### Environment Variables Reference
 
+The full reference — including the outdoor-measurement and fan-timing variables
+— lives in [specs/API.md](specs/API.md#configuration) and
+`backend/.env.example`. The deployment-critical subset:
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PORT` | No | 3000 | HTTP server port |
-| `NODE_ENV` | No | development | Environment mode |
-| `JWT_SECRET` | **Yes** (prod) | - | Token signing secret (min 32 chars) |
-| `JWT_EXPIRES_IN` | No | 24h | Token expiry duration |
-| `INFLUXDB_HOST` | No | localhost | InfluxDB hostname |
-| `INFLUXDB_PORT` | No | 8086 | InfluxDB port |
-| `INFLUXDB_DATABASE` | No | cornwatch | Database name |
-| `INFLUXDB_MEASUREMENT` | No | Temp | Measurement name |
-| `INFLUXDB_USERNAME` | No | - | Database username |
-| `INFLUXDB_PASSWORD` | No | - | Database password |
-| `USERS_FILE_PATH` | No | ./data/users.json | Path to user data file |
-| `DOCKER_NETWORK` | No | grainwatch-network | Docker network name |
+| `PORT` | No | `3000` | HTTP server port |
+| `NODE_ENV` | No | `development` | Set to `production` when deploying |
+| `JWT_SECRET` | **Yes** (prod) | — | Access token signing secret, min 32 chars |
+| `JWT_REFRESH_SECRET` | **Yes** (prod) | — | Refresh token secret; must differ from `JWT_SECRET` |
+| `JWT_EXPIRES_IN` | No | `15m` | Access token expiry |
+| `JWT_REFRESH_EXPIRES_IN` | No | `30d` | Refresh token expiry |
+| `COOKIE_SECURE` | No | `true` in production | `Secure` attribute on the refresh cookie |
+| `COOKIE_SAMESITE` | No | `lax` | `lax`, `strict` or `none` |
+| `CORS_ALLOWED_ORIGINS` | No | — | Only needed when the PWA is served from another origin |
+| `FRONTEND_DIST_PATH` | No | `/app/backend/public` | Set by the image; leave unless serving API-only |
+| `INFLUXDB_URL` | No | `http://localhost:8086` | InfluxDB server URL |
+| `INFLUXDB_TOKEN` | In practice | — | InfluxDB API token; not validated at boot, but every query fails without it |
+| `INFLUXDB_ORG` | No | `grainwatch` | InfluxDB organisation |
+| `INFLUXDB_BUCKET` | No | `grainwatch` | InfluxDB bucket |
+| `INFLUXDB_MEASUREMENT` | No | `Temp` | Stock measurement name |
+| `DATABASE_PATH` | No | `./data/grainwatch.db` | SQLite file; must sit on a mounted volume |
+| `MQTT_URL` | No | `mqtt://localhost:1883` | Broker URL for fan control |
+| `DOCKER_NETWORK` | No | `grainwatch-network` | External Docker network name |
+
+> **Persistence:** `DATABASE_PATH` must point inside a mounted volume. The SQLite
+> file holds all users, stock configuration and fan history. Without a volume it
+> is recreated empty on every container replacement, and the default admin is
+> seeded again.
 
 ---
 
 ## Docker Build
 
-### Build the Image
+The build context is the repository root — the image builds both workspaces from
+the root lockfile.
 
 ```bash
 # Standard build
 docker build -t grainwatch-controller:latest .
 
-# Build with version tag
+# Build with a version tag
 docker build -t grainwatch-controller:1.0.0 .
 
-# Build with no cache (for clean builds)
+# Clean build
 docker build --no-cache -t grainwatch-controller:latest .
 ```
 
 ### Verify the Build
 
 ```bash
-# Check image size (should be ~150-200MB)
+# Check image size
 docker images grainwatch-controller
 
-# Inspect image layers
-docker history grainwatch-controller:latest
-
-# Test container starts correctly
-docker run --rm grainwatch-controller:latest node --version
+# Confirm the compiled entry point and the bundled PWA are present
+docker run --rm grainwatch-controller:latest ls dist/index.js public/index.html
 ```
 
 ### Export for Synology
@@ -131,15 +165,19 @@ docker run --rm grainwatch-controller:latest node --version
 If building on a different machine:
 
 ```bash
-# Save image to file
+# Save the image to a file
 docker save grainwatch-controller:latest | gzip > grainwatch-controller.tar.gz
 
-# Copy to Synology
+# Copy to the Synology
 scp grainwatch-controller.tar.gz admin@synology:/volume1/docker/
 
-# On Synology: Load the image
+# On the Synology: load the image
 docker load < /volume1/docker/grainwatch-controller.tar.gz
 ```
+
+> The image is built for the architecture of the build machine. Building on an
+> Apple Silicon Mac for an x86 Synology requires
+> `docker build --platform linux/amd64 ...`.
 
 ---
 
@@ -148,29 +186,30 @@ docker load < /volume1/docker/grainwatch-controller.tar.gz
 ### Using Docker Compose
 
 ```bash
-# Start all services (BFF + test InfluxDB)
-docker-compose up -d
+# Start the stack including a local InfluxDB
+docker compose up -d
 
 # View logs
-docker-compose logs -f grainwatch-controller
+docker compose logs -f grainwatch-controller
 
-# Stop services
-docker-compose down
+# Stop
+docker compose down
 
 # Rebuild after code changes
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-### Without Docker (Development)
+### Full Simulation Stack
+
+`docker-compose.sim.yml` runs the production image against a seeded InfluxDB and
+a Shelly device emulator — the closest rehearsal for a real deployment. See
+`sim/README.md`.
+
+### Without Docker
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server with hot reload
-npm run dev
-
-# Run tests
+npm run dev      # frontend on :5173, backend on :3000
 npm test
 ```
 
@@ -178,81 +217,83 @@ npm test
 
 ## Synology NAS Deployment
 
-### Option 1: Command Line (Recommended)
+### Option 1: docker-compose.prod.yml (Recommended)
 
-SSH into your Synology NAS:
+```bash
+# On the Synology
+mkdir -p /volume1/docker/grainwatch-controller/backend/data
+cd /volume1/docker/grainwatch-controller
+
+# Transfer docker-compose.prod.yml and backend/.env from the dev machine, then:
+docker compose -f docker-compose.prod.yml up -d
+```
+
+The compose file already declares the data volume (`./backend/data:/app/data`),
+the health check and the external network, so it is the least error-prone route.
+
+### Option 2: Command Line
+
+SSH into the NAS:
 
 ```bash
 ssh admin@synology
 ```
 
-#### Step 1: Create Directory Structure
+#### Step 1: Create the Directory Structure
 
 ```bash
-# Create application directory
 mkdir -p /volume1/docker/grainwatch-controller/data
-
-# Set permissions
 chmod 755 /volume1/docker/grainwatch-controller
 chmod 755 /volume1/docker/grainwatch-controller/data
 ```
 
 #### Step 2: Transfer Files
 
-From your development machine:
+From the development machine:
 
 ```bash
-# Transfer Docker image
+# Transfer the image directly
 docker save grainwatch-controller:latest | ssh admin@synology "docker load"
 
-# Or transfer tar file
+# Or via a tar file
 scp grainwatch-controller.tar.gz admin@synology:/volume1/docker/grainwatch-controller/
 ssh admin@synology "docker load < /volume1/docker/grainwatch-controller/grainwatch-controller.tar.gz"
 
-# Transfer environment file
-scp .env admin@synology:/volume1/docker/grainwatch-controller/
+# Transfer the environment file
+scp backend/.env admin@synology:/volume1/docker/grainwatch-controller/
 ```
 
-#### Step 3: Verify Network Configuration
+#### Step 3: Verify the Network
 
 ```bash
-# List existing networks
 docker network ls
-
-# Identify the network your InfluxDB uses
 docker inspect influxdb | grep -A 10 "Networks"
 
-# If needed, create the network
+# Create and attach if needed
 docker network create grainwatch-network
-
-# Connect InfluxDB to the network (if not already)
 docker network connect grainwatch-network influxdb
 ```
 
 #### Step 4: Start the Container
 
 ```bash
-# Navigate to application directory
 cd /volume1/docker/grainwatch-controller
 
-# Run the container
 docker run -d \
   --name grainwatch-controller \
   --restart unless-stopped \
   --network grainwatch-network \
   -p 3000:3000 \
   --env-file .env \
+  -e DATABASE_PATH=/app/data/grainwatch.db \
   -v $(pwd)/data:/app/data:rw \
   grainwatch-controller:latest
 
-# Verify it started
 docker ps | grep grainwatch-controller
-
-# Check logs
 docker logs -f grainwatch-controller
 ```
 
-### Option 2: Synology Container Manager UI
+### Option 3: Synology Container Manager UI
 
 1. Open Container Manager in DSM
 2. Go to **Image** > **Add** > **Add from file**
@@ -262,73 +303,50 @@ docker logs -f grainwatch-controller
    - **Container name**: grainwatch-controller
    - **Enable auto-restart**: Yes
 6. **Advanced Settings**:
-   - **Volume**: Add `/volume1/docker/grainwatch-controller/data` mapped to `/app/data`
-   - **Network**: Select the network containing InfluxDB
-   - **Port Settings**: Local 3000 to Container 3000
-   - **Environment**: Add all variables from `.env.example`
-7. Click **Apply** and **Next** to create
-
-### Option 3: Using docker-compose.prod.yml
-
-```bash
-# On Synology
-cd /volume1/docker/grainwatch-controller
-
-# Ensure .env file exists with production values
-# Then start the service
-docker-compose -f docker-compose.prod.yml up -d
-```
+   - **Volume**: map `/volume1/docker/grainwatch-controller/data` to `/app/data`
+   - **Network**: select the network containing InfluxDB
+   - **Port Settings**: local 3000 to container 3000
+   - **Environment**: add the variables from `backend/.env.example`, including
+     `DATABASE_PATH=/app/data/grainwatch.db`
+7. Click **Apply** and **Next**
 
 ---
 
-## Initial Setup
+## First Start
 
-### Creating the Default Admin User
+No manual user setup is required. On startup the application:
 
-The service requires at least one admin user to manage other users. Create the initial user file before first start.
+1. Opens the SQLite database at `DATABASE_PATH`, creating the file if absent
+2. Runs the Drizzle migrations in `backend/drizzle/`
+3. Seeds the stock configuration
+4. Creates a default admin **only if the user table is empty**
+5. Initialises fan control over MQTT for every fan-enabled stock (skipped with a
+   warning when no broker is configured, rather than failing the boot)
 
-#### Option 1: Use Example File as Template
+The seeded admin is:
+
+```
+Username: admin
+Password: changeme123
+```
+
+It is created with `mustChangePassword` set, so the first login is forced through
+the password-change screen at `/account` and the account cannot be used for
+anything else until a new password is set. The credentials are also printed to
+the container log on the run that creates them.
+
+Verify the bootstrap:
 
 ```bash
-# Copy example users file
-cp data/users.example.json data/users.json
-
-# Generate a password hash for your admin user
-node -e "const bcrypt = require('bcrypt'); bcrypt.hash('your-secure-password', 10).then(h => console.log(h));"
-
-# Edit data/users.json and replace the example hash with your generated hash
+docker logs grainwatch-controller | grep -A 6 "Default Admin User Created"
 ```
 
-#### Option 2: Create via API (After First Start)
+Then open the application at `http://<nas>:3000`, log in as `admin` /
+`changeme123`, and set a new password when prompted.
 
-If the application supports user creation API (check API documentation):
-
-```bash
-# Start the service (it will create an empty users file)
-docker start grainwatch-controller
-
-# Use the admin creation endpoint if available
-curl -X POST http://localhost:3000/api/v1/admin/users \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "secure-password", "role": "admin"}'
-```
-
-### Users File Structure
-
-```json
-[
-  {
-    "id": "usr_001",
-    "username": "admin",
-    "passwordHash": "$2b$10$...",
-    "email": "admin@example.com",
-    "role": "admin",
-    "stockAccess": ["*"],
-    "createdAt": "2026-01-01T00:00:00.000Z",
-    "active": true
-  }
-]
-```
+Further users are created through the UI at **Users** in the header (admin only),
+or via `POST /api/v1/admin/users`. Admin-created users likewise start with a
+forced password change.
 
 ---
 
@@ -336,10 +354,10 @@ curl -X POST http://localhost:3000/api/v1/admin/users \
 
 ### Health Check Endpoint
 
-The service exposes a health endpoint at:
+The service exposes a health endpoint outside the API prefix:
 
 ```
-GET /api/v1/health
+GET /health
 ```
 
 Response when healthy:
@@ -355,24 +373,16 @@ Response when healthy:
 ### Docker Health Status
 
 ```bash
-# Check container health
 docker inspect --format='{{.State.Health.Status}}' grainwatch-controller
-
-# View health check logs
 docker inspect --format='{{range .State.Health.Log}}{{.Output}}{{end}}' grainwatch-controller
 ```
 
 ### Monitoring Commands
 
 ```bash
-# Container resource usage
 docker stats grainwatch-controller
-
-# Application logs
 docker logs -f --tail 100 grainwatch-controller
-
-# Check if service responds
-curl -s http://localhost:3000/api/v1/health | jq .
+curl -s http://localhost:3000/health | jq .
 ```
 
 ---
@@ -381,19 +391,18 @@ curl -s http://localhost:3000/api/v1/health | jq .
 
 ### Container Fails to Start
 
-**Symptom**: Container exits immediately after starting.
+**Symptom**: container exits immediately after starting.
 
 ```bash
-# Check exit logs
 docker logs grainwatch-controller
-
-# Common causes:
-# 1. Missing JWT_SECRET in production mode
-# 2. Invalid environment variables
-# 3. Port already in use
 ```
 
-**Solution**: Verify all required environment variables are set correctly.
+Common causes:
+
+1. `JWT_SECRET` or `JWT_REFRESH_SECRET` missing or under 32 characters in production
+2. `JWT_REFRESH_SECRET` identical to `JWT_SECRET` (rejected on purpose)
+3. `DATABASE_PATH` pointing at a directory the `appuser` (UID 1001) cannot write
+4. Port already in use
 
 ### Cannot Connect to InfluxDB
 
@@ -401,64 +410,75 @@ docker logs grainwatch-controller
 
 ```bash
 # Verify network connectivity
-docker exec grainwatch-controller ping influxdb
+docker exec grainwatch-controller wget -qO- http://influxdb:8086/ping
 
-# Check InfluxDB is accessible
-docker exec grainwatch-controller node -e "
-  const http = require('http');
-  http.get('http://influxdb:8086/ping', (res) => {
-    console.log('Status:', res.statusCode);
-  }).on('error', (e) => console.error('Error:', e.message));
-"
+# Inspect the configured URL
+docker exec grainwatch-controller printenv INFLUXDB_URL
 ```
 
 **Solution**:
+
 1. Ensure both containers are on the same Docker network
-2. Verify `INFLUXDB_HOST` matches the container name
-3. Check InfluxDB credentials if authentication is enabled
+2. Verify `INFLUXDB_URL` uses the container name and port, not a bare hostname
+3. Check that `INFLUXDB_TOKEN` is valid and the token has read access to the bucket
+4. Confirm the DBRP mapping exists — the v1 compatibility API needs one for the bucket
 
 ### Authentication Failures
 
-**Symptom**: 401 Unauthorized responses.
+**Symptom**: 401 responses, or users logged out on every restart.
 
 ```bash
-# Check JWT secret is consistent
 docker exec grainwatch-controller printenv JWT_SECRET | head -c 10
-
-# Verify token expiry settings
 docker exec grainwatch-controller printenv JWT_EXPIRES_IN
 ```
 
-**Solution**: Ensure JWT_SECRET is at least 32 characters and consistent across restarts.
+**Solution**: both secrets must be at least 32 characters and stable across
+restarts — a regenerated secret invalidates every issued token and cookie. If
+login succeeds but the session drops after 15 minutes, the refresh cookie is not
+reaching the server: check `COOKIE_SECURE` against whether the site is actually
+served over HTTPS, and `COOKIE_SAMESITE` against whether the PWA and API share a
+registrable domain.
 
-### Permission Denied on Data Directory
+### Permission Denied on the Data Directory
 
-**Symptom**: Cannot write to users.json file.
+**Symptom**: `SQLITE_CANTOPEN`, or the database resets on every restart.
 
 ```bash
-# Check file permissions
 docker exec grainwatch-controller ls -la /app/data/
-
-# Verify volume mount
 docker inspect grainwatch-controller | grep -A 5 "Mounts"
 ```
 
 **Solution**:
+
 ```bash
-# Fix host directory permissions
 chmod 755 /volume1/docker/grainwatch-controller/data
 chown 1001:1001 /volume1/docker/grainwatch-controller/data
 ```
 
-### High Memory Usage
+A database that resets means `DATABASE_PATH` points outside the mounted volume —
+every restart then re-seeds the default admin.
 
-**Symptom**: Container uses excessive memory.
+### Fan Control Inactive
+
+**Symptom**: the fan card shows no status, log says fan control was skipped.
 
 ```bash
-# Check current usage
-docker stats grainwatch-controller --no-stream
+docker logs grainwatch-controller | grep -i "fan control"
+```
 
-# Set memory limits
+`Fan control: no fan-enabled stocks` means no stock in the database is
+configured for it — the likely case if the fan card is missing entirely.
+
+Note that a fan-enabled stock plus an unreachable broker does *not* produce a
+warning at boot: `MQTT_URL` always resolves to a default, so the manager
+initialises and the connection failure surfaces later in the MQTT client logs
+rather than during bootstrap. Check `MQTT_URL` reachability from inside the
+container if the card renders but never updates.
+
+### High Memory Usage
+
+```bash
+docker stats grainwatch-controller --no-stream
 docker update --memory 256m --memory-swap 256m grainwatch-controller
 ```
 
@@ -469,48 +489,28 @@ docker update --memory 256m --memory-swap 256m grainwatch-controller
 ### Credentials Management
 
 1. **Never commit `.env` files** to version control
-2. **Generate strong JWT secrets**: Minimum 32 characters, use cryptographic random generation
-3. **Rotate secrets periodically**: Update JWT_SECRET and invalidate existing tokens
-4. **Use separate credentials** for development and production
+2. **Generate strong secrets**: minimum 32 characters, cryptographic randomness,
+   and `JWT_REFRESH_SECRET` must differ from `JWT_SECRET`
+3. **Rotate periodically**: changing either secret invalidates existing sessions
+4. **Change the seeded admin password** on first login — the forced-change screen
+   enforces this, but the default is public knowledge until you do
+5. **Use separate credentials** for development and production
 
 ### Network Security
 
-1. **Internal network only**: Keep the service on an internal Docker network
-2. **Reverse proxy**: Use Nginx or Synology Web Station for HTTPS termination
-3. **Firewall rules**: Restrict port 3000 access to trusted sources
+1. **Internal network only**: keep the service on an internal Docker network
+2. **Reverse proxy**: use Nginx or Synology Web Station for HTTPS termination —
+   required if `COOKIE_SECURE=true`, which is the production default
+3. **Firewall rules**: restrict port 3000 to trusted sources
 
 ### Container Security
 
-1. **Non-root user**: The container runs as `appuser` (UID 1001)
-2. **Read-only filesystem**: Consider adding `--read-only` with appropriate tmpfs mounts
-3. **Security scanning**: Regularly scan the image for vulnerabilities
+1. **Non-root user**: the container runs as `appuser` (UID 1001)
+2. **Signal handling**: `dumb-init` is the entry point, so shutdowns are graceful
+3. **Security scanning**: regularly scan the image for vulnerabilities
 
-```bash
-# Run with enhanced security
-docker run -d \
-  --name grainwatch-controller \
-  --read-only \
-  --tmpfs /tmp \
-  --security-opt no-new-privileges \
-  --cap-drop ALL \
-  ...
-```
-
-### Secrets in Environment Variables
-
-For enhanced security on Synology, consider using Docker secrets:
-
-```bash
-# Create secret files
-echo "your-jwt-secret" > /volume1/docker/secrets/jwt_secret
-
-# Mount as secret
-docker run -d \
-  --name grainwatch-controller \
-  -v /volume1/docker/secrets/jwt_secret:/run/secrets/jwt_secret:ro \
-  -e JWT_SECRET_FILE=/run/secrets/jwt_secret \
-  ...
-```
+A read-only root filesystem is possible but needs a writable mount for
+`/app/data`, since SQLite writes the database and its WAL there.
 
 ---
 
@@ -518,113 +518,103 @@ docker run -d \
 
 ### Quick Rollback
 
-If deployment fails, restore the previous version:
-
 ```bash
-# Stop the current container
 docker stop grainwatch-controller
-
-# Remove the problematic container
 docker rm grainwatch-controller
 
-# List available image versions
 docker images grainwatch-controller
 
-# Start with previous version
 docker run -d \
   --name grainwatch-controller \
   --restart unless-stopped \
   --network grainwatch-network \
   -p 3000:3000 \
   --env-file .env \
+  -e DATABASE_PATH=/app/data/grainwatch.db \
   -v $(pwd)/data:/app/data:rw \
   grainwatch-controller:previous-version
 ```
 
+> Migrations are applied forward on startup and are not reversed by rolling the
+> image back. Rolling back across a migration therefore needs the database
+> backup taken before the upgrade.
+
 ### Data Backup Before Upgrade
 
 ```bash
-# Backup user data
-cp -r /volume1/docker/grainwatch-controller/data /volume1/docker/grainwatch-controller/data.backup.$(date +%Y%m%d)
+# Stop the container first so SQLite is not mid-write
+docker stop grainwatch-controller
 
-# Backup environment
-cp /volume1/docker/grainwatch-controller/.env /volume1/docker/grainwatch-controller/.env.backup
+cp -r /volume1/docker/grainwatch-controller/data \
+      /volume1/docker/grainwatch-controller/data.backup.$(date +%Y%m%d)
+cp /volume1/docker/grainwatch-controller/.env \
+   /volume1/docker/grainwatch-controller/.env.backup
 ```
 
 ### Full Recovery
 
-If both application and data need restoration:
-
 ```bash
-# Stop and remove current container
 docker stop grainwatch-controller
 docker rm grainwatch-controller
 
-# Restore data
 rm -rf /volume1/docker/grainwatch-controller/data
-cp -r /volume1/docker/grainwatch-controller/data.backup.YYYYMMDD /volume1/docker/grainwatch-controller/data
+cp -r /volume1/docker/grainwatch-controller/data.backup.YYYYMMDD \
+      /volume1/docker/grainwatch-controller/data
 
-# Restore previous image version
 docker load < /volume1/docker/backups/grainwatch-controller-previous.tar.gz
-
-# Restart with restored configuration
-docker run -d --name grainwatch-controller ...
+docker compose -f docker-compose.prod.yml up -d
 ```
 
 ---
 
 ## Upgrade Procedure
 
-### Standard Upgrade
-
 ```bash
-# 1. Backup current state
-docker commit grainwatch-controller grainwatch-controller:backup-$(date +%Y%m%d)
+# 1. Back up the database with the container stopped
+docker stop grainwatch-controller
 cp -r data data.backup.$(date +%Y%m%d)
 
-# 2. Pull or load new image
+# 2. Load the new image
 docker load < grainwatch-controller-new.tar.gz
-# or: docker pull your-registry/grainwatch-controller:new-version
 
-# 3. Stop current container
-docker stop grainwatch-controller
-
-# 4. Remove current container (data persists in volume)
+# 3. Replace the container (data persists in the volume)
 docker rm grainwatch-controller
 
-# 5. Start new version
 docker run -d \
   --name grainwatch-controller \
   --restart unless-stopped \
   --network grainwatch-network \
   -p 3000:3000 \
   --env-file .env \
+  -e DATABASE_PATH=/app/data/grainwatch.db \
   -v $(pwd)/data:/app/data:rw \
   grainwatch-controller:new-version
 
-# 6. Verify health
+# 4. Verify — migrations run automatically on startup
 docker logs -f grainwatch-controller
-curl http://localhost:3000/api/v1/health
+curl http://localhost:3000/health
 ```
 
-### Zero-Downtime Upgrade (Advanced)
+### Zero-Downtime Upgrade
 
-For critical deployments, consider blue-green deployment:
+Blue-green is possible but **both containers must not share the SQLite volume** —
+two processes writing the same database file will corrupt it. Run the new
+container against a copy of the data, verify, then cut over:
 
 ```bash
-# Start new version on different port
+cp -r data data.green
 docker run -d \
   --name grainwatch-controller-new \
   -p 3001:3000 \
-  ... \
+  --env-file .env \
+  -e DATABASE_PATH=/app/data/grainwatch.db \
+  -v $(pwd)/data.green:/app/data:rw \
   grainwatch-controller:new-version
 
-# Verify new version
-curl http://localhost:3001/api/v1/health
+curl http://localhost:3001/health
 
-# Update reverse proxy to point to new container
-# Then remove old container
-docker stop grainwatch-controller
-docker rm grainwatch-controller
-docker rename grainwatch-controller-new grainwatch-controller
+# Cut over: stop the old container, swap the data directory back, restart
 ```
+
+For a single-operator deployment the simple stop-and-replace upgrade above is
+usually the better trade-off.
