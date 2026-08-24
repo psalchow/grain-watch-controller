@@ -136,48 +136,51 @@ The full reference — including the outdoor-measurement and fan-timing variable
 
 ## Docker Build
 
+The published image is [`psalchow/grainwatch`](https://hub.docker.com/r/psalchow/grainwatch)
+on Docker Hub. Use `scripts/build-prod-image.sh`, which derives the version tag
+from `backend/package.json` and tags both `:<version>` and `:latest`:
+
+```bash
+# Build only
+./scripts/build-prod-image.sh
+
+# Build and publish both tags (requires docker login)
+PUSH=1 ./scripts/build-prod-image.sh
+
+# Force a clean rebuild
+NO_CACHE=1 ./scripts/build-prod-image.sh
+```
+
 The build context is the repository root — the image builds both workspaces from
 the root lockfile.
 
+### Architecture
+
+The image is built for the host architecture, and the target Synology is
+**arm64**. Building on Apple Silicon therefore needs no `--platform`. From an
+x86 machine, set `PLATFORM=linux/arm64`, which builds under emulation and takes
+considerably longer because `better-sqlite3` is compiled from source.
+
+Deploying an image of the wrong architecture fails at container start with
+`exec format error`. Check what you built:
+
 ```bash
-# Standard build
-docker build -t grainwatch-controller:latest .
-
-# Build with a version tag
-docker build -t grainwatch-controller:1.0.0 .
-
-# Clean build
-docker build --no-cache -t grainwatch-controller:latest .
+docker image inspect psalchow/grainwatch:1.0.0 --format '{{.Architecture}}'
 ```
 
 ### Verify the Build
 
 ```bash
 # Check image size
-docker images grainwatch-controller
+docker images psalchow/grainwatch
 
 # Confirm the compiled entry point and the bundled PWA are present
-docker run --rm grainwatch-controller:latest ls dist/index.js public/index.html
+docker run --rm psalchow/grainwatch:latest ls dist/index.js public/index.html
+
+# Confirm no secrets or development database were baked in
+docker run --rm --entrypoint sh psalchow/grainwatch:latest -c \
+  'find / -name ".env" -o -name "*.db" 2>/dev/null | grep -v node_modules'
 ```
-
-### Export for Synology
-
-If building on a different machine:
-
-```bash
-# Save the image to a file
-docker save grainwatch-controller:latest | gzip > grainwatch-controller.tar.gz
-
-# Copy to the Synology
-scp grainwatch-controller.tar.gz admin@synology:/volume1/docker/
-
-# On the Synology: load the image
-docker load < /volume1/docker/grainwatch-controller.tar.gz
-```
-
-> The image is built for the architecture of the build machine. Building on an
-> Apple Silicon Mac for an x86 Synology requires
-> `docker build --platform linux/amd64 ...`.
 
 ---
 
@@ -217,19 +220,32 @@ npm test
 
 ## Synology NAS Deployment
 
+The image is pulled from Docker Hub, so nothing has to be transferred to the NAS
+apart from the compose file and the environment file.
+
 ### Option 1: docker-compose.prod.yml (Recommended)
 
 ```bash
 # On the Synology
-mkdir -p /volume1/docker/grainwatch-controller/backend/data
-cd /volume1/docker/grainwatch-controller
+mkdir -p /volume1/docker/grainwatch/backend/data
+cd /volume1/docker/grainwatch
 
-# Transfer docker-compose.prod.yml and backend/.env from the dev machine, then:
+# Transfer docker-compose.prod.yml and backend/.env from the dev machine:
+#   scp docker-compose.prod.yml admin@synology:/volume1/docker/grainwatch/
+#   scp backend/.env admin@synology:/volume1/docker/grainwatch/backend/
+
+docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
 
 The compose file already declares the data volume (`./backend/data:/app/data`),
 the health check and the external network, so it is the least error-prone route.
+It pins an explicit image version; override it without editing the file:
+
+```bash
+GRAINWATCH_IMAGE=psalchow/grainwatch:1.1.0 \
+  docker compose -f docker-compose.prod.yml up -d
+```
 
 ### Option 2: Command Line
 
@@ -242,25 +258,19 @@ ssh admin@synology
 #### Step 1: Create the Directory Structure
 
 ```bash
-mkdir -p /volume1/docker/grainwatch-controller/data
-chmod 755 /volume1/docker/grainwatch-controller
-chmod 755 /volume1/docker/grainwatch-controller/data
+mkdir -p /volume1/docker/grainwatch/data
+chmod 755 /volume1/docker/grainwatch
+chmod 755 /volume1/docker/grainwatch/data
 ```
 
-#### Step 2: Transfer Files
-
-From the development machine:
+#### Step 2: Pull the Image and Transfer the Environment File
 
 ```bash
-# Transfer the image directly
-docker save grainwatch-controller:latest | ssh admin@synology "docker load"
+# On the NAS
+docker pull psalchow/grainwatch:1.0.0
 
-# Or via a tar file
-scp grainwatch-controller.tar.gz admin@synology:/volume1/docker/grainwatch-controller/
-ssh admin@synology "docker load < /volume1/docker/grainwatch-controller/grainwatch-controller.tar.gz"
-
-# Transfer the environment file
-scp backend/.env admin@synology:/volume1/docker/grainwatch-controller/
+# From the development machine
+scp backend/.env admin@synology:/volume1/docker/grainwatch/
 ```
 
 #### Step 3: Verify the Network
@@ -277,7 +287,7 @@ docker network connect grainwatch-network influxdb
 #### Step 4: Start the Container
 
 ```bash
-cd /volume1/docker/grainwatch-controller
+cd /volume1/docker/grainwatch
 
 docker run -d \
   --name grainwatch-controller \
@@ -287,7 +297,7 @@ docker run -d \
   --env-file .env \
   -e DATABASE_PATH=/app/data/grainwatch.db \
   -v $(pwd)/data:/app/data:rw \
-  grainwatch-controller:latest
+  psalchow/grainwatch:1.0.0
 
 docker ps | grep grainwatch-controller
 docker logs -f grainwatch-controller
@@ -296,19 +306,19 @@ docker logs -f grainwatch-controller
 ### Option 3: Synology Container Manager UI
 
 1. Open Container Manager in DSM
-2. Go to **Image** > **Add** > **Add from file**
-3. Select the exported `grainwatch-controller.tar.gz`
-4. Go to **Container** > **Create**
-5. Configure:
+2. Go to **Registry**, search for `psalchow/grainwatch` and download the
+   `1.0.0` tag
+3. Go to **Container** > **Create** and select the image
+4. Configure:
    - **Container name**: grainwatch-controller
    - **Enable auto-restart**: Yes
-6. **Advanced Settings**:
-   - **Volume**: map `/volume1/docker/grainwatch-controller/data` to `/app/data`
+5. **Advanced Settings**:
+   - **Volume**: map `/volume1/docker/grainwatch/data` to `/app/data`
    - **Network**: select the network containing InfluxDB
    - **Port Settings**: local 3000 to container 3000
    - **Environment**: add the variables from `backend/.env.example`, including
      `DATABASE_PATH=/app/data/grainwatch.db`
-7. Click **Apply** and **Next**
+6. Click **Apply** and **Next**
 
 ---
 
@@ -448,11 +458,13 @@ docker exec grainwatch-controller ls -la /app/data/
 docker inspect grainwatch-controller | grep -A 5 "Mounts"
 ```
 
-**Solution**:
+**Solution**: give the container's `appuser` (UID 1001) ownership of the host
+directory behind the mount — `backend/data` when deploying via compose,
+`data` when using the `docker run` route:
 
 ```bash
-chmod 755 /volume1/docker/grainwatch-controller/data
-chown 1001:1001 /volume1/docker/grainwatch-controller/data
+chmod 755 /volume1/docker/grainwatch/backend/data
+chown 1001:1001 /volume1/docker/grainwatch/backend/data
 ```
 
 A database that resets means `DATABASE_PATH` points outside the mounted volume —
@@ -518,22 +530,18 @@ A read-only root filesystem is possible but needs a writable mount for
 
 ### Quick Rollback
 
+Because the compose file pins a version, rolling back is a matter of naming the
+previous tag:
+
 ```bash
-docker stop grainwatch-controller
-docker rm grainwatch-controller
-
-docker images grainwatch-controller
-
-docker run -d \
-  --name grainwatch-controller \
-  --restart unless-stopped \
-  --network grainwatch-network \
-  -p 3000:3000 \
-  --env-file .env \
-  -e DATABASE_PATH=/app/data/grainwatch.db \
-  -v $(pwd)/data:/app/data:rw \
-  grainwatch-controller:previous-version
+GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
+  docker compose -f docker-compose.prod.yml up -d
 ```
+
+Published versions are listed at
+[hub.docker.com/r/psalchow/grainwatch/tags](https://hub.docker.com/r/psalchow/grainwatch/tags).
+This is the reason to deploy explicit versions rather than `:latest` — a rollback
+target only exists if the previous release has a name.
 
 > Migrations are applied forward on startup and are not reversed by rolling the
 > image back. Rolling back across a migration therefore needs the database
@@ -545,24 +553,27 @@ docker run -d \
 # Stop the container first so SQLite is not mid-write
 docker stop grainwatch-controller
 
-cp -r /volume1/docker/grainwatch-controller/data \
-      /volume1/docker/grainwatch-controller/data.backup.$(date +%Y%m%d)
-cp /volume1/docker/grainwatch-controller/.env \
-   /volume1/docker/grainwatch-controller/.env.backup
+cp -r /volume1/docker/grainwatch/data \
+      /volume1/docker/grainwatch/data.backup.$(date +%Y%m%d)
+cp /volume1/docker/grainwatch/backend/.env \
+   /volume1/docker/grainwatch/backend/.env.backup
 ```
+
+The database runs in WAL mode, so `grainwatch.db-wal` and `grainwatch.db-shm`
+sit alongside `grainwatch.db`. Copying the directory while the container runs
+can capture an inconsistent state — stop it first, which checkpoints the WAL.
 
 ### Full Recovery
 
 ```bash
-docker stop grainwatch-controller
-docker rm grainwatch-controller
+docker compose -f docker-compose.prod.yml down
 
-rm -rf /volume1/docker/grainwatch-controller/data
-cp -r /volume1/docker/grainwatch-controller/data.backup.YYYYMMDD \
-      /volume1/docker/grainwatch-controller/data
+rm -rf /volume1/docker/grainwatch/backend/data
+cp -r /volume1/docker/grainwatch/data.backup.YYYYMMDD \
+      /volume1/docker/grainwatch/backend/data
 
-docker load < /volume1/docker/backups/grainwatch-controller-previous.tar.gz
-docker compose -f docker-compose.prod.yml up -d
+GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
+  docker compose -f docker-compose.prod.yml up -d
 ```
 
 ---
@@ -571,29 +582,21 @@ docker compose -f docker-compose.prod.yml up -d
 
 ```bash
 # 1. Back up the database with the container stopped
-docker stop grainwatch-controller
-cp -r data data.backup.$(date +%Y%m%d)
+cd /volume1/docker/grainwatch
+docker compose -f docker-compose.prod.yml stop
+cp -r backend/data data.backup.$(date +%Y%m%d)
 
-# 2. Load the new image
-docker load < grainwatch-controller-new.tar.gz
+# 2. Deploy the new version (pulls automatically)
+GRAINWATCH_IMAGE=psalchow/grainwatch:<new-version> \
+  docker compose -f docker-compose.prod.yml up -d
 
-# 3. Replace the container (data persists in the volume)
-docker rm grainwatch-controller
-
-docker run -d \
-  --name grainwatch-controller \
-  --restart unless-stopped \
-  --network grainwatch-network \
-  -p 3000:3000 \
-  --env-file .env \
-  -e DATABASE_PATH=/app/data/grainwatch.db \
-  -v $(pwd)/data:/app/data:rw \
-  grainwatch-controller:new-version
-
-# 4. Verify — migrations run automatically on startup
-docker logs -f grainwatch-controller
+# 3. Verify — migrations run automatically on startup
+docker compose -f docker-compose.prod.yml logs -f
 curl http://localhost:3000/health
 ```
+
+Once a version is proven, update the default in `docker-compose.prod.yml` so the
+override is no longer needed.
 
 ### Zero-Downtime Upgrade
 
@@ -602,14 +605,14 @@ two processes writing the same database file will corrupt it. Run the new
 container against a copy of the data, verify, then cut over:
 
 ```bash
-cp -r data data.green
+cp -r backend/data data.green
 docker run -d \
   --name grainwatch-controller-new \
   -p 3001:3000 \
-  --env-file .env \
+  --env-file backend/.env \
   -e DATABASE_PATH=/app/data/grainwatch.db \
   -v $(pwd)/data.green:/app/data:rw \
-  grainwatch-controller:new-version
+  psalchow/grainwatch:<new-version>
 
 curl http://localhost:3001/health
 

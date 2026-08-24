@@ -202,8 +202,8 @@ See `backend/.env.example` for the complete configuration.
 **Solution**: ensure the application user can write to the data directory:
 
 ```bash
-chmod 755 /volume1/docker/grainwatch-controller/data
-chown 1001:1001 /volume1/docker/grainwatch-controller/data
+chmod 755 /volume1/docker/grainwatch/backend/data
+chown 1001:1001 /volume1/docker/grainwatch/backend/data
 ```
 
 ### Default User Not Created

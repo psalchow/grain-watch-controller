@@ -4,13 +4,18 @@
 # Minimal configuration for Synology NAS deployment.
 # Assumes InfluxDB is already running in a separate container.
 #
+# The image is pulled from Docker Hub and pinned to an explicit version, so an
+# upgrade is a deliberate change rather than whatever :latest happens to be.
+# Override GRAINWATCH_IMAGE to deploy a different version or a local build.
+#
 # Usage:
-#   docker-compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
 # =============================================================================
 
 services:
   grainwatch-controller:
-    image: grainwatch-controller:latest
+    image: ${GRAINWATCH_IMAGE:-psalchow/grainwatch:1.0.0}
     container_name: grainwatch-controller
     restart: unless-stopped
     ports:
