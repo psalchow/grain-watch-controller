@@ -1,4 +1,6 @@
 import request from 'supertest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { createApp } from '../../src/app';
 import { Express } from 'express';
 import { initDb, closeDb, getDb } from '../../src/db';
@@ -26,6 +28,17 @@ describe('Health Check Endpoint', () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty('status', 'healthy');
       expect(response.body).toHaveProperty('timestamp');
+    });
+
+    it('should report the version from the package manifest', async () => {
+      const response = await request(app).get('/health');
+
+      const { version } = JSON.parse(
+        readFileSync(join(__dirname, '../../package.json'), 'utf8')
+      ) as { version: string };
+
+      expect(response.body).toHaveProperty('version', version);
+      expect(response.body.version).not.toBe('unknown');
     });
 
     it('should return valid ISO timestamp', async () => {
