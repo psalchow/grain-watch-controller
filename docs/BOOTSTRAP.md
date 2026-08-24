@@ -1,21 +1,24 @@
 # Application Bootstrap
 
-This document describes the bootstrap functionality that initialises the application on first startup.
+This document describes the bootstrap functionality that initialises the application on startup.
 
 ## Overview
 
-The bootstrap system automatically creates a default admin user when the application starts for the first time and no users exist. This solves the "chicken and egg" problem where you need a user to log in, but can't create users without being logged in.
+The bootstrap system prepares the SQLite database and creates a default admin user when the application starts for the first time and no users exist. This solves the "chicken and egg" problem where you need a user to log in, but can't create users without being logged in.
 
 ## How It Works
 
 ### Startup Sequence
 
-When the application starts (`src/index.ts`):
+When the application starts (`backend/src/index.ts` → `bootstrapApplication()`):
 
-1. **Bootstrap Phase**: The `bootstrapApplication()` function is called
-2. **User Check**: The system checks if any users exist in the user storage
-3. **Default User Creation**: If no users exist, a default admin user is created
-4. **Application Start**: The Express server starts and begins accepting requests
+1. **Database**: open the SQLite file at `DATABASE_PATH`, creating it if absent
+2. **Migrations**: run the Drizzle migrations from `backend/drizzle/`
+3. **Stock seeding**: insert the stock configuration if not already present
+4. **User check**: count existing users
+5. **Default user creation**: if no users exist, create the default admin
+6. **Fan control**: start the MQTT fan manager for every fan-enabled stock
+7. **Application start**: the Express server begins accepting requests
 
 ### Default Admin User
 
@@ -26,29 +29,36 @@ Username: admin
 Password: changeme123
 Role: admin
 Stock Access: * (all stocks)
+Must change password: yes
 ```
 
-**Security Warning**: This is a weak default password. You should change it immediately after first login.
+**Security Warning**: This is a weak default password, and it is public knowledge.
+
+The account is created with `mustChangePassword` set, so the first login is
+forced through the password-change screen at `/account`: the frontend redirects
+every other route there until a new password is set, and changing it clears the
+flag. This makes the default hard to leave in place through the UI, but it is a
+client-side gate rather than a server-side block — see
+[AUTHENTICATION.md](specs/AUTHENTICATION.md#forced-password-change).
 
 ### Idempotency
 
 The bootstrap process is idempotent:
 
 - Calling `bootstrapApplication()` multiple times is safe
-- If users already exist, no changes are made
+- Migrations and stock seeding skip work that is already applied
+- If users already exist, no user is created
 - The function returns information about what was initialised
 
 ### Error Handling
 
-The bootstrap process handles errors differently based on environment:
+If `bootstrapApplication()` throws, the database is closed and the error is
+re-thrown; `startServer()` logs it and exits with code 1. This applies in **every
+environment** — a failed bootstrap never yields a half-started server.
 
-**Production Mode**:
-- Bootstrap failures cause the application to exit with an error
-- This ensures you don't start a non-functional application in production
-
-**Development Mode**:
-- Bootstrap failures are logged but don't stop the application
-- This allows development to continue even if user storage has issues
+Fan control is the deliberate exception: if no stock has fan control configured,
+or the MQTT/fan configuration is missing, initialisation is skipped with a log
+message instead of failing the boot.
 
 ## API Reference
 
@@ -79,131 +89,149 @@ Validates that the application is properly bootstrapped by checking that at leas
 
 **Returns**: `Promise<boolean>`
 
-**Example**:
-```typescript
-const isValid = await validateBootstrap();
-if (!isValid) {
-  console.error('No users exist in the system');
-}
-```
+### `initFanControl()` / `shutdownFanControl()`
+
+Start and stop the fan control manager. `shutdownFanControl()` runs on `SIGTERM`
+and `SIGINT` so the MQTT connection closes cleanly.
 
 ## Implementation Files
 
-- **Core Logic**: `src/bootstrap.ts` - Bootstrap functions
-- **Integration**: `src/index.ts` - Application entry point that calls bootstrap
-- **User Service**: `src/services/auth/user.service.ts` - Contains `initializeDefaultUsers()` method
-- **Tests**: `tests/unit/bootstrap.test.ts` - Comprehensive test coverage
+- **Core Logic**: `backend/src/bootstrap.ts`
+- **Integration**: `backend/src/index.ts` — entry point, signal handling
+- **User Service**: `backend/src/services/auth/user.service.ts` — `initializeDefaultUsers()`
+- **Migrations**: `backend/src/db/migrate.ts` and `backend/drizzle/`
+- **Tests**: `backend/tests/unit/bootstrap.test.ts`
 
 ## Changing the Default Password
 
-After first login, you should immediately change the default admin password or create a new admin user:
+The intended route is the UI: log in as `admin` / `changeme123` and set a new
+password on the screen you are redirected to.
 
-### Option 1: Create a New Admin User
+To do it over the API instead:
 
 ```bash
-# 1. Login with default credentials
+# 1. Login with the default credentials
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "admin", "password": "changeme123"}'
 
-# 2. Use the token to create a new admin user
-curl -X POST http://localhost:3000/api/v1/admin/users \
+# 2. Change the password using the returned token
+curl -X POST http://localhost:3000/api/v1/auth/change-password \
   -H "Authorization: Bearer <your-token>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "your-username",
-    "password": "your-secure-password",
-    "role": "admin",
-    "stockAccess": ["*"]
-  }'
-
-# 3. Login with the new user and delete the default admin
-# (Implementation of user deletion would be needed)
+  -d '{"currentPassword": "changeme123", "newPassword": "your-secure-password"}'
 ```
 
-### Option 2: Manually Edit the Users File
-
-You can also manually edit the `data/users.json` file to remove the default user or change credentials, but this is not recommended in production.
+To retire the default account entirely, create a second admin and stop using
+`admin`. Note that user deletion exists in `UserService` but is **not exposed as
+an API endpoint** — the admin UI offers deactivation (`PATCH
+/api/v1/admin/users/:userId` with `{active: false}`) instead, and self-deactivation
+is rejected, so deactivate `admin` from the other admin account.
 
 ## Testing
 
-The bootstrap functionality is thoroughly tested with the following scenarios:
+The bootstrap functionality is covered by `backend/tests/unit/bootstrap.test.ts`:
 
-- Creating default admin when no users exist
-- Skipping user creation when users already exist
-- Idempotent behaviour (multiple calls)
-- Error handling in development and production modes
-- Validation of bootstrap state
-- Verification of default admin credentials
+- Creating the default admin when no users exist
+- Skipping user creation when a user already exists
+- Propagating failures from `initializeDefaultUsers()`
+- `validateBootstrap()` for both the populated and the error case
+- The default admin's credentials, and logging in with them
 
-Run tests with:
+The seeded admin's `mustChangePassword` flag is not asserted there; the flag's
+behaviour is covered by `tests/unit/services/user.mustChangePassword.test.ts`
+and `tests/integration/admin.password.test.ts`.
+
+Run the tests with:
+
 ```bash
-npm test tests/unit/bootstrap.test.ts
+cd backend && npx jest tests/unit/bootstrap.test.ts
 ```
 
 ## Production Considerations
 
 ### Security
 
-1. **Change Default Password**: The default password is weak by design. Change it immediately.
-2. **File Permissions**: Ensure the `data/users.json` file has appropriate permissions (readable/writable only by the application user).
-3. **Docker Volumes**: When running in Docker, mount the data directory as a persistent volume to preserve users across container restarts.
+1. **Change the default password** on first login — the forced-change screen
+   prompts for it, but the default is public until you act on it.
+2. **File permissions**: the SQLite database at `DATABASE_PATH` must be
+   readable/writable only by the application user (UID 1001 in the image).
+3. **Docker volumes**: mount the data directory as a persistent volume. Without
+   one the database is recreated empty on every container replacement, and the
+   default admin is seeded again.
 
 ### Monitoring
 
 The bootstrap process logs its actions:
 
-- When a default user is created (with credentials displayed in console)
-- When users already exist (skip message)
-- When errors occur during bootstrap
+- Default user creation, with the credentials printed to the console
+- A skip message when users already exist
+- Fan control initialisation, or the reason it was skipped
+- Errors during bootstrap
 
-Review these logs on first startup to ensure the application is properly initialised.
+Review these logs on first startup to confirm initialisation:
+
+```bash
+docker logs grainwatch-controller | grep -A 6 "Default Admin User Created"
+```
 
 ### Environment Variables
 
-The bootstrap process respects the following environment variables:
+The bootstrap process is affected by:
 
-- `NODE_ENV`: Determines error handling behaviour
-- `USERS_FILE_PATH`: Location of the user storage file
+- `DATABASE_PATH`: location of the SQLite database file
+- `MQTT_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`: broker connection for fan control
+- `FAN_*`: fan timing and retention settings
 
-See `.env.example` for complete configuration options.
+See `backend/.env.example` for the complete configuration.
 
 ## Future Enhancements
 
-Potential improvements to the bootstrap system:
-
-1. **Configurable Default Credentials**: Allow setting default admin credentials via environment variables
-2. **Multiple Default Users**: Support creating multiple users on first startup
-3. **Migration System**: Add support for running migrations on user data structure
-4. **Health Checks**: Integrate bootstrap validation into health check endpoints
-5. **Setup Wizard**: Interactive first-run setup for production deployments
+1. **Configurable default credentials**: set the initial admin via environment variables
+2. **Server-side enforcement** of `mustChangePassword`, so the gate is not purely client-side
+3. **User deletion endpoint**, to complement the existing service method
+4. **Health checks**: integrate bootstrap validation into the health endpoint
+5. **Setup wizard**: interactive first-run setup for production deployments
 
 ## Troubleshooting
 
-### Bootstrap Fails with File Permission Error
+### Bootstrap Fails with a File Permission Error
 
-**Problem**: Cannot write to user storage file.
+**Problem**: `SQLITE_CANTOPEN`, or the container exits on start.
 
-**Solution**: Ensure the application has write permissions to the data directory:
+**Solution**: ensure the application user can write to the data directory:
+
 ```bash
-chmod 755 data/
-chmod 644 data/users.json
+chmod 755 /volume1/docker/grainwatch-controller/data
+chown 1001:1001 /volume1/docker/grainwatch-controller/data
 ```
 
 ### Default User Not Created
 
-**Problem**: Application starts but no default user exists.
+**Problem**: the application starts but no default user exists.
 
-**Solution**: Check logs for bootstrap errors. Delete `data/users.json` and restart the application to trigger default user creation.
+**Solution**: the admin is only seeded when the user table is empty. Check the
+logs for `Users already exist, skipping default user creation`, and inspect the
+table directly if needed:
 
-### Cannot Login with Default Credentials
+```bash
+docker exec grainwatch-controller node -e "
+  const db = require('better-sqlite3')(process.env.DATABASE_PATH);
+  console.log(db.prepare('SELECT username, role, active FROM users').all());
+"
+```
 
-**Problem**: Default credentials don't work.
+### Cannot Login with the Default Credentials
 
-**Solution**: Users might already exist. Check `data/users.json` to see what users are registered. The default user is only created if the file is empty or doesn't exist.
+**Problem**: `admin` / `changeme123` is rejected.
+
+**Solution**: either the password was already changed, or the account was
+deactivated. Query the users table as above. A database that keeps reverting to
+the default admin points the other way — `DATABASE_PATH` is outside the mounted
+volume, so the file is lost on every restart.
 
 ## Related Documentation
 
-- [User Service Documentation](../src/services/auth/user.service.ts) - User management implementation
-- [Authentication](../docs/design/API_DESIGN.md) - Authentication and authorisation design
-- [Deployment Guide](../docs/DEPLOYMENT.md) - Production deployment instructions
+- [Authentication & Authorisation](specs/AUTHENTICATION.md)
+- [API Specification](specs/API.md)
+- [Deployment Guide](DEPLOYMENT.md)
