@@ -35,8 +35,21 @@ BACKEND_DIR="${REPO_ROOT}/backend"
 IMAGE_NAME="${IMAGE_NAME:-psalchow/grainwatch}"
 BUILD_TARGET="${BUILD_TARGET:-production}"
 
-# Derive the version tag from the backend package.json.
+# Derive the version tag from the backend package.json — that manifest ships in
+# the image and is what /health reports.
 VERSION="$(node -p "require('${BACKEND_DIR}/package.json').version")"
+
+# The image bundles both workspaces, so it carries a single product version.
+# Refuse to build a tag that only some of the manifests agree on.
+ROOT_VERSION="$(node -p "require('${REPO_ROOT}/package.json').version")"
+FRONTEND_VERSION="$(node -p "require('${REPO_ROOT}/frontend/package.json').version")"
+if [[ "${VERSION}" != "${ROOT_VERSION}" || "${VERSION}" != "${FRONTEND_VERSION}" ]]; then
+  echo "Version mismatch across workspaces — align them before building:" >&2
+  echo "  package.json:          ${ROOT_VERSION}" >&2
+  echo "  frontend/package.json: ${FRONTEND_VERSION}" >&2
+  echo "  backend/package.json:  ${VERSION}" >&2
+  exit 1
+fi
 
 # Assemble optional flags.
 BUILD_ARGS=()
