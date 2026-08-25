@@ -74,7 +74,11 @@ export interface HistoryReadings {
  * InfluxDB query result interface.
  */
 interface InfluxQueryResult {
-  results: Array<{
+  /** Request-level failure message (InfluxDB still answers with HTTP 200) */
+  error?: string;
+  results?: Array<{
+    /** Statement-level failure message, e.g. an unknown database */
+    error?: string;
     series?: Array<{
       name: string;
       columns: string[];
@@ -120,6 +124,7 @@ export class InfluxDBService {
    *
    * @param query - InfluxQL query string
    * @returns Query results
+   * @throws Error if the request fails or InfluxDB reports a query error
    */
   private async executeQuery(query: string): Promise<InfluxQueryResult> {
     const queryUrl = `${this.url}/query?db=${encodeURIComponent(this.bucket)}&q=${encodeURIComponent(query)}`;
@@ -136,7 +141,18 @@ export class InfluxDBService {
       throw new Error(`InfluxDB query failed: ${response.statusText}`);
     }
 
-    return await response.json() as InfluxQueryResult;
+    const body = (await response.json()) as InfluxQueryResult;
+
+    // InfluxDB answers query failures — unknown database, missing read
+    // permission, malformed InfluxQL — with HTTP 200 and the reason in the
+    // body. Surfacing it here keeps a misconfiguration from being reported as
+    // "no data available", which hides the actual cause.
+    const error = body.error ?? body.results?.find((r) => r.error)?.error;
+    if (error) {
+      throw new Error(`InfluxDB query failed: ${error}`);
+    }
+
+    return body;
   }
 
   /**
@@ -196,7 +212,7 @@ export class InfluxDBService {
     const result = await this.executeQuery(query);
     const deviceMap = new Map<string, DeviceReading>();
 
-    for (const queryResult of result.results) {
+    for (const queryResult of result.results ?? []) {
       if (!queryResult.series) continue;
 
       for (const series of queryResult.series) {
@@ -270,7 +286,7 @@ export class InfluxDBService {
   private parseLastPoint(
     result: InfluxQueryResult,
   ): { value: number | null; time: string | null } {
-    for (const queryResult of result.results) {
+    for (const queryResult of result.results ?? []) {
       if (!queryResult.series) continue;
 
       for (const series of queryResult.series) {
@@ -351,7 +367,7 @@ export class InfluxDBService {
   ): Map<string, SeriesPoint[]> {
     const out = new Map<string, SeriesPoint[]>();
 
-    for (const queryResult of result.results) {
+    for (const queryResult of result.results ?? []) {
       if (!queryResult.series) continue;
 
       for (const series of queryResult.series) {

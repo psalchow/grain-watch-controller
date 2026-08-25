@@ -16,6 +16,9 @@ jest.mock('../../../src/config', () => ({
       org: 'test-org',
       bucket: 'testdb',
       measurement: 'Temp',
+      outdoorTemperatureMeasurement: 'outdoor-temperature',
+      outdoorHumidityMeasurement: 'outdoor-humidity',
+      outdoorLookback: '1h',
     },
     jwt: {
       secret: 'jwt-secret',
@@ -258,6 +261,60 @@ describe('InfluxDBService', () => {
       mockFetch.mockRejectedValue(new Error('Network error'));
 
       await expect(service.testConnection()).rejects.toThrow('Failed to connect to InfluxDB');
+    });
+  });
+
+  describe('query error reporting', () => {
+    // InfluxDB reports query failures with HTTP 200 and an error in the body.
+    // These must surface as failures rather than as an empty result set, which
+    // would present a misconfiguration as "no data".
+
+    it('should throw on a statement-level error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: [{ statement_id: 0, error: 'database not found: testdb' }],
+        }),
+      });
+
+      await expect(service.getLatestReadings('corn-watch-1')).rejects.toThrow(
+        'database not found: testdb'
+      );
+    });
+
+    it('should throw on a request-level error', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ error: 'unauthorized access' }),
+      });
+
+      await expect(service.getLatestReadings('corn-watch-1')).rejects.toThrow(
+        'unauthorized access'
+      );
+    });
+
+    it('should surface errors from the outdoor query too', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          results: [
+            { statement_id: 0, error: 'default retention policy not set' },
+          ],
+        }),
+      });
+
+      await expect(service.getOutdoorReading('corn-watch-1')).rejects.toThrow(
+        'default retention policy not set'
+      );
+    });
+
+    it('should still treat an empty result set as no data', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [{ statement_id: 0 }] }),
+      });
+
+      await expect(service.getLatestReadings('corn-watch-1')).resolves.toEqual([]);
     });
   });
 });

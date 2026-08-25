@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { API_CACHE_NAME } from './src/lib/apiCache'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
@@ -45,7 +46,10 @@ export default defineConfig({
             urlPattern: /^https:\/\/.*\/api\/v1\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'api-cache',
+              cacheName: API_CACHE_NAME,
+              // Fall back to the cache once the network looks unresponsive,
+              // rather than leaving readings pending indefinitely.
+              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 // 1 hour

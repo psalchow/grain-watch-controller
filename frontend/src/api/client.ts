@@ -4,6 +4,8 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 
+import { clearApiCache } from '../lib/apiCache';
+
 const TOKEN_KEY = 'grainwatch_token';
 
 /** Event dispatched when the session ends and the user must log in again. */
@@ -151,6 +153,10 @@ class ApiClient {
 
   /**
    * Clear auth token
+   *
+   * Also drops cached API responses: they were fetched with this session's
+   * token and should not outlive it. Fire-and-forget so the logout flow does
+   * not wait on Cache Storage.
    */
   clearToken(): void {
     try {
@@ -158,6 +164,7 @@ class ApiClient {
     } catch (error) {
       console.error('Error clearing token:', error);
     }
+    void clearApiCache();
   }
 
 
