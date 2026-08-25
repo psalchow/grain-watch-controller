@@ -1,10 +1,13 @@
-import { LogOut, Wheat, UserCog, Users } from 'lucide-react';
+import { useState } from 'react';
+import { Info, LogOut, Wheat, UserCog, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { AppInfoDialog } from '@/components/AppInfoDialog';
 
 export function Header() {
   const { user, logout } = useAuth();
+  const [infoOpen, setInfoOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -40,12 +43,22 @@ export function Header() {
               Users
             </Link>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setInfoOpen(true)}
+            aria-label="App info"
+          >
+            <Info className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="sm" onClick={logout}>
             <LogOut className="h-4 w-4 mr-2" />
             Logout
           </Button>
         </div>
       </div>
+
+      <AppInfoDialog open={infoOpen} onClose={() => setInfoOpen(false)} />
     </header>
   );
 }

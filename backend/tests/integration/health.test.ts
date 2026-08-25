@@ -30,11 +30,11 @@ describe('Health Check Endpoint', () => {
       expect(response.body).toHaveProperty('timestamp');
     });
 
-    it('should report the version from the package manifest', async () => {
+    it('should report the version from the workspace root manifest', async () => {
       const response = await request(app).get('/health');
 
       const { version } = JSON.parse(
-        readFileSync(join(__dirname, '../../package.json'), 'utf8')
+        readFileSync(join(__dirname, '../../../package.json'), 'utf8')
       ) as { version: string };
 
       expect(response.body).toHaveProperty('version', version);

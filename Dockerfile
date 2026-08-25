@@ -63,10 +63,13 @@ ENV NODE_ENV=production \
 # Shared (hoisted) production dependencies
 COPY --from=builder --chown=appuser:nodejs /app/node_modules ./node_modules
 
-# Compiled backend, migrations and manifest
+# Compiled backend, migrations and manifests. The root manifest holds the
+# version the /health endpoint reports; the backend manifest provides npm
+# scripts and the module type.
 COPY --from=builder --chown=appuser:nodejs /app/backend/dist ./backend/dist
 COPY --from=builder --chown=appuser:nodejs /app/backend/drizzle ./backend/drizzle
 COPY --chown=appuser:nodejs backend/package.json ./backend/
+COPY --chown=appuser:nodejs package.json ./
 
 # Built PWA, served as static files
 COPY --from=builder --chown=appuser:nodejs /app/frontend/dist ./backend/public

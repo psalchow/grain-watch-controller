@@ -30,6 +30,19 @@ Monorepo for the Grainwatch grain stock monitoring system. Contains a React PWA 
 
 See `frontend/CLAUDE.md` and `backend/CLAUDE.md` for project-specific guidance.
 
+## Versioning
+
+The PWA and the BFF ship as one Docker image, so there is **one** product
+version: the `version` field in the root `package.json`. The workspace manifests
+carry no version.
+
+- Bump: `npm version <major|minor|patch> --no-git-tag-version` in the root
+- Backend reports it at `GET /health` (reads the root manifest at runtime)
+- Frontend gets it injected at build time as `__APP_VERSION__` (see `frontend/appVersion.ts`)
+- `scripts/build-prod-image.sh` derives the image tag from it
+- Both versions are visible in the app-info dialog (info icon in the header);
+  a mismatch means the browser is still running a cached bundle
+
 ## Code Standards and Conventions
 
 - **Language**: All code, documentation, comments, commit messages, and artefacts must be in English (UK)

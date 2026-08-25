@@ -3,7 +3,7 @@
 # Grainwatch - Production Image Build
 # =============================================================================
 # Builds the combined PWA + BFF production image, tagged :latest and :<version>
-# with the version taken from backend/package.json. This is the image
+# with the version taken from the root package.json. This is the image
 # docker-compose.prod.yml deploys.
 #
 # The root Dockerfile is a multi-stage build: it compiles the React PWA and the
@@ -29,25 +29,17 @@ set -euo pipefail
 # Resolve repository root regardless of where the script is invoked from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BACKEND_DIR="${REPO_ROOT}/backend"
 
 # Configuration (overridable via environment).
 IMAGE_NAME="${IMAGE_NAME:-psalchow/grainwatch}"
 BUILD_TARGET="${BUILD_TARGET:-production}"
 
-# Derive the version tag from the backend package.json — that manifest ships in
-# the image and is what /health reports.
-VERSION="$(node -p "require('${BACKEND_DIR}/package.json').version")"
-
-# The image bundles both workspaces, so it carries a single product version.
-# Refuse to build a tag that only some of the manifests agree on.
-ROOT_VERSION="$(node -p "require('${REPO_ROOT}/package.json').version")"
-FRONTEND_VERSION="$(node -p "require('${REPO_ROOT}/frontend/package.json').version")"
-if [[ "${VERSION}" != "${ROOT_VERSION}" || "${VERSION}" != "${FRONTEND_VERSION}" ]]; then
-  echo "Version mismatch across workspaces — align them before building:" >&2
-  echo "  package.json:          ${ROOT_VERSION}" >&2
-  echo "  frontend/package.json: ${FRONTEND_VERSION}" >&2
-  echo "  backend/package.json:  ${VERSION}" >&2
+# Derive the version tag from the root package.json — the single source of truth
+# for the product version. That manifest ships in the image and is what /health
+# reports; the PWA gets the same value injected at build time.
+VERSION="$(node -p "require('${REPO_ROOT}/package.json').version")"
+if [[ -z "${VERSION}" || "${VERSION}" == "undefined" ]]; then
+  echo "No version in ${REPO_ROOT}/package.json — cannot tag the image." >&2
   exit 1
 fi
 

@@ -1,7 +1,17 @@
 # =============================================================================
-# Grainwatch Controller BFF - Production Dockerfile
+# Grainwatch Controller BFF - API-only Dockerfile
 # =============================================================================
-# Multi-stage build for optimised production image
+# Builds the BFF without the PWA. Used by docker-compose.sim.yml, where the
+# frontend runs separately as a Vite dev server. The deployed production image
+# is the combined one built from the root Dockerfile.
+#
+# Build context is the repository root, so the root package.json — the single
+# source of truth for the product version, reported by /health — can be bundled.
+# Dependencies still come from the standalone backend/package-lock.json, which
+# keeps this image free of the frontend dependency tree.
+#
+#   docker build -f backend/Dockerfile -t grainwatch-controller .
+#
 # Base: Node.js 24 LTS Alpine for minimal footprint
 # =============================================================================
 
@@ -11,13 +21,13 @@
 # Separate stage for installing dependencies to maximise layer caching
 FROM node:24-alpine AS dependencies
 
-WORKDIR /app
+WORKDIR /app/backend
 
 # Native build tools required by better-sqlite3 (node-gyp)
 RUN apk add --no-cache python3 make g++
 
 # Copy package files for dependency installation
-COPY package.json package-lock.json ./
+COPY backend/package.json backend/package-lock.json ./
 
 # Install all dependencies (including dev for build stage)
 # Use --frozen-lockfile equivalent for npm
@@ -29,15 +39,15 @@ RUN npm ci
 # Compile TypeScript to JavaScript
 FROM node:24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/backend
 
 # Copy dependencies from previous stage
-COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /app/backend/node_modules ./node_modules
 
 # Copy source files
-COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
-COPY src ./src
-COPY drizzle ./drizzle
+COPY backend/package.json backend/package-lock.json backend/tsconfig.json backend/tsconfig.build.json ./
+COPY backend/src ./src
+COPY backend/drizzle ./drizzle
 
 # Build TypeScript
 RUN npm run build
@@ -54,8 +64,9 @@ FROM node:24-alpine AS production
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
 
-# Set working directory
-WORKDIR /app
+# Mirrors the layout of the combined image: the application lives in
+# /app/backend, the root manifest one level above.
+WORKDIR /app/backend
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
@@ -65,16 +76,19 @@ RUN addgroup --system --gid 1001 nodejs && \
 ENV NODE_ENV=production
 
 # Copy production dependencies
-COPY --from=builder --chown=appuser:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:nodejs /app/backend/node_modules ./node_modules
 
 # Copy compiled application
-COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
+COPY --from=builder --chown=appuser:nodejs /app/backend/dist ./dist
 
-# Copy database migrations (migrate.ts resolves ../../drizzle from dist/db → /app/drizzle)
-COPY --from=builder --chown=appuser:nodejs /app/drizzle ./drizzle
+# Copy database migrations (migrate.ts resolves ../../drizzle from dist/db → /app/backend/drizzle)
+COPY --from=builder --chown=appuser:nodejs /app/backend/drizzle ./drizzle
 
-# Copy package.json for version info and npm scripts
-COPY --chown=appuser:nodejs package.json ./
+# Backend manifest for npm scripts
+COPY --chown=appuser:nodejs backend/package.json ./
+
+# Root manifest — holds the version /health reports (resolved as ../../package.json from dist)
+COPY --chown=appuser:nodejs package.json /app/package.json
 
 # Create data directory for user database
 RUN mkdir -p /app/data && chown appuser:nodejs /app/data

@@ -44,7 +44,9 @@ services:
     networks: [sim-net]
 
   backend:
-    build: { context: ./backend }
+    # Context is the repository root so the root package.json (the version
+    # reported by /health) is part of the build context.
+    build: { context: ., dockerfile: backend/Dockerfile }
     environment:
       - NODE_ENV=development
       - PORT=3000

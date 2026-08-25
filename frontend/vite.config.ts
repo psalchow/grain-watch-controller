@@ -4,8 +4,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { API_CACHE_NAME } from './src/lib/apiCache'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
+import { readAppVersion } from './appVersion'
 
 export default defineConfig({
+  // The bundle cannot read a manifest at runtime, so the version is baked in.
+  define: {
+    __APP_VERSION__: JSON.stringify(readAppVersion(path.resolve(__dirname, '..')))
+  },
   plugins: [
     tailwindcss(),
     react(),

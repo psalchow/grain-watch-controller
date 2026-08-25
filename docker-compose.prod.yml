@@ -15,7 +15,7 @@
 
 services:
   grainwatch-controller:
-    image: ${GRAINWATCH_IMAGE:-psalchow/grainwatch:1.0.0}
+    image: ${GRAINWATCH_IMAGE:-psalchow/grainwatch:1.1.0}
     container_name: grainwatch-controller
     restart: unless-stopped
     ports:

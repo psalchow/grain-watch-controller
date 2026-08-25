@@ -63,22 +63,26 @@ function resolveFrontendDistPath(): string | null {
 }
 
 /**
- * Resolves the application version from the backend package manifest.
+ * Resolves the application version from the workspace root manifest.
+ *
+ * The root manifest is the single source of truth for the version: the PWA and
+ * the BFF ship as one Docker image, so one version describes the whole release.
+ * The workspace manifests carry no version of their own.
  *
  * The compiled application runs as `node dist/index.js` rather than through an
  * npm script, so `npm_package_version` is unset in production. Reading the
  * manifest keeps the reported version correct in every execution mode and
  * removes the need for a hard-coded fallback that silently goes stale.
  *
- * `__dirname` is `src` when running from source and `dist` when compiled; the
- * manifest sits one level above in both cases.
+ * `__dirname` is `backend/src` when running from source and `backend/dist` when
+ * compiled, so the root manifest sits two levels above in both cases.
  *
  * @returns The version string, or 'unknown' if the manifest cannot be read
  */
 function resolveVersion(): string {
   try {
     const manifest = JSON.parse(
-      fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')
+      fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')
     ) as { version?: string };
     return manifest.version ?? 'unknown';
   } catch {

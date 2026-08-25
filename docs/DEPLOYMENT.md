@@ -138,7 +138,7 @@ The full reference — including the outdoor-measurement and fan-timing variable
 
 The published image is [`psalchow/grainwatch`](https://hub.docker.com/r/psalchow/grainwatch)
 on Docker Hub. Use `scripts/build-prod-image.sh`, which derives the version tag
-from `backend/package.json` and tags both `:<version>` and `:latest`:
+from the root `package.json` and tags both `:<version>` and `:latest`:
 
 ```bash
 # Build only
@@ -376,9 +376,14 @@ Response when healthy:
 {
   "status": "healthy",
   "timestamp": "2026-01-16T10:30:00.000Z",
-  "version": "0.1.0"
+  "version": "1.1.0"
 }
 ```
+
+`version` is read from the root `package.json` bundled into the image. The PWA
+shows the same value next to its own bundled version in the app-info dialog
+(info icon in the header), which is the quickest way to confirm a deployment
+took effect.
 
 ### Docker Health Status
 

@@ -5,15 +5,12 @@ import axios, {
 } from 'axios';
 
 import { clearApiCache } from '../lib/apiCache';
+import { API_BASE_URL } from './config';
 
 const TOKEN_KEY = 'grainwatch_token';
 
 /** Event dispatched when the session ends and the user must log in again. */
 export const AUTH_LOGOUT_EVENT = 'auth:logout';
-
-// Use environment variable or fallback to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3000/api/v1' : '/api/v1');
 
 /** Request config extended with our one-shot retry flag. */
 interface RetryableRequestConfig extends InternalAxiosRequestConfig {
