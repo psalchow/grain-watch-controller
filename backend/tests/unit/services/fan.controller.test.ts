@@ -78,6 +78,36 @@ describe('FanController', () => {
     expect(controller.getStatus().lastWarning?.message).toBe('manual');
   });
 
+  it('clears the warning overlay once the device confirms the commanded state', async () => {
+    const { controller } = await makeController();
+    controller.command('on');
+    controller.handleShellyMessage(successMsg(true));
+    controller.handleShellyMessage({ type: 'warning', message: 'manual', switchState: true, inputState: true, timestamp: 3 });
+    expect(controller.getStatus().lastWarning).not.toBeNull();
+
+    // The contactor is back under control and reports success again.
+    controller.handleShellyMessage(successMsg(true));
+
+    expect(controller.getStatus().lastWarning).toBeNull();
+    // The record of the warning survives in the event log.
+    expect(controller.getRecentEvents(50).some((e) => e.kind === 'warning')).toBe(true);
+  });
+
+  it('clears the alert overlay when the fan recovers from a fault', async () => {
+    const { controller } = await makeController();
+    controller.command('on');
+    controller.handleShellyMessage({ type: 'alert', message: 'stuck', switchState: false, inputState: false, timestamp: 2 });
+    expect(controller.getStatus().state).toBe('FAULT');
+    expect(controller.getStatus().lastAlert).not.toBeNull();
+
+    controller.command('on');
+    controller.handleShellyMessage(successMsg(true));
+
+    expect(controller.getStatus().state).toBe('ON');
+    expect(controller.getStatus().lastAlert).toBeNull();
+    expect(controller.getRecentEvents(50).some((e) => e.kind === 'alert')).toBe(true);
+  });
+
   it('command off -> TURN_OFF_PENDING -> OFF on success(false)', async () => {
     const { controller, published } = await makeController();
     controller.command('on');

@@ -81,6 +81,12 @@ export class FanController {
       case 'success':
         this.log('success', msg, 'shelly');
         this.clearWatchdog();
+        // The device confirms it reached the commanded state, so any earlier
+        // warning or alert describes a condition that has since resolved.
+        // Clearing them keeps the card showing the situation now; the event
+        // log keeps the record that they occurred.
+        this.lastWarning = null;
+        this.lastAlert = null;
         if (msg.switchState) {
           this.setState('ON');
           this.ensureKeepAlive();

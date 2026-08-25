@@ -33,7 +33,7 @@ export default function StockDetailPage() {
       const response = await stocksApi.getLatestReadings(stockId);
       setData(response);
     } catch {
-      setError('Failed to load sensor data. Please try again.');
+      setError('Sensordaten konnten nicht geladen werden. Bitte erneut versuchen.');
     } finally {
       setLoading(false);
       setRefreshing(false);

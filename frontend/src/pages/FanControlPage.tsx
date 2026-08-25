@@ -4,11 +4,38 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FanStatusCard } from '@/components/FanStatusCard';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { translateDeviceMessage } from '@/lib/messages';
 import { fanApi } from '@/api/fan';
 import { useFanStream } from '@/hooks/useFanStream';
 import type { FanSnapshot } from '@/types/fan';
 
 const PENDING = ['TURN_ON_PENDING', 'TURN_OFF_PENDING'];
+
+/** German labels for the event kinds recorded in the audit log. */
+const EVENT_LABEL: Record<string, string> = {
+  command: 'Schaltbefehl',
+  success: 'Quittiert',
+  safety_shutoff: 'Sicherheitsabschaltung',
+  warning: 'Warnung',
+  alert: 'Alarm',
+  status: 'Statusmeldung',
+  online_change: 'Verbindung geändert',
+  watchdog_off: 'Zeitüberschreitung, abgeschaltet',
+  recovery: 'Zustand wiederhergestellt',
+};
+
+/** Event kinds that record a problem, highlighted in the history. */
+const PROBLEM_KINDS = ['warning', 'alert', 'safety_shutoff', 'watchdog_off'];
+
+/** Reads the device message out of an event payload, when it carries one. */
+function eventMessage(payload: unknown): string | null {
+  if (payload && typeof payload === 'object' && 'message' in payload) {
+    const message = (payload as { message?: unknown }).message;
+    if (typeof message === 'string') return translateDeviceMessage(message);
+  }
+  return null;
+}
 
 export default function FanControlPage() {
   const { stockId } = useParams<{ stockId: string }>();
@@ -84,13 +111,21 @@ export default function FanControlPage() {
         <section className="mt-8">
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Verlauf</h2>
           <ul className="space-y-1 text-xs">
-            {(snapshot?.events ?? []).map((ev) => (
-              <li key={ev.id} className="flex gap-2 border-b py-1">
-                <span className="text-muted-foreground/60">{ev.ts}</span>
-                <span className="font-medium">{ev.kind}</span>
-                <span className="text-muted-foreground">{ev.source}</span>
-              </li>
-            ))}
+            {(snapshot?.events ?? []).map((ev) => {
+              const message = eventMessage(ev.payload);
+              const isProblem = PROBLEM_KINDS.includes(ev.kind);
+              return (
+                <li key={ev.id} className="flex flex-wrap gap-2 border-b py-1">
+                  <span className="text-muted-foreground/60">
+                    {new Date(ev.ts).toLocaleString('de-DE')}
+                  </span>
+                  <span className={cn('font-medium', isProblem && 'text-destructive')}>
+                    {EVENT_LABEL[ev.kind] ?? ev.kind}
+                  </span>
+                  {message && <span className="text-muted-foreground">{message}</span>}
+                </li>
+              );
+            })}
           </ul>
         </section>
       </main>

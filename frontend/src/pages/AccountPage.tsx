@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wheat, Loader2, LogOut } from 'lucide-react';
+import { Wheat, Loader2, LogOut, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/api';
+import { extractError } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,15 +24,15 @@ export default function AccountPage() {
     setError(null);
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError('Please fill in all fields');
+      setError('Bitte alle Felder ausfüllen');
       return;
     }
     if (newPassword.length < 8) {
-      setError('New password must be at least 8 characters');
+      setError('Das neue Passwort muss mindestens 8 Zeichen lang sein');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setError('New password and confirmation do not match');
+      setError('Neues Passwort und Bestätigung stimmen nicht überein');
       return;
     }
 
@@ -41,18 +42,24 @@ export default function AccountPage() {
       await reloadUser();
       navigate('/');
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-          : null;
-      setError(message || 'Could not change password');
+      setError(extractError(err, 'Passwort konnte nicht geändert werden'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 p-4 bg-background">
+      {/* No way back while the change is forced — the route guard would send
+          the user straight back here, so offering it would only mislead. */}
+      {!forced && (
+        <div className="w-full max-w-md">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+            <ArrowLeft className="h-4 w-4" />
+            <span className="ml-1">Back</span>
+          </Button>
+        </div>
+      )}
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">

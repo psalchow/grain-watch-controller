@@ -9,10 +9,12 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-14 max-w-screen-xl items-center px-4">
-        <div className="flex items-center gap-2">
+        {/* The brand doubles as the way back to the stock overview — without it
+            the account and user-management screens are dead ends. */}
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80">
           <Wheat className="h-6 w-6 text-primary" />
           <span className="font-semibold text-lg">Grainwatch</span>
-        </div>
+        </Link>
 
         <div className="flex flex-1 items-center justify-end gap-4">
           {user && (

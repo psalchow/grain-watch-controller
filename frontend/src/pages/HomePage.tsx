@@ -25,7 +25,7 @@ export default function HomePage() {
       setStocks(response.stocks);
     } catch (err) {
       console.error('Error loading stocks:', err);
-      setError('Failed to load stocks. Please try again.');
+      setError('Hallen konnten nicht geladen werden. Bitte erneut versuchen.');
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
 import { adminApi, stocksApi } from '@/api';
+import { extractError } from '@/lib/messages';
 import { AdminUser, GrainStock } from '@/types/api';
 
 type Editing = { user: AdminUser } | null;
@@ -13,6 +15,7 @@ type Resetting = { user: AdminUser } | null;
 const ALL = '*';
 
 export default function AdminUsersPage() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [stocks, setStocks] = useState<GrainStock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +33,7 @@ export default function AdminUsersPage() {
       setUsers(u);
       setStocks(s.stocks);
     } catch {
-      setError('Could not load users');
+      setError('Benutzer konnten nicht geladen werden');
     } finally {
       setLoading(false);
     }
@@ -44,7 +47,7 @@ export default function AdminUsersPage() {
       await adminApi.setActive(user.id, !user.active);
       await load();
     } catch {
-      setError('Could not update user status');
+      setError('Benutzerstatus konnte nicht geändert werden');
     }
   };
 
@@ -53,7 +56,13 @@ export default function AdminUsersPage() {
       <Header />
       <main className="container max-w-screen-xl px-4 py-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-semibold">User Management</h1>
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+              <ArrowLeft className="h-4 w-4" />
+              <span className="ml-1">Back</span>
+            </Button>
+            <h1 className="text-2xl font-semibold">User Management</h1>
+          </div>
           <Button onClick={() => setCreating(true)}>New user</Button>
         </div>
 
@@ -132,14 +141,6 @@ function StockSelect({ stocks, value, onChange }: { stocks: GrainStock[]; value:
   );
 }
 
-function extractError(err: unknown, fallback: string): string {
-  const message =
-    err && typeof err === 'object' && 'response' in err
-      ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-      : null;
-  return message || fallback;
-}
-
 function CreateUserDialog({ stocks, onClose, onSaved }: { stocks: GrainStock[]; onClose: () => void; onSaved: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -151,16 +152,16 @@ function CreateUserDialog({ stocks, onClose, onSaved }: { stocks: GrainStock[]; 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (username.length < 3) return setError('Username must be at least 3 characters');
-    if (password.length < 8) return setError('Temporary password must be at least 8 characters');
+    if (username.length < 3) return setError('Der Benutzername muss mindestens 3 Zeichen lang sein');
+    if (password.length < 8) return setError('Das temporäre Passwort muss mindestens 8 Zeichen lang sein');
     const access = role === 'admin' ? ['*'] : stockAccess;
-    if (access.length === 0) return setError('Select at least one stock');
+    if (access.length === 0) return setError('Mindestens eine Halle auswählen');
     setSaving(true);
     try {
       await adminApi.createUser({ username, password, role, stockAccess: access });
       onSaved();
     } catch (err) {
-      setError(extractError(err, 'Could not create user'));
+      setError(extractError(err, 'Benutzer konnte nicht angelegt werden'));
     } finally {
       setSaving(false);
     }
@@ -211,13 +212,13 @@ function EditUserDialog({ user, stocks, onClose, onSaved }: { user: AdminUser; s
     e.preventDefault();
     setError(null);
     const access = role === 'admin' ? ['*'] : stockAccess;
-    if (access.length === 0) return setError('Select at least one stock');
+    if (access.length === 0) return setError('Mindestens eine Halle auswählen');
     setSaving(true);
     try {
       await adminApi.updatePermissions(user.id, { role, stockAccess: access });
       onSaved();
     } catch (err) {
-      setError(extractError(err, 'Could not update user'));
+      setError(extractError(err, 'Benutzer konnte nicht geändert werden'));
     } finally {
       setSaving(false);
     }
@@ -258,13 +259,13 @@ function ResetPasswordDialog({ user, onClose, onSaved }: { user: AdminUser; onCl
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (newPassword.length < 8) return setError('Password must be at least 8 characters');
+    if (newPassword.length < 8) return setError('Das Passwort muss mindestens 8 Zeichen lang sein');
     setSaving(true);
     try {
       await adminApi.resetPassword(user.id, newPassword);
       setDone(true);
     } catch (err) {
-      setError(extractError(err, 'Could not reset password'));
+      setError(extractError(err, 'Passwort konnte nicht zurückgesetzt werden'));
     } finally {
       setSaving(false);
     }

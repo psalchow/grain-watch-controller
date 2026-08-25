@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Wheat, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { extractError } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,7 +17,7 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!username || !password) {
-      setError('Please enter username and password');
+      setError('Bitte Benutzername und Passwort eingeben');
       return;
     }
 
@@ -27,11 +28,7 @@ export default function LoginPage() {
       await login({ username, password });
     } catch (err: unknown) {
       console.error('Login error:', err);
-      const errorMessage =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: { message?: string } } } }).response?.data?.error?.message
-          : null;
-      setError(errorMessage || 'Invalid credentials');
+      setError(extractError(err, 'Benutzername oder Passwort ist falsch'));
     } finally {
       setLoading(false);
     }

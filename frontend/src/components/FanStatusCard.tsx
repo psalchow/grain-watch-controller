@@ -1,5 +1,6 @@
 import { Fan, AlertTriangle, WifiOff, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { translateDeviceMessage } from '@/lib/messages';
 import type { FanState, FanStatus } from '@/types/fan';
 
 const STATE_LABEL: Record<FanState, string> = {
@@ -37,12 +38,12 @@ export function FanStatusCard({
       <div className="mt-2 flex flex-wrap gap-2">
         {status?.lastAlert && (
           <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-            <AlertTriangle className="h-3 w-3" /> Alarm: {status.lastAlert.message}
+            <AlertTriangle className="h-3 w-3" /> Alarm: {translateDeviceMessage(status.lastAlert.message)}
           </span>
         )}
         {status?.lastWarning && (
           <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-            <AlertTriangle className="h-3 w-3" /> Warnung: {status.lastWarning.message}
+            <AlertTriangle className="h-3 w-3" /> Warnung: {translateDeviceMessage(status.lastWarning.message)}
           </span>
         )}
         {status?.shellyOnline === false && (
