@@ -1,13 +1,24 @@
 import { useState } from 'react';
-import { Info, LogOut, Wheat, UserCog, Users } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Info, LogOut, Menu, Wheat, UserCog, Users } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
 import { AppInfoDialog } from '@/components/AppInfoDialog';
 
 export function Header() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [infoOpen, setInfoOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const isAdmin = user?.role === 'admin';
+
+  /** Leaves the menu before acting, so the two dialogs never overlap. */
+  const runFromMenu = (action: () => void) => {
+    setMenuOpen(false);
+    action();
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -19,11 +30,11 @@ export function Header() {
           <span className="font-semibold text-lg">Grainwatch</span>
         </Link>
 
-        <div className="flex flex-1 items-center justify-end gap-4">
+        {/* Wide screens: everything inline. The five items plus their labels
+            overflow a phone in portrait, so below `sm` they move into a menu. */}
+        <div className="hidden flex-1 items-center justify-end gap-4 sm:flex">
           {user && (
-            <span className="text-sm text-muted-foreground hidden sm:inline">
-              {user.username}
-            </span>
+            <span className="text-sm text-muted-foreground">{user.username}</span>
           )}
           {user && (
             <Link
@@ -34,7 +45,7 @@ export function Header() {
               Account
             </Link>
           )}
-          {user?.role === 'admin' && (
+          {isAdmin && (
             <Link
               to="/admin/users"
               className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
@@ -56,9 +67,78 @@ export function Header() {
             Logout
           </Button>
         </div>
+
+        {/* Narrow screens: a single button opening the same actions as a list. */}
+        <div className="flex flex-1 items-center justify-end sm:hidden">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
+
+      <Dialog
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title={user?.username ?? 'Menu'}
+      >
+        {/* Full-width rows rather than a compact list: this is operated on a
+            phone, often with gloves on. */}
+        <nav className="flex flex-col gap-1">
+          {user && (
+            <MenuItem
+              icon={<UserCog className="h-5 w-5" />}
+              label="Account"
+              onClick={() => runFromMenu(() => navigate('/account'))}
+            />
+          )}
+          {isAdmin && (
+            <MenuItem
+              icon={<Users className="h-5 w-5" />}
+              label="Users"
+              onClick={() => runFromMenu(() => navigate('/admin/users'))}
+            />
+          )}
+          <MenuItem
+            icon={<Info className="h-5 w-5" />}
+            label="App info"
+            onClick={() => runFromMenu(() => setInfoOpen(true))}
+          />
+          <MenuItem
+            icon={<LogOut className="h-5 w-5" />}
+            label="Logout"
+            onClick={() => runFromMenu(logout)}
+          />
+        </nav>
+      </Dialog>
 
       <AppInfoDialog open={infoOpen} onClose={() => setInfoOpen(false)} />
     </header>
+  );
+}
+
+/** One row of the mobile menu, sized for a thumb. */
+function MenuItem({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-base hover:bg-muted"
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
