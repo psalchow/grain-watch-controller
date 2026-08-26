@@ -110,3 +110,17 @@ describe('Header mobile menu', () => {
     expect(screen.queryAllByText('Account')).toHaveLength(1);
   });
 });
+
+describe('Header brand', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setUser('admin');
+  });
+
+  it('shows the shared brand mark beside the product name', () => {
+    renderHeader();
+
+    const brand = screen.getByRole('link', { name: 'Grainwatch' });
+    expect(brand.querySelector('svg[viewBox="0 0 512 512"]')).not.toBeNull();
+  });
+});

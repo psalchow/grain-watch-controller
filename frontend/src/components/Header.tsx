@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Info, LogOut, Menu, Wheat, UserCog, Users } from 'lucide-react';
+import { Info, LogOut, Menu, UserCog, Users } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { WheatMark } from '@/brand/WheatMark.tsx';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -26,7 +27,7 @@ export function Header() {
         {/* The brand doubles as the way back to the stock overview — without it
             the account and user-management screens are dead ends. */}
         <Link to="/" className="flex items-center gap-2 hover:opacity-80">
-          <Wheat className="h-6 w-6 text-primary" />
+          <WheatMark className="h-6 w-6 text-primary" />
           <span className="font-semibold text-lg">Grainwatch</span>
         </Link>
 
