@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   ICON_SPECS,
   buildIconSvg,
@@ -76,4 +77,41 @@ describe('renderIcons', () => {
       'apple-touch-icon.png',
     ]);
   });
-});
+  // 20s timeout: @resvg/resvg-js's native binding has a slow cold start on
+  // first invocation, which can exceed Vitest's default 5s on a cold CI cache.
+}, 20_000);
+
+describe('committed icons', () => {
+  const publicDir = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    'public'
+  );
+
+  it('match what the generator produces', async () => {
+    const outDir = await mkdtemp(path.join(tmpdir(), 'grainwatch-drift-'));
+    await renderIcons(outDir);
+
+    for (const spec of ICON_SPECS) {
+      const committed = await readFile(path.join(publicDir, spec.file));
+
+      if (spec.file.endsWith('.svg')) {
+        const generated = await readFile(path.join(outDir, spec.file), 'utf8');
+        // Byte-exact: the SVGs are pure text output of the generator, so any
+        // difference means someone edited public/ by hand or forgot
+        // `npm run icons` after changing the geometry.
+        expect(committed.toString('utf8')).toBe(generated);
+      } else {
+        // Only the dimensions: a @resvg/resvg-js upgrade re-encodes the pixels
+        // without anything about the design having changed.
+        expect(readPngSize(committed)).toEqual({
+          width: spec.size,
+          height: spec.size,
+        });
+      }
+    }
+  });
+  // 20s timeout: this test rasterises all seven icons via renderIcons, so
+  // it is even more exposed to @resvg/resvg-js's native cold-start delay
+  // than the renderIcons describe block above.
+}, 20_000);
