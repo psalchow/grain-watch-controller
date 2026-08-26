@@ -102,8 +102,11 @@ describe('committed icons', () => {
         // `npm run icons` after changing the geometry.
         expect(committed.toString('utf8')).toBe(generated);
       } else {
-        // Only the dimensions: a @resvg/resvg-js upgrade re-encodes the pixels
-        // without anything about the design having changed.
+        // Byte-exact: any difference in the generated PNG — whether from a
+        // geometry change or a rasteriser update — should be regenerated via
+        // `npm run icons` and committed.
+        const generated = await readFile(path.join(outDir, spec.file));
+        expect(committed).toEqual(generated);
         expect(readPngSize(committed)).toEqual({
           width: spec.size,
           height: spec.size,
