@@ -121,7 +121,14 @@ export function Header() {
   );
 }
 
-/** One row of the mobile menu, sized for a thumb. */
+/**
+ * One row of the mobile menu, sized for a thumb.
+ *
+ * Built on Button so the focus ring, hover tokens and transitions come from
+ * the design system. Only the layout is overridden: the row is full width and
+ * left-aligned rather than a centred pill, and taller than any preset size to
+ * give a thumb something to hit.
+ */
 function MenuItem({
   icon,
   label,
@@ -132,13 +139,13 @@ function MenuItem({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
       onClick={onClick}
-      className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-base hover:bg-muted"
+      className="h-auto w-full justify-start gap-3 px-3 py-3 text-base"
     >
       {icon}
       {label}
-    </button>
+    </Button>
   );
 }
