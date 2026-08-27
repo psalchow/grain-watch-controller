@@ -80,6 +80,9 @@ npm run lint
 
 # Type-check all projects
 npm run typecheck
+
+# Regenerate the PWA icon set after changing frontend/src/brand/wheatmarkGeometry.ts
+npm run icons
 ```
 
 ## Docker

@@ -21,12 +21,14 @@ Frontend-specific guidance for the Grainwatch PWA. See root `CLAUDE.md` for shar
 ```
 frontend/
 ├── public/                 # Static assets (PWA icons, favicon)
+├── scripts/                # Node scripts (icon rasteriser; run via `npm run icons`)
 ├── src/
 │   ├── api/               # Backend API client
 │   │   ├── client.ts      # Axios instance with auth interceptors
 │   │   ├── auth.ts        # Authentication API
 │   │   ├── stocks.ts      # Stocks API
 │   │   └── index.ts       # Central exports
+│   ├── brand/              # Brand mark geometry (wheatmarkGeometry.ts) + React component
 │   ├── components/
 │   │   ├── ui/            # shadcn/ui style components
 │   │   ├── Header.tsx     # App header with logout
@@ -88,7 +90,14 @@ npm run dev          # http://localhost:5173
 npm run build        # Production build
 npm run preview      # Preview production build
 npm run lint         # Linting
+npm run icons        # Regenerate public/ PWA icons from src/brand/wheatmarkGeometry.ts
 ```
+
+`npm run icons` is not part of `npm run build`; run it by hand after changing the
+geometry and commit the results. The drift test (`scripts/renderIcons.test.ts`)
+compares the committed icons byte-exact against a fresh render, so upgrading
+`@resvg/resvg-js` will fail it until icons are regenerated and committed — expected,
+not a bug.
 
 ## Environment Variables
 
