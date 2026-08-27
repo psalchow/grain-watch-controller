@@ -63,7 +63,7 @@ differs.
 
 ## Components
 
-### `frontend/src/brand/wheatmark.ts`
+### `frontend/src/brand/wheatmarkGeometry.ts`
 
 The single source of truth. Exports:
 
@@ -89,9 +89,12 @@ same classes; the `Wheat` import from `lucide-react` is dropped. The other lucid
 icons (`Info`, `LogOut`, `UserCog`, `Users`) stay — those are functional UI
 icons, not brand.
 
-### `frontend/scripts/generate-icons.mjs`
+### `frontend/scripts/renderIcons.ts` and `frontend/scripts/generate-icons.ts`
 
-Writes every artefact into `frontend/public/`:
+`renderIcons.ts` holds the SVG string builder and the `renderIcons()` function
+that rasterises it; `generate-icons.ts` is the thin CLI entry point that calls
+`renderIcons()` against `frontend/public/`. Together they write every
+artefact:
 
 | File | Size | Background | Purpose |
 |---|---|---|---|
@@ -117,7 +120,7 @@ Dockerfile.
 
 **Scripts:**
 
-- `frontend/package.json`: `"icons": "node scripts/generate-icons.mjs"`
+- `frontend/package.json`: `"icons": "node --experimental-strip-types scripts/generate-icons.ts"`
 - root `package.json`: `"icons": "npm run icons --workspace=frontend"`
 
 ## Configuration changes
@@ -149,7 +152,7 @@ temporary directory and compares the result against the committed files in
   comparison is avoided because a `@resvg/resvg-js` upgrade would change the
   encoded output without any change to the design.
 
-The test fails when someone edits `wheatmark.ts` without re-running
+The test fails when someone edits `wheatmarkGeometry.ts` without re-running
 `npm run icons`.
 
 **Existing tests:** `Header.test.tsx` does not reference the brand icon, so
