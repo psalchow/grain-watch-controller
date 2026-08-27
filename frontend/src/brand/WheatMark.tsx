@@ -1,4 +1,7 @@
-import { WHEATMARK_SHAPES, WHEATMARK_VIEWBOX } from './wheatmarkGeometry';
+import {
+  WHEATMARK_CONTENT_VIEWBOX,
+  WHEATMARK_SHAPES,
+} from './wheatmarkGeometry';
 
 interface WheatMarkProps {
   className?: string;
@@ -8,13 +11,17 @@ interface WheatMarkProps {
  * The Grainwatch brand mark, drawn from the shared geometry so the header and
  * the installed app icon cannot drift apart.
  *
+ * Uses the cropped viewBox, not the padded one the icon files need: the padding
+ * exists for Android's mask, and inline it would only shrink the mark against
+ * the icons beside it.
+ *
  * Decorative: the header spells the product name out next to it, so announcing
  * the mark as well would only repeat that.
  */
 export function WheatMark({ className }: WheatMarkProps) {
   return (
     <svg
-      viewBox={WHEATMARK_VIEWBOX}
+      viewBox={WHEATMARK_CONTENT_VIEWBOX}
       className={className}
       fill="currentColor"
       aria-hidden="true"

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { Header } from './Header';
 import { useAuth } from '@/contexts/AuthContext';
 import type { User } from '@/types/api';
+import { WHEATMARK_CONTENT_VIEWBOX } from '@/brand/wheatmarkGeometry';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('@/components/AppInfoDialog', () => ({
@@ -121,6 +122,8 @@ describe('Header brand', () => {
     renderHeader();
 
     const brand = screen.getByRole('link', { name: 'Grainwatch' });
-    expect(brand.querySelector('svg[viewBox="0 0 512 512"]')).not.toBeNull();
+    expect(
+      brand.querySelector(`svg[viewBox="${WHEATMARK_CONTENT_VIEWBOX}"]`)
+    ).not.toBeNull();
   });
 });

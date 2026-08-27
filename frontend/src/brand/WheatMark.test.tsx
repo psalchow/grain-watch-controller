@@ -1,16 +1,30 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
 import { WheatMark } from './WheatMark';
-import { WHEATMARK_SHAPES } from './wheatmarkGeometry';
+import {
+  WHEATMARK_CONTENT_VIEWBOX,
+  WHEATMARK_SHAPES,
+  WHEATMARK_VIEWBOX,
+} from './wheatmarkGeometry';
 
 describe('WheatMark', () => {
   it('draws every shape from the shared geometry', () => {
     const { container } = render(<WheatMark />);
 
     const svg = container.querySelector('svg');
-    expect(svg?.getAttribute('viewBox')).toBe('0 0 512 512');
+    expect(svg?.getAttribute('viewBox')).toBe(WHEATMARK_CONTENT_VIEWBOX);
     expect(svg?.querySelectorAll('rect, ellipse')).toHaveLength(
       WHEATMARK_SHAPES.length
+    );
+  });
+
+  it('crops to the artwork rather than using the icons padded canvas', () => {
+    const { container } = render(<WheatMark />);
+
+    // The padded canvas is what the generated icon files use; inline it would
+    // render the mark at roughly a third of the size of its neighbours.
+    expect(container.querySelector('svg')?.getAttribute('viewBox')).not.toBe(
+      WHEATMARK_VIEWBOX
     );
   });
 
