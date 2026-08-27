@@ -1,7 +1,7 @@
 /**
  * Writes the committed icon set. Run by hand via `npm run icons` after changing
- * the geometry in src/brand/wheatmark.ts — deliberately not part of the build,
- * so neither `vite build` nor the Docker image needs the rasteriser.
+ * the geometry in src/brand/wheatmarkGeometry.ts — deliberately not part of the
+ * build, so neither `vite build` nor the Docker image needs the rasteriser.
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

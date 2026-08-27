@@ -1,4 +1,4 @@
-import { WHEATMARK_SHAPES, WHEATMARK_VIEWBOX } from './wheatmark';
+import { WHEATMARK_SHAPES, WHEATMARK_VIEWBOX } from './wheatmarkGeometry';
 
 interface WheatMarkProps {
   className?: string;

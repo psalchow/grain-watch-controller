@@ -5,6 +5,9 @@
  * both the React component (WheatMark.tsx) and the icon generator
  * (scripts/renderIcons.ts). Nothing else may restate these coordinates —
  * that is what let the three hand-drawn icon files drift apart previously.
+ *
+ * File is named wheatmarkGeometry.ts, not wheatmark.ts, to avoid a
+ * case-insensitive filesystem collision with WheatMark.tsx.
  */
 
 export const WHEATMARK_VIEWBOX = '0 0 512 512';

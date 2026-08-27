@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
-import { WheatMark } from './WheatMark.tsx';
-import { WHEATMARK_SHAPES } from './wheatmark';
+import { WheatMark } from './WheatMark';
+import { WHEATMARK_SHAPES } from './wheatmarkGeometry';
 
 describe('WheatMark', () => {
   it('draws every shape from the shared geometry', () => {

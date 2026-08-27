@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Info, LogOut, Menu, UserCog, Users } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { WheatMark } from '@/brand/WheatMark.tsx';
+import { WheatMark } from '@/brand/WheatMark';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';

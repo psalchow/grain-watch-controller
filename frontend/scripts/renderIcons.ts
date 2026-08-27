@@ -7,7 +7,7 @@ import {
   WHEATMARK_SHAPES,
   WHEATMARK_VIEWBOX,
   type WheatmarkShape,
-} from '../src/brand/wheatmark.ts';
+} from '../src/brand/wheatmarkGeometry.ts';
 
 /**
  * Rounded artwork is what a browser tab and Android's `any` purpose show
