@@ -10,7 +10,11 @@
  * case-insensitive filesystem collision with WheatMark.tsx.
  */
 
-export const WHEATMARK_VIEWBOX = '0 0 512 512';
+/** The brand mark's coordinate system is square; this is both its side length
+ * in the geometry below and the icon generator's canvas size. */
+export const WHEATMARK_SIZE = 512;
+
+export const WHEATMARK_VIEWBOX = `0 0 ${WHEATMARK_SIZE} ${WHEATMARK_SIZE}`;
 
 /**
  * Brand blue. This is the same colour as --color-primary in src/index.css:

@@ -5,6 +5,7 @@ import {
   BRAND_BLUE,
   MARK_WHITE,
   WHEATMARK_SHAPES,
+  WHEATMARK_SIZE,
   WHEATMARK_VIEWBOX,
   type WheatmarkShape,
 } from '../src/brand/wheatmarkGeometry.ts';
@@ -57,7 +58,7 @@ export function buildIconSvg(size: number, corner: IconCorner): string {
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="${WHEATMARK_VIEWBOX}">`,
-    `  <rect width="512" height="512"${radius} fill="${BRAND_BLUE}"/>`,
+    `  <rect width="${WHEATMARK_SIZE}" height="${WHEATMARK_SIZE}"${radius} fill="${BRAND_BLUE}"/>`,
     `  <g fill="${MARK_WHITE}">`,
     ...WHEATMARK_SHAPES.map((shape) => `    ${shapeToSvg(shape)}`),
     '  </g>',
