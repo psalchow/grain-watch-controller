@@ -143,14 +143,16 @@ overwritten on the next build; nothing to do.
 
 ## Testing
 
-**Drift test** (Vitest, `frontend/src/brand/`): runs the generator into a
-temporary directory and compares the result against the committed files in
-`public/`.
+**Drift test** (Vitest, `frontend/scripts/renderIcons.test.ts`): runs the
+generator into a temporary directory and compares the result against the
+committed files in `public/`.
 
-- SVGs: byte-exact comparison
-- PNGs: assert the file exists and has the expected pixel dimensions. Byte
-  comparison is avoided because a `@resvg/resvg-js` upgrade would change the
-  encoded output without any change to the design.
+Both SVGs and PNGs are compared byte-exact. A `@resvg/resvg-js` upgrade will
+therefore fail the test until the icons are regenerated and committed — which is
+correct, because the shipped bytes really have changed. Comparing PNGs on their
+pixel dimensions alone would let `pwa-maskable-512x512.png` and
+`apple-touch-icon.png` go stale silently: they are full-bleed, have no SVG
+sibling, and their dimensions never change with the geometry.
 
 The test fails when someone edits `wheatmarkGeometry.ts` without re-running
 `npm run icons`.
