@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { API_CACHE_NAME } from './src/lib/apiCache'
+import { BRAND_BLUE } from './src/brand/wheatmarkGeometry'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { readAppVersion } from './appVersion'
@@ -29,7 +30,7 @@ export default defineConfig({
         name: 'Grainwatch',
         short_name: 'Grainwatch',
         description: 'Grain Stock Monitoring',
-        theme_color: '#3498db',
+        theme_color: BRAND_BLUE,
         background_color: '#f5f5f5',
         display: 'standalone',
         orientation: 'portrait',
