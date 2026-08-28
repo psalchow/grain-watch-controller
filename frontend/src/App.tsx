@@ -6,6 +6,7 @@ import StockDetailPage from './pages/StockDetailPage';
 import FanControlPage from './pages/FanControlPage';
 import AccountPage from './pages/AccountPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import { UpdateBanner } from './components/UpdateBanner';
 import { shouldForcePasswordChange, isAdmin } from './lib/access';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -131,6 +132,9 @@ export default function App() {
   return (
     <AuthProvider>
       <AppRoutes />
+      {/* Outside the routes so the offer survives navigation, and outside the
+          auth guard so it also reaches the login screen. */}
+      <UpdateBanner />
     </AuthProvider>
   );
 }

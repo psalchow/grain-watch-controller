@@ -16,7 +16,10 @@ export default defineConfig({
     tailwindcss(),
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' leaves the new worker waiting until the user accepts the
+      // update banner. Under 'autoUpdate' a deployment could swap the assets
+      // mid-session, which is a poor moment to lose the screen you were reading.
+      registerType: 'prompt',
       includeAssets: [
         'favicon.svg',
         'apple-touch-icon.png',
