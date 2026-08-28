@@ -34,19 +34,10 @@ export default defineConfig({
         background_color: '#f5f5f5',
         display: 'standalone',
         orientation: 'portrait',
+        // Raster first: Android mints a WebAPK from a bitmap, and where two
+        // entries declare the same size and purpose the pick is not specified.
+        // The SVGs stay as a sharper option for surfaces that prefer vectors.
         icons: [
-          {
-            src: 'pwa-192x192.svg',
-            sizes: '192x192',
-            type: 'image/svg+xml',
-            purpose: 'any'
-          },
-          {
-            src: 'pwa-512x512.svg',
-            sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any'
-          },
           {
             src: 'pwa-192x192.png',
             sizes: '192x192',
@@ -57,6 +48,18 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: 'pwa-192x192.svg',
+            sizes: '192x192',
+            type: 'image/svg+xml',
+            purpose: 'any'
+          },
+          {
+            src: 'pwa-512x512.svg',
+            sizes: '512x512',
+            type: 'image/svg+xml',
             purpose: 'any'
           },
           // Full-bleed artwork: Android applies its own mask, so a rounded
