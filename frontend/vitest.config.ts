@@ -15,11 +15,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      // Supplied by the VitePWA plugin at build time, which does not run here.
-      'virtual:pwa-register/react': path.resolve(
-        __dirname,
-        './src/test/pwaRegisterStub.ts'
-      ),
     },
   },
 });
