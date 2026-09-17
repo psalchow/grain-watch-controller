@@ -101,7 +101,7 @@ export class InfluxDBService {
   private readonly measurement: string;
   private readonly outdoorTemperatureMeasurement: string;
   private readonly outdoorHumidityMeasurement: string;
-  private readonly outdoorLookback: string;
+  private readonly latestLookback: string;
 
   /**
    * Creates a new InfluxDB service instance.
@@ -116,7 +116,7 @@ export class InfluxDBService {
     this.measurement = config.influxdb.measurement;
     this.outdoorTemperatureMeasurement = config.influxdb.outdoorTemperatureMeasurement;
     this.outdoorHumidityMeasurement = config.influxdb.outdoorHumidityMeasurement;
-    this.outdoorLookback = config.influxdb.outdoorLookback;
+    this.latestLookback = config.influxdb.latestLookback;
   }
 
   /**
@@ -179,7 +179,8 @@ export class InfluxDBService {
    * Retrieves the latest readings for all devices in a grain stock.
    *
    * Returns the most recent temperature, humidity, and battery values
-   * for each device in the specified device group.
+   * for each device in the specified device group. Only readings inside the
+   * configured look-back window count as current; older ones are not returned.
    *
    * @param deviceGroup - Device group identifier (e.g., 'corn-watch-1')
    * @returns Array of device readings, one per device
@@ -205,7 +206,7 @@ export class InfluxDBService {
         LAST("measurementTimeS") AS "measurement_time"
       FROM ${this.escapeMeasurement(this.measurement)}
       WHERE "device-group" = '${escapedGroup}'
-        AND time > now() - 26w
+        AND time > now() - ${this.latestLookback}
       GROUP BY "device"
     `;
 
@@ -249,7 +250,8 @@ export class InfluxDBService {
    *
    * The two values live in separate measurements and are filtered by the
    * `device` tag. Each `LAST()` query returns the timestamp of the point in
-   * its `time` column, which is used to report the reading age.
+   * its `time` column, which is used to report the reading age. The same
+   * look-back window as for sensor readings applies.
    *
    * @param deviceGroup - Device group identifier (e.g., 'corn-watch-1')
    * @returns Latest outdoor reading; individual values are null when absent
@@ -261,7 +263,7 @@ export class InfluxDBService {
       SELECT LAST(${this.escapeMeasurement(field)}) AS "value"
       FROM ${this.escapeMeasurement(measurement)}
       WHERE "device" = '${escapedGroup}'
-        AND time > now() - ${this.outdoorLookback}
+        AND time > now() - ${this.latestLookback}
     `;
 
     const [tempResult, humidityResult] = await Promise.all([

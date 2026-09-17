@@ -15,7 +15,7 @@ jest.mock('../../src/config', () => ({
   config: {
     port: 3000, nodeEnv: 'test',
     jwt: { secret: 'test-secret-key-for-testing-only-must-be-long-enough', expiresIn: '24h' },
-    influxdb: { url: 'http://localhost:8086', token: 't', org: 'o', bucket: 'b', measurement: 'Temp', outdoorTemperatureMeasurement: 'ot', outdoorHumidityMeasurement: 'oh', outdoorLookback: '1h' },
+    influxdb: { url: 'http://localhost:8086', token: 't', org: 'o', bucket: 'b', measurement: 'Temp', outdoorTemperatureMeasurement: 'ot', outdoorHumidityMeasurement: 'oh', latestLookback: '1h', offlineAfter: '15m', outdoorMaxSkew: '15m' },
   },
 }));
 

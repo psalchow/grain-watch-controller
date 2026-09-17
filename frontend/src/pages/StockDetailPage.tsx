@@ -106,7 +106,7 @@ export default function StockDetailPage() {
               Try again
             </Button>
           </div>
-        ) : data && data.devices.length > 0 ? (
+        ) : data ? (
           <>
             {fanEnabled && (
               <div className="mb-4">
@@ -121,18 +121,43 @@ export default function StockDetailPage() {
                 </Button>
               </div>
             )}
-            <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
-              {data.devices.map((device) => (
-                <SensorCard key={device.device} reading={device} />
-              ))}
-            </div>
-            {stockId && (
-              <StockHistorySection
-                stockId={stockId}
-                resolution={resolution}
-                onResolutionChange={setResolution}
-                refreshNonce={refreshNonce}
-              />
+            {/* A stock with neither thermometers nor fan control has nothing
+                to show — say so rather than rendering a blank page. */}
+            {data.hasGrainSensors === false && !fanEnabled && (
+              <div className="rounded-md bg-muted/50 p-4 text-center text-muted-foreground">
+                <p>
+                  Für diese Halle sind weder Sensoren noch eine Lüftersteuerung
+                  konfiguriert.
+                </p>
+              </div>
+            )}
+            {/* Stocks without grain thermometers show fan control only; an
+                absent field (cached response from an older backend) counts as
+                "has sensors". */}
+            {data.hasGrainSensors !== false && (
+              <>
+                {data.devices.length > 0 ? (
+                  <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
+                    {data.devices.map((device) => (
+                      <SensorCard key={device.device} reading={device} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-md bg-muted/50 p-4 text-center text-muted-foreground">
+                    <p>Keine aktuellen Messwerte vorhanden.</p>
+                  </div>
+                )}
+                {/* History covers up to a year and stays available while the
+                    sensors are silent — that is when the trend matters most. */}
+                {stockId && (
+                  <StockHistorySection
+                    stockId={stockId}
+                    resolution={resolution}
+                    onResolutionChange={setResolution}
+                    refreshNonce={refreshNonce}
+                  />
+                )}
+              </>
             )}
           </>
         ) : (

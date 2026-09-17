@@ -123,6 +123,9 @@ The full reference — including the outdoor-measurement and fan-timing variable
 | `INFLUXDB_ORG` | No | `grainwatch` | InfluxDB organisation |
 | `INFLUXDB_BUCKET` | No | `grainwatch` | InfluxDB bucket |
 | `INFLUXDB_MEASUREMENT` | No | `Temp` | Stock measurement name |
+| `INFLUXDB_LATEST_LOOKBACK` | No | `6h` in production | Look-back window for all latest values; older readings are dropped |
+| `INFLUXDB_OFFLINE_AFTER` | No | `1h` in production | Age at which a reading is shown as offline; must not exceed the look-back window |
+| `INFLUXDB_OUTDOOR_MAX_SKEW` | No | `30m` | Maximum gap between the outdoor temperature and humidity timestamps for the derived values |
 | `DATABASE_PATH` | No | `./data/grainwatch.db` | SQLite file; must sit on a mounted volume |
 | `MQTT_URL` | No | `mqtt://localhost:1883` | Broker URL for fan control |
 | `DOCKER_NETWORK` | No | `grainwatch-network` | External Docker network name |
@@ -584,6 +587,16 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 ---
 
 ## Upgrade Procedure
+
+> **Breaking change — versions after the look-back rework:** `INFLUXDB_OUTDOOR_LOOKBACK`
+> no longer exists and the backend **refuses to start** while it is still set.
+> Rename it to `INFLUXDB_LATEST_LOOKBACK` in `/volume1/docker/grainwatch/backend/.env`
+> — the file `docker-compose.prod.yml` declares as `env_file`; only the
+> `docker run --env-file .env` flow above uses `/volume1/docker/grainwatch/.env`
+> — *before* deploying, otherwise the container crash-loops. The variable now
+> bounds stock readings as well as outdoor conditions, so a value chosen for
+> outdoor alone (e.g. `1h`) is likely too tight — leave it unset to get the
+> `6h` production default.
 
 ```bash
 # 1. Back up the database with the container stopped

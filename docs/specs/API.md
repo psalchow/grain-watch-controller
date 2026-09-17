@@ -96,7 +96,73 @@ assets and an SPA fallback are served from the same origin. Requests under
 | `INFLUXDB_MEASUREMENT` | `Temp` | Stock temperature/humidity measurement |
 | `INFLUXDB_OUTDOOR_TEMPERATURE_MEASUREMENT` | `outdoor-temperature` | Outdoor temperature measurement |
 | `INFLUXDB_OUTDOOR_HUMIDITY_MEASUREMENT` | `outdoor-humidity` | Outdoor humidity measurement |
-| `INFLUXDB_OUTDOOR_LOOKBACK` | `1h` in production, `26w` otherwise | Look-back window for the latest outdoor reading |
+| `INFLUXDB_LATEST_LOOKBACK` | `6h` in production, `26w` otherwise | Look-back window for all latest values (sensor readings and outdoor conditions); older readings are dropped |
+| `INFLUXDB_OFFLINE_AFTER` | `1h` in production, `26w` otherwise, clamped to `INFLUXDB_LATEST_LOOKBACK` | Age at which a reading is flagged `offline`; an explicitly set value must not exceed the look-back window |
+| `INFLUXDB_OUTDOOR_MAX_SKEW` | `30m` | How far the outdoor temperature and humidity timestamps may lie apart and still be combined into dew point and absolute humidity |
+
+All three durations must be greater than zero; `0h` and friends are rejected at
+startup rather than silently emptying every query.
+
+`INFLUXDB_OUTDOOR_LOOKBACK` was replaced by `INFLUXDB_LATEST_LOOKBACK`; the
+backend refuses to start while the old name is still set.
+
+### Staleness of latest values
+
+One window governs stock sensors and outdoor conditions alike:
+
+1. Fresh reading — value and timestamp are reported, `offline` is `false`.
+2. Older than `INFLUXDB_OFFLINE_AFTER` — still reported, `offline` is `true`.
+   The PWA greys out the sensor card and the outdoor chip alike.
+3. Older than `INFLUXDB_LATEST_LOOKBACK` — no longer reported. The sensor card
+   disappears; outdoor values fall back to `–`.
+
+A stale sensor card keeps its temperature colour: the colour is the app's only
+alarm channel, and a probe in a self-heating spot tends to fall silent exactly
+when that alarm matters. Dimming and the "Offline" label carry the staleness.
+
+Stock probes measure every 15 minutes and publish every 5 minutes, so the
+production defaults leave room for several missed transmissions before a card
+greys out, and many more before it disappears.
+
+Outdoor temperature and humidity are queried separately and age independently:
+both `lastMeasurement` and `offline` follow the older of the two, so the
+reported age matches the flag. One value present and the other missing also
+counts as offline; `lastMeasurement` then reports the surviving value's age and
+the missing half shows as `null`. Neither present does not count as offline (the
+stock simply has no outdoor sensor). When the two timestamps lie further apart than
+`INFLUXDB_OUTDOOR_MAX_SKEW`, `dewPoint` and `absoluteHumidity` are reported as
+`null`, because a figure derived from two different instants would be
+misleading; `derivedUnavailableReason` is then `'skew'` and the PWA says so
+instead of showing bare dashes. A derived value that is simply not computable
+(0 % relative humidity drives the dew point to negative infinity) is reported as
+`null` with no reason. The default
+keeps twice the guaranteed publish interval as headroom so ordinary jitter does
+not blank the values.
+
+The two response shapes time their `offline` flag differently:
+
+- Stock readings compare the device-reported `measurementTimeS`, not the
+  InfluxDB ingest time that bounds the look-back window, so a skewed device
+  clock shifts the flag. A reading without a timestamp is not flagged.
+- Outdoor conditions compare the InfluxDB `time` of the `LAST()` point.
+
+`GET /stocks/:stockId/latest` answers 200 even when no reading is current:
+`devices` is then empty and `timestamp` is `null`. A 404 means the stock itself
+is unknown. History is unaffected by these windows and stays available while the
+sensors are silent.
+
+### Stocks without grain thermometers
+
+`hasGrainSensors = false` marks a stock that only has fan control: neither
+endpoint queries InfluxDB for stock sensors, `devices` and the history series
+stay empty, and the PWA shows fan control and outdoor conditions only.
+
+The column defaults to `true` and there is no admin UI for stocks yet, so it is
+currently set by hand against the SQLite file:
+
+```sql
+UPDATE stocks SET has_grain_sensors = 0 WHERE id = '<stock-id>';
+```
 
 ### Database
 

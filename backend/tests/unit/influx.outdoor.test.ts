@@ -7,7 +7,9 @@ jest.mock('../../src/config', () => ({
       measurement: 'Temp',
       outdoorTemperatureMeasurement: 'outdoor-temperature',
       outdoorHumidityMeasurement: 'outdoor-humidity',
-      outdoorLookback: '1h',
+      latestLookback: '1h',
+      offlineAfter: '15m',
+      outdoorMaxSkew: '15m',
     },
   },
 }));

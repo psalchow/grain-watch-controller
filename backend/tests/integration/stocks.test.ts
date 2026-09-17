@@ -35,7 +35,9 @@ jest.mock('../../src/config', () => ({
       measurement: 'Temp',
       outdoorTemperatureMeasurement: 'outdoor-temperature',
       outdoorHumidityMeasurement: 'outdoor-humidity',
-      outdoorLookback: '1h',
+      latestLookback: '1h',
+      offlineAfter: '15m',
+      outdoorMaxSkew: '15m',
     },
   },
 }));
@@ -228,12 +230,104 @@ describe('Stock Endpoints', () => {
       expect(response.body.outdoor).toMatchObject({
         temperature: 12.4,
         humidity: 78,
-        lastMeasurement: '2026-01-16T09:00:30.000Z',
+        // The older of the two timestamps, matching the offline decision
+        lastMeasurement: '2026-01-16T09:00:00.000Z',
       });
       expect(typeof response.body.outdoor.dewPoint).toBe('number');
       expect(typeof response.body.outdoor.absoluteHumidity).toBe('number');
       expect(response.body.outdoor.dewPoint).toBeCloseTo(8.7, 0);
       expect(response.body.outdoor.absoluteHumidity).toBeCloseTo(8.5, 0);
+    });
+
+    it('flags outdoor conditions as offline past the threshold', async () => {
+      const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: 12.4,
+        humidity: 78,
+        temperatureTime: stale,
+        humidityTime: stale,
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor.offline).toBe(true);
+      expect(response.body.outdoor.temperature).toBe(12.4);
+    });
+
+    it('flags outdoor conditions as offline when only one of the two values is stale', async () => {
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: 12.4,
+        humidity: 78,
+        temperatureTime: new Date(Date.now() - 60 * 1000).toISOString(),
+        humidityTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor.offline).toBe(true);
+    });
+
+    it('flags outdoor conditions as offline when one of the two readings is missing', async () => {
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: 8.5,
+        humidity: null,
+        temperatureTime: new Date(Date.now() - 60 * 1000).toISOString(),
+        humidityTime: null,
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor.offline).toBe(true);
+      expect(response.body.outdoor.temperature).toBe(8.5);
+      // The surviving value still reports its own age
+      expect(response.body.outdoor.lastMeasurement).not.toBeNull();
+    });
+
+    it('suppresses derived outdoor values when the two measurements drift apart', async () => {
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: 12.4,
+        humidity: 78,
+        temperatureTime: new Date(Date.now() - 60 * 1000).toISOString(),
+        humidityTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor.temperature).toBe(12.4);
+      expect(response.body.outdoor.humidity).toBe(78);
+      expect(response.body.outdoor.dewPoint).toBeNull();
+      expect(response.body.outdoor.absoluteHumidity).toBeNull();
+      expect(response.body.outdoor.derivedUnavailableReason).toBe('skew');
+    });
+
+    it('reports no skew reason when a derived value is simply not computable', async () => {
+      const now = new Date().toISOString();
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: 12.4,
+        humidity: 0,
+        temperatureTime: now,
+        humidityTime: now,
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor.dewPoint).toBeNull();
+      expect(response.body.outdoor.derivedUnavailableReason).toBeNull();
     });
 
     it('returns null outdoor values when no outdoor data exists', async () => {
@@ -250,12 +344,33 @@ describe('Stock Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.outdoor).toEqual({
+        offline: false,
+        derivedUnavailableReason: null,
         temperature: null,
         humidity: null,
         dewPoint: null,
         absoluteHumidity: null,
         lastMeasurement: null,
       });
+    });
+
+    it('reports the older of the two outdoor timestamps so age and flag agree', async () => {
+      const fresh = new Date(Date.now() - 60 * 1000).toISOString();
+      const stale = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+      mockGetOutdoorReading.mockResolvedValue({
+        temperature: 12.4,
+        humidity: 78,
+        temperatureTime: fresh,
+        humidityTime: stale,
+      });
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.outdoor.lastMeasurement).toBe(stale);
+      expect(response.body.outdoor.offline).toBe(true);
     });
 
     it('should return 403 for unauthorised stock', async () => {
@@ -274,14 +389,44 @@ describe('Stock Endpoints', () => {
       expect(response.status).toBe(200);
     });
 
-    it('should return 404 when no readings found', async () => {
+    it('should return 200 with no devices when every reading is outside the window', async () => {
       mockGetLatestReadings.mockResolvedValue([]);
 
       const response = await request(app)
         .get('/api/v1/stocks/grain-watch-1/latest')
         .set('Authorization', `Bearer ${viewerToken}`);
 
+      expect(response.status).toBe(200);
+      expect(response.body.devices).toEqual([]);
+      expect(response.body.timestamp).toBeNull();
+      expect(response.body).toHaveProperty('outdoor');
+    });
+
+    it('should return 404 for an unknown stock', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/does-not-exist/latest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
       expect(response.status).toBe(404);
+    });
+
+    it('should flag readings older than the offline threshold', async () => {
+      const fresh = new Date(Date.now() - 60 * 1000).toISOString();
+      const stale = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      mockGetLatestReadings.mockResolvedValue([
+        { device: '1.2', tempTop: 9, tempMid: 9, tempBottom: 9, humidity: null, battery: null, measurementTime: stale },
+        { device: '1.1', tempTop: 10, tempMid: 10, tempBottom: 10, humidity: null, battery: null, measurementTime: fresh },
+      ]);
+
+      const response = await request(app)
+        .get('/api/v1/stocks/grain-watch-1/latest')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      // Sorted by device id, so the fresh 1.1 comes first
+      expect(response.body.devices.map((d: { device: string }) => d.device)).toEqual(['1.1', '1.2']);
+      expect(response.body.devices[0].offline).toBe(false);
+      expect(response.body.devices[1].offline).toBe(true);
     });
 
     it('should return 401 without authentication', async () => {
@@ -388,6 +533,53 @@ describe('Stock Endpoints', () => {
         .get('/api/v1/stocks/grain-watch-1/history?resolution=day');
 
       expect(response.status).toBe(401);
+    });
+  });
+
+  describe('stocks without grain thermometers', () => {
+    beforeAll(async () => {
+      await new StockRepository(getDb()).upsertMany([
+        {
+          id: 'fan-only',
+          name: 'Halle ohne Thermometer',
+          deviceCount: 0,
+          deviceGroup: 'corn-watch-9',
+          devicePrefix: '9',
+          hasHumidity: false,
+          hasGrainSensors: false,
+          active: true,
+          createdAt: '2026-06-02T00:00:00.000Z',
+          fanControlEnabled: true,
+          fanSwitchId: 0,
+        },
+      ]);
+    });
+
+    it('reports outdoor conditions without querying stock sensors', async () => {
+      mockGetLatestReadings.mockClear();
+
+      const response = await request(app)
+        .get('/api/v1/stocks/fan-only/latest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.hasGrainSensors).toBe(false);
+      expect(response.body.devices).toEqual([]);
+      expect(response.body.fanControlEnabled).toBe(true);
+      expect(mockGetLatestReadings).not.toHaveBeenCalled();
+    });
+
+    it('returns an empty history without querying InfluxDB', async () => {
+      mockGetHistory.mockClear();
+
+      const response = await request(app)
+        .get('/api/v1/stocks/fan-only/history?resolution=day')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.devices).toEqual([]);
+      expect(response.body.series.temperature.top).toEqual([]);
+      expect(mockGetHistory).not.toHaveBeenCalled();
     });
   });
 

@@ -26,7 +26,7 @@ async function setup() {
   const db = createTestDb();
   await new StockRepository(db.db).upsertMany([{
     id: 'grain-watch-1', name: 'Halle 8', deviceCount: 5, deviceGroup: 'corn-watch-1',
-    devicePrefix: '1', hasHumidity: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
+    devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
     fanControlEnabled: true, fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', fanSwitchId: 0,
   }]);
   const f = fakeMqtt();
@@ -95,7 +95,8 @@ describe('FanControlManager', () => {
 describe('selectFanStocks', () => {
   const base: Stock = {
     id: 'x', name: 'X', deviceCount: 5, deviceGroup: 'g', devicePrefix: '1',
-    hasHumidity: false, active: true, createdAt: 'x', fanControlEnabled: false, fanSwitchId: 0,
+    hasHumidity: false,
+    hasGrainSensors: true, active: true, createdAt: 'x', fanControlEnabled: false, fanSwitchId: 0,
   };
 
   it('keeps only fan-enabled stocks that have a topic prefix', () => {

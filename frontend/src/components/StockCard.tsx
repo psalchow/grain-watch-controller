@@ -1,4 +1,4 @@
-import { Cpu } from 'lucide-react';
+import { Cpu, Fan } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GrainStock } from '@/types/api';
 import { cn } from '@/lib/utils';
@@ -36,8 +36,19 @@ export function StockCard({ stock, onClick }: StockCardProps) {
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Cpu className="h-4 w-4" />
-          <span>{stock.deviceCount} device{stock.deviceCount !== 1 ? 's' : ''}</span>
+          {/* An absent field (cached response from an older backend) counts as
+              "has sensors". */}
+          {stock.hasGrainSensors !== false ? (
+            <>
+              <Cpu className="h-4 w-4" />
+              <span>{stock.deviceCount} device{stock.deviceCount !== 1 ? 's' : ''}</span>
+            </>
+          ) : (
+            <>
+              <Fan className="h-4 w-4" />
+              <span>Nur Lüftersteuerung</span>
+            </>
+          )}
         </div>
       </CardContent>
     </Card>

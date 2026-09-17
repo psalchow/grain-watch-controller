@@ -18,7 +18,9 @@ jest.mock('../../../src/config', () => ({
       measurement: 'Temp',
       outdoorTemperatureMeasurement: 'outdoor-temperature',
       outdoorHumidityMeasurement: 'outdoor-humidity',
-      outdoorLookback: '1h',
+      latestLookback: '1h',
+      offlineAfter: '15m',
+      outdoorMaxSkew: '15m',
     },
     jwt: {
       secret: 'jwt-secret',
@@ -95,6 +97,19 @@ describe('InfluxDBService', () => {
         battery: 436,
         measurementTime: '2024-01-16T09:00:00.000Z',
       });
+    });
+
+    it('should limit the query to the configured look-back window', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ results: [] }),
+      });
+
+      await service.getLatestReadings('corn-watch-1');
+
+      const query = decodeURIComponent(mockFetch.mock.calls[0][0] as string);
+      expect(query).toContain('now() - 1h');
+      expect(query).not.toContain('26w');
     });
 
     it('should handle empty results', async () => {

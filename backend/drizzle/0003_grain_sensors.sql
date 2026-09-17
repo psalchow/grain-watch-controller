@@ -1,0 +1,1 @@
+ALTER TABLE `stocks` ADD `has_grain_sensors` integer DEFAULT true NOT NULL;

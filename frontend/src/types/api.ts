@@ -62,6 +62,11 @@ export interface GrainStock {
   name: string;
   description: string;
   deviceCount: number;
+  /**
+   * False for stocks with fan control only and no grain thermometers.
+   * Optional: a cached response from a pre-upgrade backend omits it.
+   */
+  hasGrainSensors?: boolean;
   active: boolean;
 }
 
@@ -81,6 +86,11 @@ export interface DeviceReading {
   humidity: number | null;
   batteryMV: number | null;
   lastMeasurement: string | null; // ISO 8601
+  /**
+   * True once the reading is older than the configured offline threshold.
+   * Optional: a cached response from a pre-upgrade backend omits it.
+   */
+  offline?: boolean;
 }
 
 export interface OutdoorConditions {
@@ -89,13 +99,28 @@ export interface OutdoorConditions {
   dewPoint: number | null; // °C
   absoluteHumidity: number | null; // g/m³
   lastMeasurement: string | null; // ISO 8601
+  /**
+   * True once the reading is older than the configured offline threshold.
+   * Optional: a cached response from a pre-upgrade backend omits it.
+   */
+  offline?: boolean;
+  /**
+   * Why the derived values are absent when temperature and humidity are not.
+   * 'skew' means the two measurement times lie too far apart.
+   */
+  derivedUnavailableReason?: 'skew' | null;
 }
 
 export interface LatestReadingsResponse {
   stockId: string;
   stockName: string;
-  timestamp: string; // ISO 8601
+  timestamp: string | null; // ISO 8601; null when no current readings exist
   devices: DeviceReading[];
+  /**
+   * False for stocks with fan control only and no grain thermometers.
+   * Optional: a cached response from a pre-upgrade backend omits it.
+   */
+  hasGrainSensors?: boolean;
   outdoor: OutdoorConditions;
   fanControlEnabled?: boolean;
 }

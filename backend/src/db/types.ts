@@ -13,6 +13,8 @@ export interface Stock {
   deviceGroup: string;
   devicePrefix: string;
   hasHumidity: boolean;
+  /** False for stocks with fan control only and no grain thermometers. */
+  hasGrainSensors: boolean;
   active: boolean;
   createdAt: string;
   fanControlEnabled: boolean;

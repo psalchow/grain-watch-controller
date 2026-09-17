@@ -125,6 +125,87 @@ describe('Configuration', () => {
     expect(config.database.path).toBe('/custom/path/grainwatch.db');
   });
 
+  describe('look-back windows', () => {
+    it('defaults to a short window and a shorter offline threshold in production', async () => {
+      process.env['NODE_ENV'] = 'production';
+      process.env['JWT_SECRET'] = 'a'.repeat(40);
+      process.env['JWT_REFRESH_SECRET'] = 'b'.repeat(40);
+      delete process.env['INFLUXDB_LATEST_LOOKBACK'];
+      delete process.env['INFLUXDB_OFFLINE_AFTER'];
+
+      const { config } = await import('../../src/config/index');
+
+      expect(config.influxdb.latestLookback).toBe('6h');
+      expect(config.influxdb.offlineAfter).toBe('1h');
+    });
+
+    it('rejects an offline threshold beyond the look-back window', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_LATEST_LOOKBACK'] = '1h';
+      process.env['INFLUXDB_OFFLINE_AFTER'] = '2h';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /INFLUXDB_OFFLINE_AFTER \(2h\) must not exceed INFLUXDB_LATEST_LOOKBACK \(1h\)/
+      );
+    });
+
+    it('rejects a malformed duration', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_LATEST_LOOKBACK'] = 'soon';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /INFLUXDB_LATEST_LOOKBACK must be a valid InfluxQL duration/
+      );
+    });
+
+    it('rejects a zero duration', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_LATEST_LOOKBACK'] = '0h';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /INFLUXDB_LATEST_LOOKBACK must be greater than zero/
+      );
+    });
+
+    it('clamps the unset offline default to a shortened look-back window', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_LATEST_LOOKBACK'] = '30m';
+      delete process.env['INFLUXDB_OFFLINE_AFTER'];
+
+      const { config } = await import('../../src/config/index');
+
+      expect(config.influxdb.offlineAfter).toBe('30m');
+    });
+
+    it('still rejects an explicitly set threshold beyond the window', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_LATEST_LOOKBACK'] = '30m';
+      process.env['INFLUXDB_OFFLINE_AFTER'] = '2h';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /INFLUXDB_OFFLINE_AFTER \(2h\) must not exceed INFLUXDB_LATEST_LOOKBACK \(30m\)/
+      );
+    });
+
+    it('rejects a malformed outdoor skew tolerance', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_OUTDOOR_MAX_SKEW'] = 'quarter';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /INFLUXDB_OUTDOOR_MAX_SKEW must be a valid InfluxQL duration/
+      );
+    });
+
+    it('fails fast when the pre-rename variable is still set', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['INFLUXDB_OUTDOOR_LOOKBACK'] = '1h';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /INFLUXDB_OUTDOOR_LOOKBACK has been replaced by INFLUXDB_LATEST_LOOKBACK/
+      );
+    });
+  });
+
   describe('fan/mqtt config', () => {
     it('provides mqtt and fan defaults', async () => {
       jest.resetModules();

@@ -5,6 +5,8 @@
  * validation and sensible defaults for development.
  */
 
+import { parseDurationMs } from '../utils/duration';
+
 /**
  * InfluxDB connection configuration.
  */
@@ -31,10 +33,28 @@ interface InfluxDBConfig {
   outdoorHumidityMeasurement: string;
 
   /**
-   * Look-back window for the latest outdoor reading query as an InfluxQL
-   * duration (e.g. '1h', '26w'). Short in production, long in development.
+   * Look-back window for every "latest value" query (sensor readings and
+   * outdoor conditions) as an InfluxQL duration (e.g. '6h', '26w'). Readings
+   * older than this window are reported as absent. Short in production, long
+   * in development.
    */
-  outdoorLookback: string;
+  latestLookback: string;
+
+  /**
+   * Age at which a reading is shown as offline while still being returned, as
+   * an InfluxQL duration (e.g. '1h'). Must not exceed `latestLookback`: a
+   * reading is first flagged offline, then drops out of the look-back window.
+   */
+  offlineAfter: string;
+
+  /**
+   * How far the outdoor temperature and humidity timestamps may lie apart and
+   * still be combined into dew point and absolute humidity, as an InfluxQL
+   * duration. Both are published on change and at least every 15 minutes, so
+   * the default keeps twice that as headroom: a threshold sitting on the
+   * publish period would blank the derived values on ordinary jitter.
+   */
+  outdoorMaxSkew: string;
 }
 
 /**
@@ -186,12 +206,34 @@ function getEnvVarAsBool(key: string, defaultValue: boolean): boolean {
 }
 
 /**
+ * Returns the shorter of two InfluxQL durations.
+ *
+ * Used to keep an unset offline threshold inside a look-back window the
+ * operator shortened: tightening one variable must not fail the boot over the
+ * default of another they never touched.
+ *
+ * @param value - Preferred duration
+ * @param ceiling - Upper bound
+ * @returns `ceiling` when it is shorter than `value`, otherwise `value`
+ */
+function clampDuration(value: string, ceiling: string): string {
+  const valueMs = parseDurationMs(value);
+  const ceilingMs = parseDurationMs(ceiling);
+  if (valueMs === null || ceilingMs === null) return value;
+  return ceilingMs < valueMs ? ceiling : value;
+}
+
+/**
  * Validates the configuration and throws descriptive errors for invalid settings.
  *
  * @param cfg - Configuration object to validate
+ * @param env - Environment to check for retired variable names
  * @throws Error if configuration is invalid
  */
-function validateConfig(cfg: Config): void {
+function validateConfig(
+  cfg: Config,
+  env: Record<string, string | undefined> = process.env
+): void {
   const errors: string[] = [];
 
   // Validate JWT secret in production
@@ -239,12 +281,68 @@ function validateConfig(cfg: Config): void {
     errors.push('FAN_KEEPALIVE_INTERVAL_MS must be under 3600000 (Shelly Auto OFF is 1 h)');
   }
 
-  // Validate outdoor look-back duration (interpolated into InfluxQL)
-  if (!/^\d+[smhdw]$/.test(cfg.influxdb.outdoorLookback)) {
+  // Reject the pre-rename variable outright: silently ignoring it would swap
+  // the operator's window for the default without any sign of it.
+  if (env['INFLUXDB_OUTDOOR_LOOKBACK'] !== undefined) {
     errors.push(
-      `INFLUXDB_OUTDOOR_LOOKBACK must be a valid InfluxQL duration (e.g. '1h', '26w'), got: ${cfg.influxdb.outdoorLookback}`
+      'INFLUXDB_OUTDOOR_LOOKBACK has been replaced by INFLUXDB_LATEST_LOOKBACK, ' +
+        'which now bounds stock readings and outdoor conditions alike. Rename the variable.'
     );
   }
+
+  /**
+   * Parses a duration and records an error for anything unusable. Zero is
+   * rejected: `now() - 0h` matches nothing, which would empty every latest
+   * query without a single complaint anywhere.
+   */
+  const durationMs = (name: string, value: string, example: string): number | null => {
+    const ms = parseDurationMs(value);
+    if (ms === null) {
+      errors.push(
+        `${name} must be a valid InfluxQL duration (e.g. '${example}'), got: ${value}`
+      );
+      return null;
+    }
+    if (ms === 0) {
+      errors.push(`${name} must be greater than zero, got: ${value}`);
+      return null;
+    }
+    return ms;
+  };
+
+  // Validate latest-value look-back duration (interpolated into InfluxQL)
+  const lookbackMs = durationMs(
+    'INFLUXDB_LATEST_LOOKBACK',
+    cfg.influxdb.latestLookback,
+    '6h'
+  );
+
+  // Validate offline threshold; it only makes sense inside the look-back
+  // window. The ordering holds as long as device clocks are roughly right:
+  // the window filters the InfluxDB ingest time, the offline flag for stock
+  // readings the device-reported time.
+  const offlineMs = durationMs(
+    'INFLUXDB_OFFLINE_AFTER',
+    cfg.influxdb.offlineAfter,
+    '1h'
+  );
+
+  // Only an explicitly set threshold can be wrong here — an unset one is
+  // clamped to the look-back window when the configuration is built.
+  if (
+    env['INFLUXDB_OFFLINE_AFTER'] !== undefined &&
+    offlineMs !== null &&
+    lookbackMs !== null &&
+    offlineMs > lookbackMs
+  ) {
+    errors.push(
+      `INFLUXDB_OFFLINE_AFTER (${cfg.influxdb.offlineAfter}) must not exceed ` +
+        `INFLUXDB_LATEST_LOOKBACK (${cfg.influxdb.latestLookback})`
+    );
+  }
+
+  // Validate the outdoor pairing tolerance
+  durationMs('INFLUXDB_OUTDOOR_MAX_SKEW', cfg.influxdb.outdoorMaxSkew, '30m');
 
   // Validate JWT expiry format (basic check)
   const expiryPattern = /^\d+[smhdw]$/;
@@ -258,6 +356,13 @@ function validateConfig(cfg: Config): void {
     throw new Error(`Configuration validation failed:\n  - ${errors.join('\n  - ')}`);
   }
 }
+
+const isProduction = getEnvVar('NODE_ENV', 'development') === 'production';
+
+const latestLookback = getEnvVar(
+  'INFLUXDB_LATEST_LOOKBACK',
+  isProduction ? '6h' : '26w'
+);
 
 /**
  * Application configuration object.
@@ -311,10 +416,12 @@ export const config: Config = {
       'INFLUXDB_OUTDOOR_HUMIDITY_MEASUREMENT',
       'outdoor-humidity',
     ),
-    outdoorLookback: getEnvVar(
-      'INFLUXDB_OUTDOOR_LOOKBACK',
-      getEnvVar('NODE_ENV', 'development') === 'production' ? '1h' : '26w',
+    latestLookback,
+    offlineAfter: getEnvVar(
+      'INFLUXDB_OFFLINE_AFTER',
+      clampDuration(isProduction ? '1h' : '26w', latestLookback),
     ),
+    outdoorMaxSkew: getEnvVar('INFLUXDB_OUTDOOR_MAX_SKEW', '30m'),
   },
   database: {
     path: getEnvVar('DATABASE_PATH', './data/grainwatch.db'),

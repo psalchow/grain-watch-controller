@@ -35,6 +35,10 @@ export const stocks = sqliteTable('stocks', {
   deviceGroup: text('device_group').notNull(),
   devicePrefix: text('device_prefix').notNull(),
   hasHumidity: integer('has_humidity', { mode: 'boolean' }).notNull(),
+  /** False for stocks that only have fan control and no grain thermometers. */
+  hasGrainSensors: integer('has_grain_sensors', { mode: 'boolean' })
+    .notNull()
+    .default(true),
   active: integer('active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull(),
   fanControlEnabled: integer('fan_control_enabled', { mode: 'boolean' })
