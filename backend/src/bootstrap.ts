@@ -55,13 +55,52 @@ export async function initFanControl(): Promise<void> {
   const db = getDb();
   const stocks = await new StockRepository(db).findAll();
   const fanStocks = selectFanStocks(stocks);
+
+  // A row cleared while the service was down leaves a stale desired state
+  // behind, which `recover()` would resume the next time fan control is enabled
+  // again. Clearing it needs no controller — and no command either: a fan is
+  // not left running through a revocation, and the Shelly switches itself off
+  // without a keep-alive signal anyway.
+  const stateRepo = new FanStateRepository(db);
+  for (const stock of stocks) {
+    // Keyed on the row's own flag, not on whether the stock could be wired: a
+    // missing topic prefix is a misconfiguration to be fixed, and wiping the
+    // desired state would lose what `recover()` should resume afterwards.
+    if (stock.fanControlEnabled) continue;
+    const persisted = stateRepo.get(stock.id);
+    if (!persisted?.desiredOn) continue;
+    const nowIso = new Date().toISOString();
+    stateRepo.upsert({
+      stockId: stock.id,
+      desiredOn: false,
+      since: null,
+      lastCommandAt: persisted.lastCommandAt,
+      updatedAt: nowIso,
+    });
+    console.warn(`Fan control: ${stock.id} is no longer enabled, clearing its stale desired state`);
+  }
+
+  // A row that claims fan control but carries no topic prefix is dropped here.
+  // Since the API reports availability from the controller map, such a stock
+  // would otherwise just be missing its fan control with nothing saying why.
+  const wired = new Set(fanStocks.map((s) => s.stockId));
+  const skipped = stocks.filter((s) => s.fanControlEnabled && !wired.has(s.id));
+  if (skipped.length > 0) {
+    console.warn(
+      'Fan control: no MQTT topic prefix for ' +
+        `${skipped.map((s) => s.id).join(', ')}; ` +
+        'these stocks report fan control as unavailable.'
+    );
+  }
+
   if (fanStocks.length === 0) {
     console.log('Fan control: no fan-enabled stocks, skipping MQTT init');
     return;
   }
-  // Graceful degradation: if the broker or fan section is absent from the configuration
-  // (e.g. the service is deployed without MQTT credentials), skip fan control entirely
-  // rather than crashing bootstrap.  A warning is emitted so the omission is visible.
+  // Both sections always exist in a real deployment — the configuration builds
+  // them with defaults. This guard covers a partial config object (unit tests
+  // omit the two so bootstrap opens no socket) and keeps bootstrap from
+  // crashing on one.
   if (!config.mqtt || !config.fan) {
     console.warn('Fan control: MQTT/fan configuration missing; skipping fan control.');
     return;
@@ -77,6 +116,11 @@ export async function initFanControl(): Promise<void> {
       watchdogMs: config.fan.watchdogMs,
       retentionDays: config.fan.retentionDays,
       retentionSweepMs: config.fan.retentionSweepMs,
+      reconcileIntervalMs: config.fan.reconcileIntervalMs,
+    },
+    fanEnabledStockIds: async () => {
+      const current = await new StockRepository(getDb()).findAll();
+      return new Set(selectFanStocks(current).map((s) => s.stockId));
     },
   });
   manager.init();

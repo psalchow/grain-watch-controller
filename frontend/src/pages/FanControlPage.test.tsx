@@ -33,7 +33,7 @@ describe('FanControlPage', () => {
   });
 
   it('shows an enabled Einschalten button when OFF and sends the command', async () => {
-    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('OFF'), connected: true });
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('OFF'), connected: true, disabled: false });
     renderPage();
     const btn = await screen.findByRole('button', { name: /Einschalten/i });
     expect(btn).toBeEnabled();
@@ -42,13 +42,29 @@ describe('FanControlPage', () => {
   });
 
   it('disables buttons while pending (in-flight)', () => {
-    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('TURN_ON_PENDING'), connected: true });
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('TURN_ON_PENDING'), connected: true, disabled: false });
     renderPage();
     expect(screen.getByRole('button', { name: /wird quittiert/i })).toBeDisabled();
   });
 
+  it('replaces the controls when the stream reports fan control as withdrawn', () => {
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('ON'), connected: false, disabled: true });
+    renderPage();
+    expect(screen.getByText(/keine Lüftersteuerung zur Verfügung/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ausschalten/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the notice when the status load answers 404', async () => {
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: null, connected: false, disabled: false });
+    vi.mocked(fanApi.getStatus).mockRejectedValue({ response: { status: 404 } });
+    renderPage();
+
+    expect(await screen.findByText(/keine Lüftersteuerung zur Verfügung/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Einschalten/i })).not.toBeInTheDocument();
+  });
+
   it('shows Ausschalten when running', () => {
-    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('ON'), connected: true });
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('ON'), connected: true, disabled: false });
     renderPage();
     expect(screen.getByRole('button', { name: /Ausschalten/i })).toBeEnabled();
   });

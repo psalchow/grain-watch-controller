@@ -55,7 +55,7 @@ function renderPage() {
 describe('StockDetailPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useFanStream).mockReturnValue({ snapshot: null, connected: false });
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: null, connected: false, disabled: false });
   });
 
   it('renders a card per current device plus the history', async () => {
@@ -105,8 +105,17 @@ describe('StockDetailPage', () => {
     renderPage();
 
     expect(
-      await screen.findByText(/weder Sensoren noch eine Lüftersteuerung/),
+      await screen.findByText(/weder Messwerte vor noch ist eine Lüftersteuerung/),
     ).toBeInTheDocument();
+  });
+
+  it('drops the fan section once the stream reports fan control as disabled', async () => {
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: null, connected: false, disabled: true });
+    vi.mocked(stocksApi.getLatestReadings).mockResolvedValue(response());
+    renderPage();
+
+    expect(await screen.findByText('Sensor 1.1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Lüfter steuern/i })).not.toBeInTheDocument();
   });
 
   it('still reports a failed request as an error', async () => {

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { InfluxDBService, SeriesPoint, StockService, OutdoorReading } from '../services';
+import { getFanManager } from '../services/fan';
 import { NotFoundError } from '../middleware';
 import { hasStockAccess } from '../models';
 import { config } from '../config';
@@ -16,6 +17,12 @@ interface OutdoorConditions {
   /** True once the reading is older than the configured offline threshold. */
   offline: boolean;
   /**
+   * Why the conditions count as offline: `'stale'` for an ageing reading,
+   * `'partner-missing'` when one of the two measurements is absent entirely.
+   * `null` whenever `offline` is false — the client must not re-derive this.
+   */
+  offlineReason: 'stale' | 'partner-missing' | null;
+  /**
    * Why `dewPoint` and `absoluteHumidity` are absent, when the inputs alone do
    * not explain it. `'skew'` means the two measurement times lie further apart
    * than `INFLUXDB_OUTDOOR_MAX_SKEW`; `null` means there is nothing to explain.
@@ -24,6 +31,23 @@ interface OutdoorConditions {
 }
 
 const round1 = (value: number): number => Math.round(value * 10) / 10;
+
+/**
+ * Whether the fan endpoints will serve this stock.
+ *
+ * Mirrors what `FanHttpController` requires: the stock row still asks for fan
+ * control *and* a controller exists for it. The row alone would advertise a fan
+ * nothing is wired up for; the map alone would keep advertising one whose row
+ * was disabled underneath the running process. It says nothing about the broker
+ * being reachable — controllers are built from the wiring at startup, before any
+ * connection exists. Live reachability travels as `shellyOnline` in the fan
+ * status instead.
+ */
+const fanControlAvailable = (stock: {
+  id: string;
+  fanControlEnabled: boolean;
+}): boolean =>
+  stock.fanControlEnabled && getFanManager()?.getController(stock.id) != null;
 
 /**
  * Rounds a derived figure, or reports it as absent when the calculation did not
@@ -103,6 +127,8 @@ function buildOutdoorConditions(
     null,
   );
 
+  const stale = isOffline(lastMeasurement, offlineThreshold);
+
   return {
     temperature: temperature !== null ? round1(temperature) : null,
     humidity: humidity !== null ? Math.round(humidity) : null,
@@ -111,7 +137,8 @@ function buildOutdoorConditions(
       ? finiteOrNull(absoluteHumidity(temperature, humidity))
       : null,
     lastMeasurement,
-    offline: onlyOnePresent || isOffline(lastMeasurement, offlineThreshold),
+    offline: onlyOnePresent || stale,
+    offlineReason: onlyOnePresent ? 'partner-missing' : stale ? 'stale' : null,
     derivedUnavailableReason: inputsPresent && !withinSkew ? 'skew' : null,
   };
 }
@@ -137,8 +164,8 @@ export class StocksController {
         id: s.id,
         name: s.name,
         description: s.description ?? '',
-        deviceCount: s.deviceCount,
         hasGrainSensors: s.hasGrainSensors,
+        fanControlEnabled: fanControlAvailable(s),
         active: s.active,
       }));
 
@@ -204,7 +231,7 @@ export class StocksController {
         devices,
         hasGrainSensors: metadata.hasGrainSensors,
         outdoor: buildOutdoorConditions(outdoorReading, offlineThreshold),
-        fanControlEnabled: metadata.fanControlEnabled,
+        fanControlEnabled: fanControlAvailable(metadata),
       });
     } catch (error) {
       next(error);
@@ -238,7 +265,12 @@ export class StocksController {
           to: range.toUtc.toISOString(),
           intervalSeconds: range.intervalSeconds,
           devices: [],
-          series: { temperature: { top: [], mid: [], bottom: [] } },
+          // Same shape as the normal path: humidity present exactly when the
+          // stock is configured for it, so consumers need no special case.
+          series: {
+            temperature: { top: [], mid: [], bottom: [] },
+            ...(metadata.hasHumidity ? { humidity: [] } : {}),
+          },
         });
         return;
       }
@@ -251,10 +283,17 @@ export class StocksController {
         metadata.hasHumidity
       );
 
-      const devices = Array.from(
-        { length: metadata.deviceCount },
-        (_, i) => `${metadata.devicePrefix}.${i + 1}`,
-      );
+      // Every device the group actually reported in the range, rather than a
+      // list synthesised from configuration: how many probes a stock has is
+      // whatever the data says.
+      const devices = [
+        ...new Set([
+          ...readings.temperature.top.keys(),
+          ...readings.temperature.mid.keys(),
+          ...readings.temperature.bottom.keys(),
+          ...(readings.humidity?.keys() ?? []),
+        ]),
+      ].sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
 
       const seriesFor = (layer: Map<string, SeriesPoint[]>): SeriesPoint[][] =>
         devices.map((device) => layer.get(device) ?? []);

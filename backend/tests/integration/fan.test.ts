@@ -1,7 +1,9 @@
 import request from 'supertest';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
+import { eq } from 'drizzle-orm';
 import { initDb, closeDb, getDb } from '../../src/db';
+import { stocks } from '../../src/db/schema';
 import { runMigrations } from '../../src/db/migrate';
 import { resetServiceSingletonsForTests } from '../../src/services';
 import { StockRepository, FanStateRepository, FanEventsRepository } from '../../src/db/repositories';
@@ -38,7 +40,11 @@ beforeEach(async () => {
     mqtt: { publish: (topic, message) => published.push({ topic, message }), subscribe: () => {}, onMessage: () => {}, end: () => {} },
     stateRepo: new FanStateRepository(getDb()),
     eventsRepo: new FanEventsRepository(getDb()),
-    timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000 },
+    timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
+    fanEnabledStockIds: async () => {
+      const current = await new StockRepository(getDb()).findAll();
+      return new Set(current.filter((s) => s.fanControlEnabled && s.fanTopicPrefix).map((s) => s.id));
+    },
   });
   manager.init();
   setFanManager(manager);
@@ -66,6 +72,58 @@ describe('fan endpoints', () => {
     expect(res.status).toBe(200);
     expect(res.body.status.state).toBe('TURN_ON_PENDING');
     expect(published).toContainEqual({ topic: '/p/command/switch:0', message: 'on' });
+  });
+
+  it('stops serving a stock whose row was disabled under the running process', async () => {
+    // The operator's kill switch: clear the flag without a restart, so the
+    // controller built at startup is still in the manager.
+    getDb()
+      .update(stocks)
+      .set({ fanControlEnabled: false })
+      .where(eq(stocks.id, 'grain-watch-1'))
+      .run();
+
+    const status = await request(app()).get('/api/v1/stocks/grain-watch-1/fan').set('Authorization', `Bearer ${token()}`);
+    expect(status.status).toBe(404);
+
+    const command = await request(app())
+      .post('/api/v1/stocks/grain-watch-1/fan/command')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ action: 'on' });
+    expect(command.status).toBe(404);
+    // The request path refuses the stock without touching MQTT: neither the
+    // status read nor the rejected command publishes anything. Switching the
+    // fan off is the reconciliation tick's job, covered by the next test.
+    expect(published).toEqual([]);
+
+    // That tick then sends the one best-effort `off`, even for a fan that is
+    // already off.
+    await manager.reconcile();
+    expect(published).toEqual([{ topic: '/p/command/switch:0', message: 'off' }]);
+  });
+
+  it('switches a running fan off when its row is cleared under the process', async () => {
+    const on = await request(app())
+      .post('/api/v1/stocks/grain-watch-1/fan/command')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ action: 'on' });
+    expect(on.status).toBe(200);
+    expect(published).toEqual([{ topic: '/p/command/switch:0', message: 'on' }]);
+
+    getDb()
+      .update(stocks)
+      .set({ fanControlEnabled: false })
+      .where(eq(stocks.id, 'grain-watch-1'))
+      .run();
+
+    // The request path only stops serving the stock…
+    const after = await request(app()).get('/api/v1/stocks/grain-watch-1/fan').set('Authorization', `Bearer ${token()}`);
+    expect(after.status).toBe(404);
+    expect(published.some((p) => p.message === 'off')).toBe(false);
+
+    // …the reconciliation tick is what switches the fan off.
+    await manager.reconcile();
+    expect(published).toContainEqual({ topic: '/p/command/switch:0', message: 'off' });
   });
 
   it('POST /fan/command rejects invalid action', async () => {

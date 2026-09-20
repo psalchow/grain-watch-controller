@@ -21,8 +21,15 @@ export default function StockDetailPage() {
   const [resolution, setResolution] = useState<Resolution>('day');
   const [refreshNonce, setRefreshNonce] = useState(0);
 
-  const fanEnabled = data?.fanControlEnabled ?? false;
-  const { snapshot: fanSnapshot, connected: fanConnected } = useFanStream(stockId, fanEnabled);
+  const {
+    snapshot: fanSnapshot,
+    connected: fanConnected,
+    disabled: fanDisabled,
+  } = useFanStream(stockId, data?.fanControlEnabled ?? false);
+
+  // The server dropped the stream because fan control was taken out of service;
+  // hide the section immediately rather than after the next manual refresh.
+  const fanEnabled = (data?.fanControlEnabled ?? false) && !fanDisabled;
 
   const loadData = useCallback(async (showRefreshing = false) => {
     if (!stockId) return;
@@ -121,13 +128,14 @@ export default function StockDetailPage() {
                 </Button>
               </div>
             )}
-            {/* A stock with neither thermometers nor fan control has nothing
-                to show — say so rather than rendering a blank page. */}
+            {/* Nothing to show — worded after availability rather than after
+                the installation, since fanControlEnabled reports whether a
+                controller is up, not whether a fan exists. */}
             {data.hasGrainSensors === false && !fanEnabled && (
               <div className="rounded-md bg-muted/50 p-4 text-center text-muted-foreground">
                 <p>
-                  Für diese Halle sind weder Sensoren noch eine Lüftersteuerung
-                  konfiguriert.
+                  Für diese Halle liegen weder Messwerte vor noch ist eine
+                  Lüftersteuerung verfügbar.
                 </p>
               </div>
             )}

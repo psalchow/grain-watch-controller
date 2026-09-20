@@ -9,7 +9,6 @@ export interface Stock {
   id: string;
   name: string;
   description?: string;
-  deviceCount: number;
   deviceGroup: string;
   devicePrefix: string;
   hasHumidity: boolean;

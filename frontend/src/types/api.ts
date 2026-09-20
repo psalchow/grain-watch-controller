@@ -61,12 +61,13 @@ export interface GrainStock {
   id: string;
   name: string;
   description: string;
-  deviceCount: number;
   /**
    * False for stocks with fan control only and no grain thermometers.
    * Optional: a cached response from a pre-upgrade backend omits it.
    */
   hasGrainSensors?: boolean;
+  /** Whether the stock has a controllable fan. */
+  fanControlEnabled?: boolean;
   active: boolean;
 }
 
@@ -104,6 +105,11 @@ export interface OutdoorConditions {
    * Optional: a cached response from a pre-upgrade backend omits it.
    */
   offline?: boolean;
+  /**
+   * Why the conditions count as offline: 'stale' for an ageing reading,
+   * 'partner-missing' when one of the two measurements is absent entirely.
+   */
+  offlineReason?: 'stale' | 'partner-missing' | null;
   /**
    * Why the derived values are absent when temperature and humidity are not.
    * 'skew' means the two measurement times lie too far apart.

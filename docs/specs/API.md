@@ -128,7 +128,8 @@ Outdoor temperature and humidity are queried separately and age independently:
 both `lastMeasurement` and `offline` follow the older of the two, so the
 reported age matches the flag. One value present and the other missing also
 counts as offline; `lastMeasurement` then reports the surviving value's age and
-the missing half shows as `null`. Neither present does not count as offline (the
+the missing half shows as `null`. `offlineReason` names the cause
+(`'stale'` or `'partner-missing'`) so clients do not re-derive the rule. Neither present does not count as offline (the
 stock simply has no outdoor sensor). When the two timestamps lie further apart than
 `INFLUXDB_OUTDOOR_MAX_SKEW`, `dewPoint` and `absoluteHumidity` are reported as
 `null`, because a figure derived from two different instants would be
@@ -151,6 +152,28 @@ The two response shapes time their `offline` flag differently:
 is unknown. History is unaffected by these windows and stays available while the
 sensors are silent.
 
+`fanControlEnabled` reports whether the fan endpoints will serve the stock: the
+stock row still asks for fan control **and** a controller exists for it. Those
+are the same two conditions the fan endpoints check, so the field never
+advertises a call that answers 404. It does not promise the broker is reachable
+— controllers are built from the wiring at startup. Whether the Shelly is
+actually answering travels as `shellyOnline` in the fan status.
+
+### Device rosters
+
+Neither endpoint takes the number of probes from the stock configuration: the
+latest view lists whatever the device group reported inside the look-back
+window, and the history lists every device that has a point in the requested
+range, in any layer. A stock where only some of the five positions are fitted
+therefore shows exactly the ones that exist.
+
+This is deliberate, and it cuts both ways: a probe that reported nothing across
+the whole requested range is indistinguishable from a position that was never
+fitted. It has no entry in `devices`, no series, and no legend entry in the
+chart — on the year view a probe must have been silent for a year to disappear,
+on the day view since midnight. Neither response carries an expected roster to
+compare against, because no such roster is configured any more.
+
 ### Stocks without grain thermometers
 
 `hasGrainSensors = false` marks a stock that only has fan control: neither
@@ -163,6 +186,27 @@ currently set by hand against the SQLite file:
 ```sql
 UPDATE stocks SET has_grain_sensors = 0 WHERE id = '<stock-id>';
 ```
+
+Fan controllers are built once at startup from the stock rows, so the two
+directions of a hand-edit differ:
+
+- Clearing `fan_control_enabled` takes effect within one reconciliation tick
+  (`FAN_RECONCILE_INTERVAL_MS`, 60 s by default), whether or not anyone is using
+  the app. The stock stops being serviceable at once — every fan endpoint
+  answers 404, an open SSE stream ends with a `disabled` event, and
+  `fanControlEnabled` reports `false`. The tick then stops driving the fan,
+  sends one last `off` and forgets the wiring.
+
+  That single command is deliberate. Withdrawing fan control is a rare, planned
+  change with people on site, the fan is practically never running at that
+  moment, and the Shelly switches itself off after one to two hours without a
+  keep-alive signal — so the backend does not track acknowledgements or retry.
+  A row cleared while the service was down is caught at the next startup, where
+  the stale desired state is cleared so a later re-enable cannot resume the fan.
+
+- Setting `fan_control_enabled` (or adding a `fan_topic_prefix`) needs a restart
+  to build the controller. Until then the stock reports `false` and the
+  endpoints answer 404.
 
 ### Database
 
@@ -185,3 +229,4 @@ forced through the password-change screen.
 | `FAN_WATCHDOG_TIMEOUT_MS` | `10000` | Command acknowledgement timeout |
 | `FAN_EVENT_RETENTION_DAYS` | `90` | How long fan events are retained |
 | `FAN_RETENTION_SWEEP_INTERVAL_MS` | `21600000` | Retention sweep interval |
+| `FAN_RECONCILE_INTERVAL_MS` | `60000` | How often the stock rows are re-read to catch fan control being revoked; at least 1000 ms |

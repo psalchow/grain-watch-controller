@@ -26,12 +26,20 @@ export function OutdoorSummary({ outdoor, className }: OutdoorSummaryProps) {
     absoluteHumidity,
     lastMeasurement,
     offline,
+    offlineReason,
     derivedUnavailableReason,
   } = outdoor;
 
-  /** Exactly one of the two measurements is present. */
-  const incomplete =
-    (temperature === null) !== (humidity === null);
+  /**
+   * Exactly one of the two measurements is present. Preferably taken from the
+   * response so the rule lives in one place; derived locally only when the
+   * field is absent, which a cached response from a pre-upgrade backend is.
+   */
+  const partnerMissing =
+    offlineReason === 'partner-missing' ||
+    (offlineReason === undefined &&
+      offline === true &&
+      (temperature === null) !== (humidity === null));
 
   /**
    * The backend refused to combine both inputs because their measurement times
@@ -58,8 +66,10 @@ export function OutdoorSummary({ outdoor, className }: OutdoorSummaryProps) {
       </span>
       <span className="text-[10px] text-muted-foreground/60">
         {/* A missing half gets its own wording: the age belongs to the value
-            that is still there, so a bare "Offline" would contradict it. */}
-        {offline && incomplete
+            that is still there, so a bare "Offline" would contradict it. The
+            reason comes from the response; inferring it from the values here
+            would duplicate the backend's rule and drift from it. */}
+        {partnerMissing
           ? 'Wert fehlt · '
           : offline
             ? 'Offline · '

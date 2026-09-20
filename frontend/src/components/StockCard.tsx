@@ -1,4 +1,4 @@
-import { Cpu, Fan } from 'lucide-react';
+import { Fan, Thermometer } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GrainStock } from '@/types/api';
 import { cn } from '@/lib/utils';
@@ -35,19 +35,39 @@ export function StockCard({ stock, onClick }: StockCardProps) {
         <CardDescription>{stock.description}</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          {/* An absent field (cached response from an older backend) counts as
-              "has sensors". */}
-          {stock.hasGrainSensors !== false ? (
-            <>
-              <Cpu className="h-4 w-4" />
-              <span>{stock.deviceCount} device{stock.deviceCount !== 1 ? 's' : ''}</span>
-            </>
-          ) : (
-            <>
-              <Fan className="h-4 w-4" />
-              <span>Nur Lüftersteuerung</span>
-            </>
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          {/* What the stock is equipped with, from its configuration. Both
+              fields are optional because a cached response from an older
+              backend omits them; they default in opposite directions on
+              purpose. Sensors are the norm, so an absent flag counts as
+              equipped. Fan control is the exception, so an absent flag counts
+              as not equipped — claiming a control that may not exist would
+              promise an action the detail page then cannot offer. */}
+          {stock.hasGrainSensors !== false && (
+            <span className="inline-flex items-center">
+              {/* The tooltip sits on the hidden icon so it adds no second
+                  accessible name beside the sr-only text. It only reaches
+                  pointer devices — mobile browsers do not surface a <title> on
+                  tap — so on a phone the glyph stands on its own. */}
+              <Thermometer className="h-4 w-4" aria-hidden="true" >
+                <title>Getreidethermometer</title>
+              </Thermometer>
+              <span className="sr-only">Getreidethermometer</span>
+            </span>
+          )}
+          {stock.fanControlEnabled && (
+            <span className="inline-flex items-center">
+              <Fan className="h-4 w-4" aria-hidden="true" >
+                <title>Lüftersteuerung</title>
+              </Fan>
+              <span className="sr-only">Lüftersteuerung</span>
+            </span>
+          )}
+          {/* Worded after what the app can show, not after what is installed:
+              fanControlEnabled reports whether a controller is up, not whether
+              a fan exists. */}
+          {stock.hasGrainSensors === false && !stock.fanControlEnabled && (
+            <span className="text-xs">Keine Messwerte, keine Steuerung</span>
           )}
         </div>
       </CardContent>

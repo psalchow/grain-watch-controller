@@ -10,6 +10,7 @@ const withData: OutdoorConditions = {
   absoluteHumidity: 8.5,
   lastMeasurement: new Date().toISOString(),
   offline: false,
+  offlineReason: null,
   derivedUnavailableReason: null,
 };
 
@@ -20,6 +21,7 @@ const empty: OutdoorConditions = {
   absoluteHumidity: null,
   lastMeasurement: null,
   offline: false,
+  offlineReason: null,
   derivedUnavailableReason: null,
 };
 
@@ -36,7 +38,7 @@ describe('OutdoorSummary', () => {
 
   it('greys the chip out and labels it when the reading is stale', () => {
     const { container } = render(
-      <OutdoorSummary outdoor={{ ...withData, offline: true }} />,
+      <OutdoorSummary outdoor={{ ...withData, offline: true, offlineReason: 'stale' }} />,
     );
     expect(container.firstChild).toHaveClass('opacity-50');
     expect(screen.getByText(/Offline/)).toBeInTheDocument();
@@ -45,11 +47,34 @@ describe('OutdoorSummary', () => {
   it('names a missing half instead of claiming the whole chip is stale', () => {
     render(
       <OutdoorSummary
-        outdoor={{ ...withData, humidity: null, dewPoint: null, absoluteHumidity: null, offline: true }}
+        outdoor={{
+          ...withData,
+          humidity: null,
+          dewPoint: null,
+          absoluteHumidity: null,
+          offline: true,
+          offlineReason: 'partner-missing',
+        }}
       />,
     );
     expect(screen.getByText(/Wert fehlt/)).toBeInTheDocument();
     expect(screen.queryByText(/Offline/)).not.toBeInTheDocument();
+  });
+
+  it('falls back to local inference when the response carries no reason', () => {
+    const { offlineReason: _omitted, ...withoutReason } = withData;
+    render(
+      <OutdoorSummary
+        outdoor={{
+          ...withoutReason,
+          humidity: null,
+          dewPoint: null,
+          absoluteHumidity: null,
+          offline: true,
+        }}
+      />,
+    );
+    expect(screen.getByText(/Wert fehlt/)).toBeInTheDocument();
   });
 
   it('explains why the derived values are missing when the measurement times drift apart', () => {

@@ -5,7 +5,7 @@ import { FanStateRepository, FanEventsRepository } from '../../../src/db/reposit
 async function seedStock(db: ReturnType<typeof createTestDb>): Promise<void> {
   await new StockRepository(db.db).upsertMany([
     {
-      id: 'grain-watch-1', name: 'Halle 8', deviceCount: 5, deviceGroup: 'corn-watch-1',
+      id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
       devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
       fanControlEnabled: true, fanTopicPrefix: '/p', fanSwitchId: 0,
     },

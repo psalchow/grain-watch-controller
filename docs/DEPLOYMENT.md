@@ -128,6 +128,7 @@ The full reference — including the outdoor-measurement and fan-timing variable
 | `INFLUXDB_OUTDOOR_MAX_SKEW` | No | `30m` | Maximum gap between the outdoor temperature and humidity timestamps for the derived values |
 | `DATABASE_PATH` | No | `./data/grainwatch.db` | SQLite file; must sit on a mounted volume |
 | `MQTT_URL` | No | `mqtt://localhost:1883` | Broker URL for fan control |
+| `FAN_RECONCILE_INTERVAL_MS` | No | `60000` | How often revoked fan control is picked up from the database; at least 1000 ms |
 | `DOCKER_NETWORK` | No | `grainwatch-network` | External Docker network name |
 
 > **Persistence:** `DATABASE_PATH` must point inside a mounted volume. The SQLite
@@ -597,6 +598,20 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 > bounds stock readings as well as outdoor conditions, so a value chosen for
 > outdoor alone (e.g. `1h`) is likely too tight — leave it unset to get the
 > `6h` production default.
+
+> **Rollback needs the database backup from step 1.** The same release drops the
+> `device_count` column from `stocks`. The previous image still writes that
+> column while seeding on startup, so pulling the old image back over the
+> migrated database fails before the server listens. Roll back with **Full
+> Recovery** above — restore `data.backup.YYYYMMDD`, then start the previous
+> image — rather than by swapping the image alone.
+
+> **Browsers on the old bundle briefly show "undefined devices".** The same
+> release removes `deviceCount` from `GET /stocks`, which the previous PWA
+> bundle still renders on the stock list. The service worker updates itself
+> (`registerType: 'autoUpdate'`), so the wrong label disappears once the new
+> bundle takes control; a reload fixes it immediately. Nothing is broken behind
+> it — the value no longer exists anywhere.
 
 ```bash
 # 1. Back up the database with the container stopped

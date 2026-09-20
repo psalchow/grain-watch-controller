@@ -31,8 +31,12 @@ export const stocks = sqliteTable('stocks', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
-  deviceCount: integer('device_count').notNull(),
   deviceGroup: text('device_group').notNull(),
+  /**
+   * Leading segment of this stock's device ids ('1' for '1.1'…'1.5'). Kept as
+   * documentation of the naming convention: nothing reads it since the device
+   * rosters come from the measurements themselves.
+   */
   devicePrefix: text('device_prefix').notNull(),
   hasHumidity: integer('has_humidity', { mode: 'boolean' }).notNull(),
   /** False for stocks that only have fan control and no grain thermometers. */

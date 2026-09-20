@@ -14,6 +14,27 @@ Monorepo for the Grainwatch grain stock monitoring system. Contains a React PWA 
 - Data flow: Devices → MQTT → Sink Service → InfluxDB → BFF → Frontend
 - Replaces Grafana dashboards with custom application
 
+### Operating Reality
+
+This context decides how much machinery a feature deserves. Reviewers should
+weigh findings against it rather than against a worst case that cannot occur
+here.
+
+- **Seasonal.** Ventilation matters from August to May, with the bulk between
+  September and February. After that the stock is at temperature.
+- **Installations are stable.** A hall is fitted with fan control once and keeps
+  it for years. Withdrawing it is a rare, planned change, not an operation.
+- **People are present.** Storage and ventilation are supervised. A change to
+  the installation happens with somebody on site who can look at the fan.
+- **The Shelly is the safety net.** It switches off by itself after roughly one
+  to two hours without a keep-alive signal from the backend, so the backend does
+  not have to chase acknowledgements to leave the plant in a safe state.
+
+Consequently: prefer the simple path. One best-effort command plus the device's
+own auto-off beats a retry loop with acknowledgement tracking. Complexity is
+only justified where it protects against something that actually happens in a
+season.
+
 ### Infrastructure
 - InfluxDB: Time-series database (not publicly accessible)
 - MQTT Broker: Device communication
@@ -42,6 +63,48 @@ carry no version.
 - `scripts/build-prod-image.sh` derives the image tag from it
 - Both versions are visible in the app-info dialog (info icon in the header);
   a mismatch means the browser is still running a cached bundle
+
+## Scope Discipline and Backlog
+
+Work the task as leanly as it can be done. A task grows only when the growth
+belongs to it.
+
+**Fix inside the current task:**
+- what the task asks for, including the unstated parts a careful reader would
+  assume
+- clarifications where the request was vague — ask rather than guess when the
+  answers lead to materially different work
+- review findings that concern the code this task touches and are defects,
+  contradictions, or unsafe behaviour in it
+
+**Put in `docs/BACKLOG.md` instead:**
+- pre-existing weaknesses the task merely walks past
+- new capabilities suggested by a finding ("while you are here, add X")
+- follow-up work created by a deliberate decision (migrations to defer,
+  configuration that needs a UI, wording that needs a redesign)
+
+When it is unclear which side a finding falls on, ask: fix now or backlog? Do
+not decide it by fixing it.
+
+Before starting a feature, read `docs/BACKLOG.md` and pick up the entries that
+belong to the same area — a backlog item is cheapest to clear while its code is
+already open. Entries may also be worked off in dedicated rounds.
+
+**For reviewers (human or agent):** report findings with the same split. Mark
+each one as *in scope* (a defect in the code under review) or *backlog*
+(everything else), so out-of-scope observations are recorded rather than
+repaired on the spot. Repeating a finding the author has already resolved as a
+deliberate, documented decision is noise — check `docs/BACKLOG.md` and the
+relevant spec first.
+
+## Branching
+
+Work on `main` directly. A single stream of work needs no branch, and a feature
+branch that is only ever merged by its own author is overhead.
+
+Parallel features are the exception: give each one its own branch in its own
+`git worktree`, so the working copies cannot interfere. Merge back into `main`
+and remove the worktree when the feature lands.
 
 ## Code Standards and Conventions
 

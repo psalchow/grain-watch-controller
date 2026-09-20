@@ -1,5 +1,5 @@
 export interface MqttClientLike {
-  publish(topic: string, message: string): void;
+  publish(topic: string, message: string, options?: { qos?: 0 | 1 | 2 }): void;
   subscribe(topic: string): void;
   on(event: 'message', cb: (topic: string, payload: Buffer) => void): void;
   end(): void;
@@ -23,8 +23,8 @@ export class MqttService {
     });
   }
 
-  publish(topic: string, message: string): void {
-    this.client.publish(topic, message);
+  publish(topic: string, message: string, options?: { qos?: 0 | 1 | 2 }): void {
+    this.client.publish(topic, message, options);
   }
 
   subscribe(topic: string): void {

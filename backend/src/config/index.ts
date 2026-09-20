@@ -113,6 +113,8 @@ interface FanConfig {
   retentionDays: number;
   /** Interval of the retention sweep (ms). */
   retentionSweepMs: number;
+  /** Interval at which the stock rows are re-read to catch revoked fan control (ms). */
+  reconcileIntervalMs: number;
 }
 
 /**
@@ -280,6 +282,13 @@ function validateConfig(
   if (cfg.fan.keepAliveMs >= 3600000) {
     errors.push('FAN_KEEPALIVE_INTERVAL_MS must be under 3600000 (Shelly Auto OFF is 1 h)');
   }
+  // Every tick reads the stock table, so a value meant as seconds would turn
+  // into dozens of full-table reads per second.
+  if (cfg.fan.reconcileIntervalMs < 1000) {
+    errors.push(
+      `FAN_RECONCILE_INTERVAL_MS must be at least 1000 ms, got: ${cfg.fan.reconcileIntervalMs}`
+    );
+  }
 
   // Reject the pre-rename variable outright: silently ignoring it would swap
   // the operator's window for the default without any sign of it.
@@ -436,6 +445,7 @@ export const config: Config = {
     watchdogMs: getEnvVarAsInt('FAN_WATCHDOG_TIMEOUT_MS', 10000),
     retentionDays: getEnvVarAsInt('FAN_EVENT_RETENTION_DAYS', 90),
     retentionSweepMs: getEnvVarAsInt('FAN_RETENTION_SWEEP_INTERVAL_MS', 21600000),
+    reconcileIntervalMs: getEnvVarAsInt('FAN_RECONCILE_INTERVAL_MS', 60000),
   },
 };
 

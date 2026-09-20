@@ -10,7 +10,7 @@ function successMsg(switchState: boolean): ShellyMonitorMessage {
 async function makeController() {
   const db = createTestDb();
   await new StockRepository(db.db).upsertMany([{
-    id: 'grain-watch-1', name: 'Halle 8', deviceCount: 5, deviceGroup: 'corn-watch-1',
+    id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
     devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
     fanControlEnabled: true, fanTopicPrefix: '/p', fanSwitchId: 0,
   }]);
@@ -39,6 +39,26 @@ describe('FanController', () => {
     controller.handleShellyMessage(successMsg(true));
     expect(controller.getStatus().state).toBe('ON');
     expect(controller.getStatus().desiredOn).toBe(true);
+  });
+
+  it('publishes even when a status subscriber throws', async () => {
+    const { controller, published } = await makeController();
+    const consoleError = jest.spyOn(console, 'error').mockImplementation();
+    controller.onChange(() => {
+      throw new Error('subscriber blew up');
+    });
+    const seen: string[] = [];
+    controller.onChange((status) => seen.push(status.state));
+
+    controller.command('on');
+
+    // The throw is contained: the later subscriber still hears it, and the
+    // command reaches MQTT — the emit sits between the state change and the
+    // publish.
+    expect(published).toEqual(['on']);
+    expect(seen).toEqual(['TURN_ON_PENDING']);
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('watchdog switches off and faults when no success arrives', async () => {

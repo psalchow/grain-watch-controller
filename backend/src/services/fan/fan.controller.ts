@@ -62,12 +62,15 @@ export class FanController {
     }
   }
 
-  /** User-initiated switch request from the API. */
-  command(action: 'on' | 'off'): void {
+  /**
+   * Switch request. `source` records who asked: the API passes the default,
+   * the manager passes 'backend' when it switches a fan off on retirement.
+   */
+  command(action: 'on' | 'off', source: 'user' | 'backend' = 'user'): void {
     if (action === 'on') {
-      this.beginTurnOn('user', true, this.now().toISOString());
+      this.beginTurnOn(source, true, this.now().toISOString());
     } else {
-      this.beginTurnOff();
+      this.beginTurnOff(source);
     }
   }
 
@@ -177,14 +180,14 @@ export class FanController {
   }
 
   /** Enters TURN_OFF_PENDING, stops timers, publishes 'off'. */
-  private beginTurnOff(): void {
+  private beginTurnOff(source: 'user' | 'backend' = 'user'): void {
     this.desiredOn = false;
     this.since = null;
     this.persistState();
     this.clearWatchdog();
     this.clearKeepAlive();
     this.setState('TURN_OFF_PENDING');
-    this.log('command', { action: 'off' }, 'user');
+    this.log('command', { action: 'off' }, source);
     this.deps.publish('off');
   }
 
@@ -262,6 +265,19 @@ export class FanController {
   /** Pushes the current status to all subscribers. */
   private emit(): void {
     const status = this.getStatus();
-    for (const listener of this.listeners) listener(status);
+    // Snapshot: a listener may unsubscribe from inside its own notification
+    // (an SSE stream tearing down on retirement does exactly that), which would
+    // shift the array underneath the loop and skip the next listener.
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(status);
+      } catch (error) {
+        // Subscribers do real work — an SSE push reads the event log and writes
+        // to a socket. A throw must not escape into the state machine: it runs
+        // between the state change and the MQTT publish, so it would swallow
+        // the very command being issued.
+        console.error(`Fan control: a status subscriber for ${this.deps.stockId} threw`, error);
+      }
+    }
   }
 }

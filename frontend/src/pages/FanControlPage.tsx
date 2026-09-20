@@ -22,6 +22,7 @@ const EVENT_LABEL: Record<string, string> = {
   status: 'Statusmeldung',
   online_change: 'Verbindung geändert',
   watchdog_off: 'Zeitüberschreitung, abgeschaltet',
+  stand_down: 'Steuerung entzogen',
   recovery: 'Zustand wiederhergestellt',
 };
 
@@ -43,12 +44,26 @@ export default function FanControlPage() {
   const [initial, setInitial] = useState<FanSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The status load and the stream race on mount. A 404 from either means the
+  // same thing, so both feed the notice — otherwise the page briefly offers an
+  // enabled switch for a hall that has no fan control.
+  const [notAvailable, setNotAvailable] = useState(false);
 
-  const { snapshot: live, connected } = useFanStream(stockId, true);
+  const { snapshot: live, connected, disabled } = useFanStream(stockId, true);
 
   useEffect(() => {
     if (!stockId) return;
-    fanApi.getStatus(stockId).then(setInitial).catch(() => setError('Status konnte nicht geladen werden.'));
+    setNotAvailable(false);
+    fanApi
+      .getStatus(stockId)
+      .then(setInitial)
+      .catch((err: { response?: { status?: number } }) => {
+        if (err?.response?.status === 404) {
+          setNotAvailable(true);
+          return;
+        }
+        setError('Status konnte nicht geladen werden.');
+      });
   }, [stockId]);
 
   const snapshot = live ?? initial;
@@ -100,12 +115,31 @@ export default function FanControlPage() {
           <h1 className="text-2xl font-bold">Lüftersteuerung</h1>
         </div>
 
-        <FanStatusCard status={snapshot?.status ?? null} connected={connected} />
+        {/* The server ended the stream because fan control was taken out of
+            service. Showing the last snapshot with a live-looking button would
+            invite a command that now answers 404. */}
+        {disabled || notAvailable ? (
+          <div className="rounded-md bg-muted/50 p-4 text-center text-muted-foreground">
+            <p>Für diese Halle steht keine Lüftersteuerung zur Verfügung.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-4"
+              onClick={() => navigate(`/stocks/${stockId}`)}
+            >
+              Zur Halle
+            </Button>
+          </div>
+        ) : (
+          <>
+            <FanStatusCard status={snapshot?.status ?? null} connected={connected} />
 
-        <div className="mt-6 flex justify-center">{renderButton()}</div>
+            <div className="mt-6 flex justify-center">{renderButton()}</div>
 
-        {error && (
-          <p className="mt-4 text-center text-sm text-destructive">{error}</p>
+            {error && (
+              <p className="mt-4 text-center text-sm text-destructive">{error}</p>
+            )}
+          </>
         )}
 
         <section className="mt-8">

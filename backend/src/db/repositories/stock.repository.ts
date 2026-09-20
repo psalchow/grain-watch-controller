@@ -25,7 +25,6 @@ export class StockRepository {
           id: s.id,
           name: s.name,
           description: s.description ?? null,
-          deviceCount: s.deviceCount,
           deviceGroup: s.deviceGroup,
           devicePrefix: s.devicePrefix,
           hasHumidity: s.hasHumidity,
@@ -45,7 +44,6 @@ export class StockRepository {
     const stock: Stock = {
       id: row.id,
       name: row.name,
-      deviceCount: row.deviceCount,
       deviceGroup: row.deviceGroup,
       devicePrefix: row.devicePrefix,
       hasHumidity: row.hasHumidity,

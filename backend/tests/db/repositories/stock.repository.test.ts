@@ -17,7 +17,6 @@ describe('StockRepository', () => {
     id: 'grain-watch-1',
     name: 'Halle 8',
     description: 'Lagerhalle 8',
-    deviceCount: 5,
     deviceGroup: 'corn-watch-1',
     devicePrefix: '1',
     hasHumidity: true,
@@ -67,7 +66,6 @@ describe('StockRepository', () => {
         {
           id: 'grain-watch-9',
           name: 'Halle 9',
-          deviceCount: 5,
           deviceGroup: 'corn-watch-9',
           devicePrefix: '9',
           hasHumidity: false,
@@ -92,7 +90,6 @@ describe('StockRepository', () => {
         {
           id: 'grain-watch-10',
           name: 'Halle 10',
-          deviceCount: 5,
           deviceGroup: 'corn-watch-10',
           devicePrefix: '10',
           hasHumidity: false,

@@ -13,3 +13,4 @@ export function setFanManager(m: FanControlManager | null): void {
 export function getFanManager(): FanControlManager | null {
   return manager;
 }
+

@@ -15,6 +15,18 @@ import { resetServiceSingletonsForTests } from '../../src/services';
 import { setAuthService } from '../../src/middleware';
 import { StockRepository } from '../../src/db/repositories';
 import { seedStocks } from '../../src/db/seed';
+import { setFanManager } from '../../src/services/fan';
+import type { FanControlManager } from '../../src/services/fan';
+
+/**
+ * Stands in for the manager bootstrap builds: a controller exists exactly for
+ * the stocks whose MQTT wiring is complete, which is what the fan endpoints
+ * answer from.
+ */
+const wiredStocks = new Set(['grain-watch-1', 'fan-only']);
+const fakeFanManager = {
+  getController: (stockId: string) => (wiredStocks.has(stockId) ? {} : null),
+} as unknown as FanControlManager;
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
 
@@ -112,6 +124,8 @@ describe('Stock Endpoints', () => {
       stockAccess: ['grain-watch-1'],
     });
 
+    setFanManager(fakeFanManager);
+
     // Create app
     app = createApp();
     finaliseApp(app);
@@ -153,6 +167,7 @@ describe('Stock Endpoints', () => {
   });
 
   afterAll(() => {
+    setFanManager(null);
     setAuthService(null);
     closeDb();
     resetServiceSingletonsForTests();
@@ -182,6 +197,40 @@ describe('Stock Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.body.stocks).toHaveLength(1);
       expect(response.body.stocks[0].id).toBe('grain-watch-1');
+    });
+
+    it('reports fan control only for stocks with a live controller', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      const byId = Object.fromEntries(
+        response.body.stocks.map((s: { id: string; fanControlEnabled: boolean }) => [
+          s.id,
+          s.fanControlEnabled,
+        ]),
+      );
+      expect(byId['grain-watch-1']).toBe(true);
+      // No controller was built for this one, so the fan endpoints would 404
+      expect(byId['grain-watch-2']).toBe(false);
+    });
+
+    it('reports no fan control when fan control never came up in this process', async () => {
+      setFanManager(null);
+
+      try {
+        const response = await request(app)
+          .get('/api/v1/stocks')
+          .set('Authorization', `Bearer ${adminToken}`);
+
+        expect(response.status).toBe(200);
+        expect(
+          response.body.stocks.every((s: { fanControlEnabled: boolean }) => !s.fanControlEnabled),
+        ).toBe(true);
+      } finally {
+        setFanManager(fakeFanManager);
+      }
     });
 
     it('should return 401 without authentication', async () => {
@@ -287,6 +336,7 @@ describe('Stock Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.outdoor.offline).toBe(true);
+      expect(response.body.outdoor.offlineReason).toBe('partner-missing');
       expect(response.body.outdoor.temperature).toBe(8.5);
       // The surviving value still reports its own age
       expect(response.body.outdoor.lastMeasurement).not.toBeNull();
@@ -345,6 +395,7 @@ describe('Stock Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.body.outdoor).toEqual({
         offline: false,
+        offlineReason: null,
         derivedUnavailableReason: null,
         temperature: null,
         humidity: null,
@@ -452,7 +503,9 @@ describe('Stock Endpoints', () => {
             ]],
           ]),
           mid: new Map(),
-          bottom: new Map(),
+          bottom: new Map([
+            ['1.3', [{ t: '2026-05-19T00:00:00.000Z', v: 11.0 }]],
+          ]),
         },
       });
     });
@@ -468,15 +521,18 @@ describe('Stock Endpoints', () => {
         stockName: 'Halle 8',
         resolution: 'day',
         intervalSeconds: 1800,
-        devices: ['1.1', '1.2', '1.3', '1.4', '1.5'],
+        // Exactly the devices the group reported in any layer, not a
+        // configured roster: 1.3 only appears in the bottom layer.
+        devices: ['1.1', '1.2', '1.3'],
       });
       expect(response.body.series.temperature).toBeDefined();
-      expect(response.body.series.temperature.top).toHaveLength(5);
+      expect(response.body.series.temperature.top).toHaveLength(3);
       expect(response.body.series.temperature.top[0]).toEqual([
         { t: '2026-05-19T00:00:00.000Z', v: 12.0 },
         { t: '2026-05-19T00:30:00.000Z', v: 12.4 },
       ]);
-      // Device 1.3 had no series — empty array.
+      // A layer without data for a reported device stays an empty array.
+      expect(response.body.series.temperature.mid[0]).toEqual([]);
       expect(response.body.series.temperature.top[2]).toEqual([]);
       // Humidity not enabled for grain-watch-1.
       expect(response.body.series.humidity).toBeUndefined();
@@ -542,7 +598,6 @@ describe('Stock Endpoints', () => {
         {
           id: 'fan-only',
           name: 'Halle ohne Thermometer',
-          deviceCount: 0,
           deviceGroup: 'corn-watch-9',
           devicePrefix: '9',
           hasHumidity: false,
@@ -550,6 +605,7 @@ describe('Stock Endpoints', () => {
           active: true,
           createdAt: '2026-06-02T00:00:00.000Z',
           fanControlEnabled: true,
+          fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
           fanSwitchId: 0,
         },
       ]);

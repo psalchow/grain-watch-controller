@@ -207,6 +207,15 @@ describe('Configuration', () => {
   });
 
   describe('fan/mqtt config', () => {
+    it('rejects a reconciliation interval below a second', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['FAN_RECONCILE_INTERVAL_MS'] = '60';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /FAN_RECONCILE_INTERVAL_MS must be at least 1000 ms/
+      );
+    });
+
     it('provides mqtt and fan defaults', async () => {
       jest.resetModules();
       process.env['NODE_ENV'] = 'development';

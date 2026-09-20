@@ -24,6 +24,7 @@ export type FanEventKind =
   | 'status'
   | 'online_change'
   | 'watchdog_off'
+  | 'stand_down'
   | 'recovery';
 
 export interface FanStatus {

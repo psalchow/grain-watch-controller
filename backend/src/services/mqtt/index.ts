@@ -19,7 +19,7 @@ export function createMqttService(cfg: {
     reconnectPeriod: 5000,
   });
   const adapter: MqttClientLike = {
-    publish: (topic, message) => client.publish(topic, message),
+    publish: (topic, message, options) => client.publish(topic, message, options ?? {}),
     subscribe: (topic) => client.subscribe(topic),
     on: ((event: string, cb: (...args: unknown[]) => void) =>
       client.on(event as 'message', cb as never)) as MqttClientLike['on'],

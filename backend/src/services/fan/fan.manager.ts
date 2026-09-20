@@ -3,7 +3,13 @@ import type { Stock } from '../../db/types';
 import { FanController } from './fan.controller';
 import { parseShellyMonitorMessage } from './shelly-message';
 
-/** Selects the MQTT wiring config for every fan-enabled stock. Pure. */
+/**
+ * Selects the MQTT wiring config for every fan-enabled stock. Pure.
+ *
+ * A usable topic prefix is as necessary as the flag: without one there is
+ * nothing to publish to, so no controller is built and the stock reports no fan
+ * control.
+ */
 export function selectFanStocks(
   stocks: Stock[],
 ): Array<{ stockId: string; topicPrefix: string; switchId: number }> {
@@ -15,14 +21,27 @@ export function selectFanStocks(
 export interface FanManagerDeps {
   stocks: Array<{ stockId: string; topicPrefix: string; switchId: number }>;
   mqtt: {
-    publish(topic: string, message: string): void;
+    publish(topic: string, message: string, options?: { qos?: 0 | 1 | 2 }): void;
     subscribe(topic: string): void;
     onMessage(listener: (topic: string, payload: string) => void): void;
     end(): void;
   };
   stateRepo: FanStateRepository;
   eventsRepo: FanEventsRepository;
-  timings: { keepAliveMs: number; watchdogMs: number; retentionDays: number; retentionSweepMs: number };
+  timings: {
+    keepAliveMs: number;
+    watchdogMs: number;
+    retentionDays: number;
+    retentionSweepMs: number;
+    /** How often the stock rows are re-read to catch fan control being revoked. */
+    reconcileIntervalMs: number;
+  };
+  /**
+   * Ids of the stocks that currently ask for fan control. Re-read on every
+   * reconciliation tick so a row edited underneath the process takes effect
+   * without HTTP traffic and without a restart.
+   */
+  fanEnabledStockIds: () => Promise<Set<string>>;
   now?: () => Date;
 }
 
@@ -31,11 +50,19 @@ interface StockFanWiring {
   topicPrefix: string;
   commandTopic: string;
   controller: FanController;
+  /**
+   * Set when a request observed that fan control was revoked for this stock.
+   * `getController` then refuses it, so the endpoints, the SSE guard and the
+   * reported availability all stop serving it at once; the reconciliation tick
+   * does the switching shortly after.
+   */
+  retiring: boolean;
 }
 
 export class FanControlManager {
   private readonly fanStocks = new Map<string, StockFanWiring>();
   private retentionTimer: ReturnType<typeof setInterval> | null = null;
+  private reconcileTimer: ReturnType<typeof setInterval> | null = null;
   private readonly now: () => Date;
 
   constructor(private readonly deps: FanManagerDeps) {
@@ -44,13 +71,21 @@ export class FanControlManager {
       const commandTopic = `${s.topicPrefix}/command/switch:${s.switchId}`;
       const controller = new FanController({
         stockId: s.stockId,
-        publish: (payload) => this.deps.mqtt.publish(commandTopic, payload),
+        // QoS 1: a switching command must survive a brief broker hiccup. Both
+        // payloads are idempotent, so a duplicate delivery is harmless.
+        publish: (payload) => this.deps.mqtt.publish(commandTopic, payload, { qos: 1 }),
         stateRepo: deps.stateRepo,
         eventsRepo: deps.eventsRepo,
         timings: { keepAliveMs: deps.timings.keepAliveMs, watchdogMs: deps.timings.watchdogMs },
         now: this.now,
       });
-      this.fanStocks.set(s.stockId, { stockId: s.stockId, topicPrefix: s.topicPrefix, commandTopic, controller });
+      this.fanStocks.set(s.stockId, {
+        stockId: s.stockId,
+        topicPrefix: s.topicPrefix,
+        commandTopic,
+        controller,
+        retiring: false,
+      });
     }
   }
 
@@ -65,14 +100,101 @@ export class FanControlManager {
       wiring.controller.recover();
     }
     this.retentionTimer = setInterval(() => this.sweepRetention(), this.deps.timings.retentionSweepMs);
+    this.reconcileTimer = setInterval(
+      () => void this.reconcile(),
+      this.deps.timings.reconcileIntervalMs,
+    );
+  }
+
+  /**
+   * Re-reads which stocks still ask for fan control and retires the rest.
+   *
+   * The safety property must not depend on someone using the app: a fan whose
+   * row was cleared has to stop even if nobody opens the page again. A failed
+   * read is skipped — the next tick retries — rather than treated as a revocation.
+   */
+  async reconcile(): Promise<void> {
+    let enabled: Set<string>;
+    try {
+      enabled = await this.deps.fanEnabledStockIds();
+    } catch (error) {
+      console.error('Fan control: reconciliation failed, keeping current wiring', error);
+      return;
+    }
+    for (const [stockId, wiring] of [...this.fanStocks]) {
+      // Marked by a request counts too: that path only refuses the stock, the
+      // switching happens here.
+      if (!enabled.has(stockId) || wiring.retiring) this.retireController(stockId);
+    }
   }
 
   getController(stockId: string): FanController | null {
-    return this.fanStocks.get(stockId)?.controller ?? null;
+    const wiring = this.fanStocks.get(stockId);
+    // Refused from the moment a request marked the stock: the reconciliation
+    // tick switches the fan off and drops the wiring shortly after.
+    return wiring && !wiring.retiring ? wiring.controller : null;
+  }
+
+  /**
+   * Takes a stock's fan out of service: stops driving it, sends one last `off`
+   * and forgets the wiring.
+   *
+   * Deliberately a single shot rather than a retry loop. Withdrawing fan
+   * control is a rare, supervised change to a hall's installation, the fan is
+   * practically never running at that moment, and the Shelly switches itself
+   * off after one to two hours without a keep-alive signal — so the backend
+   * does not need to chase an acknowledgement to stay safe.
+   */
+  retireController(stockId: string): void {
+    const wiring = this.fanStocks.get(stockId);
+    if (!wiring) return;
+
+    wiring.retiring = true;
+    try {
+      // Also clears the keep-alive and the persisted desired state, so nothing
+      // re-asserts `on` and a later re-enable cannot resume the fan.
+      wiring.controller.command('off', 'backend');
+    } catch (error) {
+      console.error(`Fan control: switching ${stockId} off during retirement failed`, error);
+    }
+
+    // Separate from the command on purpose, so this extra record does not add a
+    // second way for the switch-off to fail. It does not make the command
+    // failure-proof: `beginTurnOff` writes its own audit row before publishing,
+    // so a database failure still swallows the `off` — see the backlog entry
+    // "A failing audit write blocks the MQTT command". The device's auto-off
+    // covers that case.
+    try {
+      this.deps.eventsRepo.insert({
+        stockId,
+        ts: this.now().toISOString(),
+        kind: 'stand_down',
+        payload: { reason: 'fan control withdrawn' },
+        source: 'backend',
+      });
+    } catch (error) {
+      console.error(`Fan control: logging the retirement of ${stockId} failed`, error);
+    }
+
+    wiring.controller.stop();
+    this.fanStocks.delete(stockId);
+  }
+
+  /**
+   * Marks a stock as no longer serviceable without commanding anything.
+   *
+   * Used by the request path: a GET should not publish to MQTT, and the mark is
+   * enough to stop serving the stock immediately. The switching belongs to the
+   * reconciliation tick, which picks up marked stocks too.
+   */
+  markRetiring(stockId: string): void {
+    const wiring = this.fanStocks.get(stockId);
+    if (wiring) wiring.retiring = true;
   }
 
   shutdown(): void {
     if (this.retentionTimer) { clearInterval(this.retentionTimer); this.retentionTimer = null; }
+    if (this.reconcileTimer) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
     for (const wiring of this.fanStocks.values()) wiring.controller.stop();
     this.deps.mqtt.end();
   }

@@ -29,6 +29,13 @@
       "when": 1789634503351,
       "tag": "0003_grain_sensors",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789683976646,
+      "tag": "0004_drop_device_count",
+      "breakpoints": true
     }
   ]
 }
