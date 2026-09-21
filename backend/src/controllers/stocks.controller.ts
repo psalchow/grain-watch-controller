@@ -40,8 +40,8 @@ const round1 = (value: number): number => Math.round(value * 10) / 10;
  * nothing is wired up for; the map alone would keep advertising one whose row
  * was disabled underneath the running process. It says nothing about the broker
  * being reachable — controllers are built from the wiring at startup, before any
- * connection exists. Live reachability travels as `shellyOnline` in the fan
- * status instead.
+ * connection exists. Live reachability travels as `fanControlReachable` in the
+ * fan status instead.
  */
 const fanControlAvailable = (stock: {
   id: string;

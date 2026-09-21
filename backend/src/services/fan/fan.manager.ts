@@ -209,7 +209,9 @@ export class FanControlManager {
       } else if (suffix.startsWith('status/')) {
         wiring.controller.handleStatus(payload);
       } else if (suffix === 'online') {
-        wiring.controller.handleOnline(payload.trim() === 'true');
+        // The device's own topic name; the controller maps it onto the
+        // reachability the API reports.
+        wiring.controller.handleReachability(payload.trim() === 'true');
       }
       return;
     }

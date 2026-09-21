@@ -27,8 +27,8 @@ Wait until `influx-seed` exits 0 and the backend logs `Fan control: initialised`
    the emulator publishes `alert` + `safety_shutoff`; the frontend shows FAULT.
 3. **Manual contactor switch:** Click "Lüfter/Schütz manuell schalten" — the
    emulator publishes a `warning` and the frontend shows the warning overlay.
-4. **Shelly offline:** Click "Shelly offline schalten" — the frontend shows the
-   Shelly-offline overlay.
+4. **Shelly offline:** Click "Shelly offline schalten" — the fan card's
+   reachability badge switches to "Steuerung nicht erreichbar".
 5. **Keep-alive / auto-off:** With the fan ON, watch the MQTT log — the backend
    re-asserts `on` every 30 s. To see auto-off quickly, set
    `SHELLY_AUTO_OFF_MS` (e.g. `120000`) in `docker-compose.sim.yml`.

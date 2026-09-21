@@ -4,7 +4,7 @@ import { FanStatusCard } from './FanStatusCard';
 import type { FanStatus } from '../types/fan';
 
 const base: FanStatus = {
-  stockId: 'grain-watch-1', state: 'ON', desiredOn: true, shellyOnline: true,
+  stockId: 'grain-watch-1', state: 'ON', desiredOn: true, fanControlReachable: true,
   lastWarning: null, lastAlert: null, since: null, updatedAt: '2026-07-09T10:00:00.000Z',
 };
 
@@ -27,5 +27,46 @@ describe('FanStatusCard', () => {
   it('renders a placeholder when status is null', () => {
     render(<FanStatusCard status={null} connected={false} />);
     expect(screen.getByText(/Lüfter/i)).toBeInTheDocument();
+  });
+
+  it('reports the control as reachable', () => {
+    render(<FanStatusCard status={{ ...base, fanControlReachable: true }} connected={true} />);
+    expect(screen.getByText('Steuerung erreichbar')).toBeInTheDocument();
+  });
+
+  it('reports the control as unreachable', () => {
+    render(<FanStatusCard status={{ ...base, fanControlReachable: false }} connected={true} />);
+    expect(screen.getByText('Steuerung nicht erreichbar')).toBeInTheDocument();
+  });
+
+  it('reports reachability as unknown until the control has been heard from', () => {
+    render(<FanStatusCard status={{ ...base, fanControlReachable: null }} connected={true} />);
+    expect(screen.getByText('Erreichbarkeit unbekannt')).toBeInTheDocument();
+  });
+
+  it('marks reachability as stale while the stream is disconnected', () => {
+    render(<FanStatusCard status={{ ...base, fanControlReachable: true }} connected={false} />);
+    expect(screen.getByText('Steuerung erreichbar')).toHaveAttribute('data-stale', 'true');
+  });
+
+  it('falls back to unknown when the payload carries no reachability at all', () => {
+    // A cached bundle can meet a rolled-back backend, and the SSE payload is
+    // parsed unvalidated — so the field can be absent despite the type.
+    const { fanControlReachable: _omitted, ...withoutField } = base;
+    render(<FanStatusCard status={withoutField as FanStatus} connected={true} />);
+    expect(screen.getByText('Erreichbarkeit unbekannt')).toBeInTheDocument();
+  });
+
+  it('falls back to unknown for a value the type does not allow', () => {
+    // 'constructor' resolves through Object.prototype, so a nullish guard on
+    // the lookup would let an inherited function through.
+    const poisoned = { ...base, fanControlReachable: 'constructor' as unknown as boolean };
+    render(<FanStatusCard status={poisoned} connected={true} />);
+    expect(screen.getByText('Erreichbarkeit unbekannt')).toBeInTheDocument();
+  });
+
+  it('marks reachability as current while the stream is open', () => {
+    render(<FanStatusCard status={{ ...base, fanControlReachable: true }} connected={true} />);
+    expect(screen.getByText('Steuerung erreichbar')).toHaveAttribute('data-stale', 'false');
   });
 });

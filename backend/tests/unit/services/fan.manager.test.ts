@@ -71,7 +71,7 @@ describe('FanControlManager', () => {
     const { manager, f } = await setup();
     manager.init();
     f.emit('/corn-watch/actors/corn-watch-1/fan-control/online', 'true');
-    expect(manager.getController('grain-watch-1')!.getStatus().shellyOnline).toBe(true);
+    expect(manager.getController('grain-watch-1')!.getStatus().fanControlReachable).toBe(true);
   });
 
   it('publishes to the command topic when the controller acts', async () => {

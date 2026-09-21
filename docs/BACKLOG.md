@@ -137,8 +137,14 @@ if the 401 branch did not return first.
 as a stream, reaches a clean end of body and resolves. No retry, no `onerror`,
 no signal — the page sits on the last snapshot with a live-looking button.
 
-Closing it: abort on the second 401, as the 404 and 403 branches do, and surface
-it.
+`refreshAttempts` makes it easier to reach than it looks: it is reset only on a
+successful open, never when the effect re-runs. `StockDetailPage` is not
+remounted when the `:stockId` route param changes, so navigating away from a
+hall that spent its refresh carries the count into the next hall, where a single
+401 then lands in the give-up branch directly.
+
+Closing it: abort on the second 401, as the 404 and 403 branches do, surface it,
+and reset the ref at the top of the effect body.
 
 ## A stray 404 latches the fan page into "no fan control"
 
@@ -190,6 +196,33 @@ middleware, after logging the error.
 timeout, keepalive timeout), and an unhandled `error` event takes the whole BFF
 down, not just fan control. A one-line listener that logs and lets
 `reconnectPeriod` do its job closes it.
+
+## The reachability badge affirms a reachability the backend cannot observe
+
+**Deferred:** 2026-09-21 — weighed against the operating reality and accepted.
+
+`fanControlReachable` moves only when an `online` LWT message is routed
+(`backend/src/services/fan/fan.manager.ts`). `MqttClientLike`
+(`backend/src/services/mqtt/mqtt.service.ts`) exposes `message` alone, so no
+connect, close or offline event reaches the manager — the same surface as the
+missing error listener above. If the backend keeps running but loses its broker
+link, the last value freezes, usually `true`. The SSE stream to the browser is
+unaffected, so `connected` stays true and the badge is not dimmed either: the
+card states "Steuerung erreichbar" on no evidence.
+
+Two things made this worth recording rather than ignoring. Showing the badge
+permanently turned what used to be silence into a positive claim — the old card
+rendered nothing for a frozen `true`. And the rename widened the promise:
+`shellyOnline` reported the LWT verbatim and left the reader to draw the
+conclusion, while `fanControlReachable` asserts something the data does not
+cover. The field's doc comment and `docs/specs/API.md` now state that limit; the
+badge label does not.
+
+Fix when it becomes worth it: give `MqttClientLike` the connection events
+mqtt.js already emits, have `MqttService` forward them, and let
+`FanControlManager` reset every controller's reachability to `null` — unknown
+rather than unreachable, since the device itself may be fine. The existing
+dedupe in `handleReachability` and the `online_change` log entry then cover it.
 
 ## Backend integration suite is flaky under the full parallel run
 

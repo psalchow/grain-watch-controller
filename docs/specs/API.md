@@ -156,8 +156,17 @@ sensors are silent.
 stock row still asks for fan control **and** a controller exists for it. Those
 are the same two conditions the fan endpoints check, so the field never
 advertises a call that answers 404. It does not promise the broker is reachable
-— controllers are built from the wiring at startup. Whether the Shelly is
-actually answering travels as `shellyOnline` in the fan status.
+— controllers are built from the wiring at startup. Whether the control is
+answering travels as `fanControlReachable` in the fan status.
+
+`fanControlReachable` carries the control's last connection state as reported by
+the broker: `true` while it is connected, `false` once it dropped off, `null`
+until it has been heard from at all. Two limits are worth knowing. A loss
+surfaces only once the broker gives up on the device, which takes a multiple of
+the device's own keep-alive interval — so the field says "was answering
+recently", not "is answering this second". And it tracks reports *about* the
+device only: if the backend loses its own link to the broker, no report can
+arrive and the last value stands unchanged (see `docs/BACKLOG.md`).
 
 ### Device rosters
 

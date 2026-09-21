@@ -20,7 +20,8 @@ const EVENT_LABEL: Record<string, string> = {
   warning: 'Warnung',
   alert: 'Alarm',
   status: 'Statusmeldung',
-  online_change: 'Verbindung geändert',
+  // Recorded under its original key; the label matches the reachability badge.
+  online_change: 'Erreichbarkeit geändert',
   watchdog_off: 'Zeitüberschreitung, abgeschaltet',
   stand_down: 'Steuerung entzogen',
   recovery: 'Zustand wiederhergestellt',

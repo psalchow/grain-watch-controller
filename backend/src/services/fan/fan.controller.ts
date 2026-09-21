@@ -32,8 +32,8 @@ export class FanController {
   private desiredOn = false;
   /** When desiredOn last became true (null while off). */
   private since: string | null = null;
-  /** Latest Shelly online/offline (LWT); null = not yet known. */
-  private shellyOnline: boolean | null = null;
+  /** Whether the fan control currently answers; null = not yet heard from. */
+  private fanControlReachable: boolean | null = null;
   /** Last unsolicited-switching warning (overlay, independent of state). */
   private lastWarning: { message: string; ts: string } | null = null;
   /** Last contactor-failure alert / safety shutoff (overlay, independent of state). */
@@ -123,11 +123,22 @@ export class FanController {
     this.log('status', payload, 'shelly');
   }
 
-  /** Updates the online overlay from the Shelly's retained LWT; logs only real changes. */
-  handleOnline(online: boolean): void {
-    if (this.shellyOnline === online) return;
-    this.shellyOnline = online;
-    this.log('online_change', { online }, 'shelly');
+  /**
+   * Updates the reachability overlay; logs only real changes.
+   *
+   * The device reports this by staying connected to the broker, so a loss
+   * surfaces only once the broker gives up on it — a multiple of the device's
+   * own keep-alive interval, which is configured on the device and not visible
+   * from here. Reachable therefore means "was answering recently", not "is
+   * answering this second".
+   *
+   * `online_change` is kept as the recorded event kind: it names an internal
+   * audit entry, not part of the published status.
+   */
+  handleReachability(reachable: boolean): void {
+    if (this.fanControlReachable === reachable) return;
+    this.fanControlReachable = reachable;
+    this.log('online_change', { online: reachable }, 'shelly');
     this.emit();
   }
 
@@ -137,7 +148,7 @@ export class FanController {
       stockId: this.deps.stockId,
       state: this.state,
       desiredOn: this.desiredOn,
-      shellyOnline: this.shellyOnline,
+      fanControlReachable: this.fanControlReachable,
       lastWarning: this.lastWarning,
       lastAlert: this.lastAlert,
       since: this.since,

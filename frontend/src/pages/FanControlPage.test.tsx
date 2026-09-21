@@ -11,7 +11,7 @@ vi.mock('../hooks/useFanStream', () => ({ useFanStream: vi.fn() }));
 vi.mock('../components/Header', () => ({ Header: () => null }));
 
 const snap = (state: string): FanSnapshot => ({
-  status: { stockId: 'grain-watch-1', state: state as FanSnapshot['status']['state'], desiredOn: state === 'ON', shellyOnline: true, lastWarning: null, lastAlert: null, since: null, updatedAt: 'x' },
+  status: { stockId: 'grain-watch-1', state: state as FanSnapshot['status']['state'], desiredOn: state === 'ON', fanControlReachable: true, lastWarning: null, lastAlert: null, since: null, updatedAt: 'x' },
   events: [],
 });
 
