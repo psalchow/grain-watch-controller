@@ -17,6 +17,7 @@ export class TenantRepository {
     return this.db
       .select({ id: tenants.id, name: tenants.name })
       .from(tenants)
+      .orderBy(tenants.name)
       .all();
   }
 

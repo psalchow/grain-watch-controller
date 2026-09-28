@@ -87,7 +87,7 @@ export default function AdminUsersPage() {
                   <tr key={u.id} className="border-b last:border-0">
                     <td className="p-3">{u.username}</td>
                     <td className="p-3">{u.role}</td>
-                    <td className="p-3">{u.tenants.map((t) => t.name).join(', ')}</td>
+                    <td className="p-3">{(u.tenants ?? []).map((t) => t.name).join(', ')}</td>
                     <td className="p-3">{u.active ? 'Yes' : 'No'}</td>
                     <td className="p-3 text-right space-x-2 whitespace-nowrap">
                       <Button variant="outline" size="sm" onClick={() => setEditing({ user: u })}>Edit</Button>
@@ -197,7 +197,7 @@ function CreateUserDialog({ tenants, onClose, onSaved }: { tenants: Tenant[]; on
 
 function EditUserDialog({ user, tenants, onClose, onSaved }: { user: AdminUser; tenants: Tenant[]; onClose: () => void; onSaved: () => void }) {
   const [role, setRole] = useState<'admin' | 'viewer'>(user.role);
-  const [tenantId, setTenantId] = useState(user.tenants[0]?.id ?? '');
+  const [tenantId, setTenantId] = useState(user.tenants?.[0]?.id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 

@@ -127,6 +127,11 @@ likely to investigate sees nothing wrong.
 `tenant_id` with no matching `tenants` row would turn a silent disappearance
 into a log line, for a few lines of code.
 
+The quieter failure runs the other way once a second tenant exists: because
+the column's non-null default is `'tnt_default'`, a hall inserted by SQL
+without naming `tenant_id` does not error or disappear — it silently joins
+`tnt_default` and becomes visible to everyone in it.
+
 ## The offline flag trusts the device clock
 
 **Deferred:** 2026-09-18 — decided to leave as is; documented in

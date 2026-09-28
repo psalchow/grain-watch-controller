@@ -615,7 +615,12 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 > once the new claim shape takes effect, but the refresh cookie survives and
 > the client re-mints a new one silently, on mount and on the first 401 — only
 > a user whose refresh cookie has expired or been cleared sees the login
-> screen.
+> screen. That holds for a browser already running the new bundle; a browser
+> still on the cached previous bundle runs the old `userFromToken`, which
+> requires the retired claim and returns `null` for both the stored token and
+> the freshly refreshed one, so it shows the login screen once, until the
+> service worker swaps in the new bundle — the user is not locked out, logging
+> in works straight away.
 
 > **Breaking change — versions after the look-back rework:** `INFLUXDB_OUTDOOR_LOOKBACK`
 > no longer exists and the backend **refuses to start** while it is still set.

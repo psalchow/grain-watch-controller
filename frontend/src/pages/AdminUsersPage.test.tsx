@@ -84,7 +84,7 @@ describe('AdminUsersPage', () => {
     );
   });
 
-  it('pre-selects the user’s tenant when editing, for either role', async () => {
+  it('pre-selects the user’s tenant when editing', async () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
 

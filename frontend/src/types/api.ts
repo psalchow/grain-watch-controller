@@ -40,7 +40,8 @@ export interface AdminUser {
   username: string;
   email?: string;
   role: 'admin' | 'viewer';
-  tenants: Tenant[];
+  /** Optional: a cached response from a pre-upgrade backend omits it. */
+  tenants?: Tenant[];
   active: boolean;
   createdAt: string;
 }

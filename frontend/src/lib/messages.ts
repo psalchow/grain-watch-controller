@@ -69,8 +69,10 @@ const API_MESSAGES: Record<string, string> = {
   'Invalid role': 'Ungültige Rolle',
   'Cannot deactivate your own account':
     'Das eigene Konto kann nicht deaktiviert werden',
-  'At least one stock access entry is required':
-    'Mindestens eine Halle muss zugewiesen sein',
+  'At least one tenant is required':
+    'Mindestens ein Mandant muss zugewiesen sein',
+  'A user can belong to at most one tenant':
+    'Ein Benutzer kann höchstens einem Mandanten angehören',
   'At least one permission field must be provided':
     'Mindestens eine Berechtigung muss angegeben werden',
 
