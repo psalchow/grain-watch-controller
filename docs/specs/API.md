@@ -40,11 +40,22 @@ All admin endpoints require an authenticated user with the `admin` role
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| `GET` | `/admin/tenants` | List all tenants — `{ tenants: [{ id, name }] }` |
 | `GET` | `/admin/users` | List all users |
 | `POST` | `/admin/users` | Create user (forces `mustChangePassword=true`) |
-| `PUT` | `/admin/users/:userId/permissions` | Update `role` and/or `stockAccess` |
+| `PUT` | `/admin/users/:userId/permissions` | Update `role` and/or `tenantIds` |
 | `PATCH` | `/admin/users/:userId` | Activate/deactivate (`{active}`); self-deactivation rejected |
 | `POST` | `/admin/users/:userId/reset-password` | Set a temporary password, force change on next login (204) |
+
+`POST /admin/users` and `PUT /admin/users/:userId/permissions` take
+`tenantIds: string[]`, capped at one entry — an unknown tenant, or more than
+one, answers 400. `GET /admin/users`, `POST /admin/users` and
+`PUT /admin/users/:userId/permissions` all answer `tenants: [{ id, name }]` per
+user, so the three agree on one shape.
+
+Tenants are created with SQL on the NAS, exactly like hall configuration
+below — the API only lists them, so an administrator can choose one when
+creating a user. There is no create, rename, delete or deactivation.
 
 ### Operational
 

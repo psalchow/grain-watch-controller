@@ -589,6 +589,34 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 
 ## Upgrade Procedure
 
+> **Tenants replace the per-user hall list — run this query before upgrading.**
+> Migration 0005 gives every hall and every user a tenant (`tnt_default`,
+> "Standard") and drops `user_stock_access`. That **widens** access: anyone
+> holding a partial hall grant gains the rest, and dropping the table destroys
+> the record of what they were meant to see. Before deploying, run this against
+> the SQLite file to find affected users — it starts from `users` so an account
+> with no grant at all is listed, treats `'*'` as full access, and ignores
+> grants naming halls that no longer exist:
+>
+> ```sql
+> SELECT u.id, u.username, COUNT(a.stock_id) AS granted
+> FROM users u
+> LEFT JOIN user_stock_access a
+>   ON a.user_id = u.id
+>  AND (a.stock_id = '*' OR a.stock_id IN (SELECT id FROM stocks))
+> GROUP BY u.id, u.username
+> HAVING SUM(CASE WHEN a.stock_id = '*' THEN 1 ELSE 0 END) = 0
+>    AND COUNT(a.stock_id) < (SELECT COUNT(*) FROM stocks);
+> ```
+>
+> Decide what to do about the users it lists before running the upgrade —
+> rollback after the fact is a database restore, since the grants themselves
+> are gone. Nobody is forced to log in again: the old access token is rejected
+> once the new claim shape takes effect, but the refresh cookie survives and
+> the client re-mints a new one silently, on mount and on the first 401 — only
+> a user whose refresh cookie has expired or been cleared sees the login
+> screen.
+
 > **Breaking change — versions after the look-back rework:** `INFLUXDB_OUTDOOR_LOOKBACK`
 > no longer exists and the backend **refuses to start** while it is still set.
 > Rename it to `INFLUXDB_LATEST_LOOKBACK` in `/volume1/docker/grainwatch/backend/.env`

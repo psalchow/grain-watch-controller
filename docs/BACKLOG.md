@@ -72,20 +72,60 @@ publishes temperature would therefore be greyed out permanently.
 If such a station appears, add a flag mirroring `hasGrainSensors` and only treat
 a missing partner as offline when it was expected.
 
-## Revoking a user's stock access does not close an open SSE stream
+## Changing a user's tenancy does not close an open SSE stream
 
-**Deferred:** 2026-09-18 — pre-existing, not introduced by the fan work.
+**Deferred:** 2026-09-23 — pre-existing, restated in tenant terms because the
+previous entry named `user_stock_access`, a table this change drops.
 
-`requireStockAccess` runs once when the fan stream connects. Removing a
-`user_stock_access` row therefore stops nothing until the client reconnects or
-its access token expires. The feature flag *is* re-checked; the access grant is
-not (`backend/src/controllers/fan.controller.ts`, `stream`).
+`requireStockAccess` runs once when the fan stream connects. Moving a hall to
+another tenant or removing a user's membership therefore stops nothing until
+the client reconnects or its access token expires (`JWT_EXPIRES_IN`, 15 minutes
+by default) — the feature flag *is* re-checked on each reconciliation tick; the
+tenant grant is not (`backend/src/controllers/fan.controller.ts`, `stream`).
 
 The client side of the same case: `useFanStream` aborts on a 403 without
 latching `disabled`, so `FanControlPage` keeps showing the last snapshot and an
 enabled switch whose command then answers 403. A separate `forbidden` flag would
 let the page say "kein Zugriff" rather than borrowing the "keine
 Lüftersteuerung" wording, which would be the wrong cause.
+
+## The `viewer` role already writes
+
+**Deferred:** 2026-09-23 — noted while introducing tenants, not caused by them.
+
+`POST /api/v1/stocks/:stockId/fan/command` applies `authenticate` and
+`requireStockAccess`, not `requireRole`. A `viewer` can therefore switch a fan,
+while `backend/src/models/user.model.ts` documents the role as read-only and
+`docs/specs/AUTHENTICATION.md` repeats it. Automation and ventilation profiles
+will add further write endpoints for exactly that role. Renaming it to
+`operator` costs a migration on `users.role`, the enum in
+`updatePermissionsSchema`, the frontend strings and the two documents above.
+
+## Per-hall grants inside a tenant are gone
+
+**Deferred:** 2026-09-23 — accepted alongside the tenants migration
+(migration 0005), which widens access for anyone who held a partial hall grant.
+
+Tenant membership is all-or-nothing: a user reaches every hall of their
+tenant, and the finer per-hall grant that `user_stock_access` used to offer has
+no equivalent. Reinstating it means a filter *inside* a tenant, not a return to
+the dropped table.
+
+## A wrong `stocks.tenant_id` disappears silently
+
+**Deferred:** 2026-09-23 — accepted; `stocks.tenant_id` carries no foreign key
+(SQLite refuses `ADD COLUMN` with both `REFERENCES` and a non-null default),
+and hall-to-tenant assignment is manual SQL until a hall configuration screen
+exists.
+
+A typo in `tenant_id` is therefore the expected way this goes wrong: the hall
+simply drops out of its intended tenant's `GET /stocks`, while an administrator
+— who bypasses the tenant filter by role — still sees it, so the account most
+likely to investigate sees nothing wrong.
+
+`initFanControl` already reads every stock at startup. Warning there about a
+`tenant_id` with no matching `tenants` row would turn a silent disappearance
+into a log line, for a few lines of code.
 
 ## The offline flag trusts the device clock
 

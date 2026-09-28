@@ -20,13 +20,30 @@ The refresh token is never exposed to JavaScript. It is set as a cookie named
 (per `COOKIE_SAMESITE`), scoped to path `/api/v1/auth` so it is only sent to the
 endpoints that need it. Each successful refresh rotates the cookie.
 
+The access token carries `tenants: [{ id, name }]`; the refresh token carries
+only the user id, so a rename or a membership change is only visible after the
+next access token is minted. The ids are what authorise — `requireStockAccess`
+below compares them against a hall's `tenant_id` — and the names ride along as
+display data. A rename therefore shows up for a signed-in user after at most
+one access-token lifetime (`JWT_EXPIRES_IN`, 15 minutes by default), not
+immediately.
+
 ## Authorisation
 
-- **Roles**: `admin` (full access, user management) and `viewer` (read-only)
-- **Stock access**: each user has a list of permitted stock IDs, or `['*']` for all
-- Admins implicitly have access to all stocks
-- Stock-scoped routes run `requireStockAccess`, which matches the `:stockId`
-  route parameter against the caller's `stockAccess` claim
+- **Roles**: `admin` (full access, user management) and `viewer` (read-only
+  access to the stocks of their tenants)
+- **Tenants**: every hall (`stocks.tenant_id`) belongs to exactly one tenant;
+  every user belongs to at least one (`user_tenants`). A user sees the halls of
+  their tenants; an administrator sees all, by role rather than membership.
+  Tenants themselves are created with SQL on the NAS, like hall configuration
+  (`docs/specs/API.md`, "Stocks without grain thermometers") — the API only
+  lists them (`GET /admin/tenants`), so an administrator can pick one when
+  creating a user.
+- Stock-scoped routes run `requireStockAccess`: it looks the hall up and
+  compares its tenant against the caller's tenant ids. An administrator passes
+  without the lookup. A hall of another tenant and an unknown hall both answer
+  **403** — the shape is unchanged from the retired per-hall list, so a 404
+  never reveals whether a hall id exists.
 - Admin routes run `requireRole('admin')` for the whole router
 
 ## Forced Password Change
@@ -59,7 +76,7 @@ away from leaving a default password in place, not as an authorisation boundary.
    ↓
 4. Set httpOnly refresh_token cookie, scoped to /api/v1/auth
    ↓
-5. Return {token, expiresIn, user{id, username, role, stockAccess,
+5. Return {token, expiresIn, user{id, username, role, tenants,
                                  mustChangePassword}}
 
 Subsequent requests:
