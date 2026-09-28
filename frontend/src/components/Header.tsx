@@ -14,6 +14,10 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isAdmin = user?.role === 'admin';
+  // A second membership has no single name to show, so it degrades to
+  // nothing rather than showing a wrong tenant.
+  const tenantName =
+    !isAdmin && user?.tenants.length === 1 ? user.tenants[0].name : null;
 
   /** Leaves the menu before acting, so the two dialogs never overlap. */
   const runFromMenu = (action: () => void) => {
@@ -35,7 +39,10 @@ export function Header() {
             overflow a phone in portrait, so below `sm` they move into a menu. */}
         <div className="hidden flex-1 items-center justify-end gap-4 sm:flex">
           {user && (
-            <span className="text-sm text-muted-foreground">{user.username}</span>
+            <span className="text-sm text-muted-foreground">
+              {user.username}
+              {tenantName && ` · ${tenantName}`}
+            </span>
           )}
           {user && (
             <Link

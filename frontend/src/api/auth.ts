@@ -6,7 +6,7 @@ import { decodeJwtPayload, isTokenValid } from '../lib/token';
 /**
  * Builds a User from the claims embedded in an access token.
  *
- * The access token carries userId, username, role and stockAccess, so the
+ * The access token carries userId, username, role and tenants, so the
  * client can restore the current user without an extra API call.
  */
 function userFromToken(token: string | null): User | null {
@@ -19,7 +19,7 @@ function userFromToken(token: string | null): User | null {
     typeof payload.userId !== 'string' ||
     typeof payload.username !== 'string' ||
     typeof payload.role !== 'string' ||
-    !Array.isArray(payload.stockAccess)
+    !Array.isArray(payload.tenants)
   ) {
     return null;
   }
@@ -27,7 +27,7 @@ function userFromToken(token: string | null): User | null {
     id: payload.userId,
     username: payload.username,
     role: payload.role as User['role'],
-    stockAccess: payload.stockAccess as string[],
+    tenants: payload.tenants as User['tenants'],
     mustChangePassword: payload.mustChangePassword === true,
   };
 }

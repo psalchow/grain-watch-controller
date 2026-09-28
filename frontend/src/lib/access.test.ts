@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { shouldForcePasswordChange, isAdmin } from './access';
 import { User } from '../types/api';
 
-const base: User = { id: 'usr_001', username: 'a', role: 'viewer', stockAccess: ['s1'] };
+const base: User = { id: 'usr_001', username: 'a', role: 'viewer', tenants: [{ id: 'tnt_default', name: 'Standard' }] };
 
 describe('access helpers', () => {
   it('forces a change when the flag is set and not already on /account', () => {

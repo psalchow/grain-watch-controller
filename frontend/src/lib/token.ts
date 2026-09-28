@@ -26,7 +26,11 @@ export function decodeJwtPayload(
     while (base64.length % 4 !== 0) {
       base64 += '=';
     }
-    return JSON.parse(atob(base64)) as Record<string, unknown>;
+    // atob yields one character per byte, mangling any non-ASCII text (a
+    // tenant or user name with an umlaut). Decode the bytes as UTF-8 instead.
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    return JSON.parse(json) as Record<string, unknown>;
   } catch {
     return null;
   }

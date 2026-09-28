@@ -1,10 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { isTokenValid } from './token';
+import { decodeJwtPayload, isTokenValid } from './token';
 
-/** Builds an unsigned JWT-shaped string with the given payload. */
+/**
+ * Builds an unsigned JWT-shaped string with the given payload.
+ *
+ * Encodes via TextEncoder rather than a bare `btoa(JSON.stringify(...))`: a
+ * real token's payload is UTF-8, and a name containing an umlaut needs its
+ * multi-byte encoding preserved to exercise `decodeJwtPayload` realistically
+ * (a naive helper built directly from the JS string round-trips by
+ * coincidence and would not catch a regression to `atob`-only decoding).
+ */
 function makeToken(payload: Record<string, unknown>): string {
-  const encode = (obj: Record<string, unknown>) =>
-    btoa(JSON.stringify(obj)).replace(/=/g, '');
+  const encode = (obj: Record<string, unknown>) => {
+    const bytes = new TextEncoder().encode(JSON.stringify(obj));
+    const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+    return btoa(binary).replace(/=/g, '');
+  };
   return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}.sig`;
 }
 
@@ -35,5 +46,16 @@ describe('isTokenValid', () => {
     const exp = Math.floor(Date.now() / 1000) + 10;
     // 30s skew → a token with 10s left is considered already invalid
     expect(isTokenValid(makeToken({ exp }), 30)).toBe(false);
+  });
+});
+
+describe('decodeJwtPayload', () => {
+  it('returns null for a malformed token', () => {
+    expect(decodeJwtPayload('not-a-jwt')).toBeNull();
+  });
+
+  it('decodes a UTF-8 payload without mangling an umlaut', () => {
+    const payload = decodeJwtPayload(makeToken({ name: 'Müller' }));
+    expect(payload?.name).toBe('Müller');
   });
 });

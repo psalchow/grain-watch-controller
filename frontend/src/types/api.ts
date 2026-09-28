@@ -15,11 +15,17 @@ export interface LoginResponse {
   user: User;
 }
 
+/** A tenant (Mandant) a user belongs to. */
+export interface Tenant {
+  id: string;
+  name: string;
+}
+
 export interface User {
   id: string;
   username: string;
   role: 'admin' | 'viewer';
-  stockAccess: string[]; // ['*'] for admin, specific stock IDs for viewers
+  tenants: Tenant[];
   mustChangePassword?: boolean;
 }
 
@@ -34,7 +40,7 @@ export interface AdminUser {
   username: string;
   email?: string;
   role: 'admin' | 'viewer';
-  stockAccess: string[];
+  tenants: Tenant[];
   active: boolean;
   createdAt: string;
 }
@@ -43,17 +49,21 @@ export interface AdminUsersResponse {
   users: AdminUser[];
 }
 
+export interface TenantsResponse {
+  tenants: Tenant[];
+}
+
 export interface CreateUserRequest {
   username: string;
   password: string;
   email?: string;
   role: 'admin' | 'viewer';
-  stockAccess: string[];
+  tenantIds: string[];
 }
 
 export interface UpdatePermissionsRequest {
   role?: 'admin' | 'viewer';
-  stockAccess?: string[];
+  tenantIds?: string[];
 }
 
 // Grain Stocks

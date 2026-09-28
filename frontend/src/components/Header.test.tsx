@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Header } from './Header';
 import { useAuth } from '@/contexts/AuthContext';
-import type { User } from '@/types/api';
+import type { Tenant, User } from '@/types/api';
 import { WHEATMARK_CONTENT_VIEWBOX } from '@/brand/wheatmarkGeometry';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: vi.fn() }));
@@ -22,12 +22,12 @@ vi.mock('react-router-dom', async () => {
 
 const logout = vi.fn();
 
-function setUser(role: 'admin' | 'viewer') {
+function setUser(role: 'admin' | 'viewer', tenants: Tenant[] = [{ id: 'tnt_default', name: 'Standard' }]) {
   const user: User = {
     id: 'usr_001',
     username: 'peter',
     role,
-    stockAccess: role === 'admin' ? ['*'] : ['grain-watch-1'],
+    tenants,
   };
   vi.mocked(useAuth).mockReturnValue({ user, logout } as unknown as ReturnType<
     typeof useAuth
@@ -125,5 +125,38 @@ describe('Header brand', () => {
     expect(
       brand.querySelector(`svg[viewBox="${WHEATMARK_CONTENT_VIEWBOX}"]`)
     ).not.toBeNull();
+  });
+});
+
+describe('Header tenant name', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows the tenant name beside the username for a non-administrator with one tenant', () => {
+    setUser('viewer', [{ id: 'tnt_default', name: 'Mustermann Agrar' }]);
+    renderHeader();
+
+    expect(screen.getByText('peter · Mustermann Agrar')).toBeInTheDocument();
+  });
+
+  it('shows nothing extra for an administrator', () => {
+    setUser('admin', [{ id: 'tnt_default', name: 'Standard' }]);
+    renderHeader();
+
+    expect(screen.getByText('peter')).toBeInTheDocument();
+    expect(screen.queryByText(/Standard/)).not.toBeInTheDocument();
+  });
+
+  it('shows nothing extra for a user with two tenants', () => {
+    setUser('viewer', [
+      { id: 'tnt_default', name: 'Standard' },
+      { id: 'tnt_other', name: 'Other' },
+    ]);
+    renderHeader();
+
+    expect(screen.getByText('peter')).toBeInTheDocument();
+    expect(screen.queryByText(/Standard/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Other/)).not.toBeInTheDocument();
   });
 });

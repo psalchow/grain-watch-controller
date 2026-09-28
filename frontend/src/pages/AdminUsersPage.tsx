@@ -5,19 +5,17 @@ import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
-import { adminApi, stocksApi } from '@/api';
+import { adminApi } from '@/api';
 import { extractError } from '@/lib/messages';
-import { AdminUser, GrainStock } from '@/types/api';
+import { AdminUser, Tenant } from '@/types/api';
 
 type Editing = { user: AdminUser } | null;
 type Resetting = { user: AdminUser } | null;
 
-const ALL = '*';
-
 export default function AdminUsersPage() {
   const navigate = useNavigate();
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [stocks, setStocks] = useState<GrainStock[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,9 +27,9 @@ export default function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [u, s] = await Promise.all([adminApi.listUsers(), stocksApi.getStocks()]);
+      const [u, t] = await Promise.all([adminApi.listUsers(), adminApi.listTenants()]);
       setUsers(u);
-      setStocks(s.stocks);
+      setTenants(t);
     } catch {
       setError('Benutzer konnten nicht geladen werden');
     } finally {
@@ -79,7 +77,7 @@ export default function AdminUsersPage() {
                 <tr>
                   <th className="p-3 text-left">Username</th>
                   <th className="p-3 text-left">Role</th>
-                  <th className="p-3 text-left">Stocks</th>
+                  <th className="p-3 text-left">Tenant</th>
                   <th className="p-3 text-left">Active</th>
                   <th className="p-3 text-right">Actions</th>
                 </tr>
@@ -89,7 +87,7 @@ export default function AdminUsersPage() {
                   <tr key={u.id} className="border-b last:border-0">
                     <td className="p-3">{u.username}</td>
                     <td className="p-3">{u.role}</td>
-                    <td className="p-3">{u.stockAccess.includes(ALL) ? 'All stocks' : u.stockAccess.join(', ')}</td>
+                    <td className="p-3">{u.tenants.map((t) => t.name).join(', ')}</td>
                     <td className="p-3">{u.active ? 'Yes' : 'No'}</td>
                     <td className="p-3 text-right space-x-2 whitespace-nowrap">
                       <Button variant="outline" size="sm" onClick={() => setEditing({ user: u })}>Edit</Button>
@@ -107,10 +105,10 @@ export default function AdminUsersPage() {
       </main>
 
       {creating && (
-        <CreateUserDialog stocks={stocks} onClose={() => setCreating(false)} onSaved={async () => { setCreating(false); await load(); }} />
+        <CreateUserDialog tenants={tenants} onClose={() => setCreating(false)} onSaved={async () => { setCreating(false); await load(); }} />
       )}
       {editing && (
-        <EditUserDialog user={editing.user} stocks={stocks} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
+        <EditUserDialog user={editing.user} tenants={tenants} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />
       )}
       {resetting && (
         <ResetPasswordDialog user={resetting.user} onClose={() => setResetting(null)} onSaved={() => setResetting(null)} />
@@ -119,33 +117,31 @@ export default function AdminUsersPage() {
   );
 }
 
-function StockSelect({ stocks, value, onChange }: { stocks: GrainStock[]; value: string[]; onChange: (v: string[]) => void }) {
-  const allSelected = value.includes(ALL);
+function TenantSelect({ id, tenants, value, onChange }: { id: string; tenants: Tenant[]; value: string; onChange: (v: string) => void }) {
   return (
-    <div className="space-y-2">
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={allSelected} onChange={(e) => onChange(e.target.checked ? [ALL] : [])} />
-        All stocks
-      </label>
-      {!allSelected && stocks.map((s) => (
-        <label key={s.id} className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={value.includes(s.id)}
-            onChange={(e) => onChange(e.target.checked ? [...value, s.id] : value.filter((v) => v !== s.id))}
-          />
-          {s.name}
-        </label>
+    <select
+      id={id}
+      className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="" disabled>
+        Select a tenant
+      </option>
+      {tenants.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
       ))}
-    </div>
+    </select>
   );
 }
 
-function CreateUserDialog({ stocks, onClose, onSaved }: { stocks: GrainStock[]; onClose: () => void; onSaved: () => void }) {
+function CreateUserDialog({ tenants, onClose, onSaved }: { tenants: Tenant[]; onClose: () => void; onSaved: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'admin' | 'viewer'>('viewer');
-  const [stockAccess, setStockAccess] = useState<string[]>([]);
+  const [tenantId, setTenantId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -154,11 +150,10 @@ function CreateUserDialog({ stocks, onClose, onSaved }: { stocks: GrainStock[]; 
     setError(null);
     if (username.length < 3) return setError('Der Benutzername muss mindestens 3 Zeichen lang sein');
     if (password.length < 8) return setError('Das temporäre Passwort muss mindestens 8 Zeichen lang sein');
-    const access = role === 'admin' ? ['*'] : stockAccess;
-    if (access.length === 0) return setError('Mindestens eine Halle auswählen');
+    if (!tenantId) return setError('Ein Mandant muss ausgewählt werden');
     setSaving(true);
     try {
-      await adminApi.createUser({ username, password, role, stockAccess: access });
+      await adminApi.createUser({ username, password, role, tenantIds: [tenantId] });
       onSaved();
     } catch (err) {
       setError(extractError(err, 'Benutzer konnte nicht angelegt werden'));
@@ -172,28 +167,26 @@ function CreateUserDialog({ stocks, onClose, onSaved }: { stocks: GrainStock[]; 
       <form onSubmit={submit} className="space-y-4">
         {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Username</label>
-          <Input value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="none" />
+          <label htmlFor="new-user-username" className="text-sm font-medium">Username</label>
+          <Input id="new-user-username" value={username} onChange={(e) => setUsername(e.target.value)} autoCapitalize="none" />
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Temporary password</label>
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <label htmlFor="new-user-password" className="text-sm font-medium">Temporary password</label>
+          <Input id="new-user-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           <p className="text-xs text-muted-foreground">The user must change this on first login.</p>
         </div>
         <div className="space-y-2">
-          <label className="text-sm font-medium">Role</label>
-          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          <label htmlFor="new-user-role" className="text-sm font-medium">Role</label>
+          <select id="new-user-role" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'viewer')}>
             <option value="viewer">viewer</option>
             <option value="admin">admin</option>
           </select>
         </div>
-        {role === 'viewer' && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Stock access</label>
-            <StockSelect stocks={stocks} value={stockAccess} onChange={setStockAccess} />
-          </div>
-        )}
+        <div className="space-y-2">
+          <label htmlFor="new-user-tenant" className="text-sm font-medium">Tenant</label>
+          <TenantSelect id="new-user-tenant" tenants={tenants} value={tenantId} onChange={setTenantId} />
+        </div>
         <Button type="submit" className="w-full" disabled={saving}>
           {saving ? 'Saving...' : 'Create user'}
         </Button>
@@ -202,20 +195,19 @@ function CreateUserDialog({ stocks, onClose, onSaved }: { stocks: GrainStock[]; 
   );
 }
 
-function EditUserDialog({ user, stocks, onClose, onSaved }: { user: AdminUser; stocks: GrainStock[]; onClose: () => void; onSaved: () => void }) {
+function EditUserDialog({ user, tenants, onClose, onSaved }: { user: AdminUser; tenants: Tenant[]; onClose: () => void; onSaved: () => void }) {
   const [role, setRole] = useState<'admin' | 'viewer'>(user.role);
-  const [stockAccess, setStockAccess] = useState<string[]>(user.stockAccess);
+  const [tenantId, setTenantId] = useState(user.tenants[0]?.id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const access = role === 'admin' ? ['*'] : stockAccess;
-    if (access.length === 0) return setError('Mindestens eine Halle auswählen');
+    if (!tenantId) return setError('Ein Mandant muss ausgewählt werden');
     setSaving(true);
     try {
-      await adminApi.updatePermissions(user.id, { role, stockAccess: access });
+      await adminApi.updatePermissions(user.id, { role, tenantIds: [tenantId] });
       onSaved();
     } catch (err) {
       setError(extractError(err, 'Benutzer konnte nicht geändert werden'));
@@ -229,19 +221,17 @@ function EditUserDialog({ user, stocks, onClose, onSaved }: { user: AdminUser; s
       <form onSubmit={submit} className="space-y-4">
         {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
         <div className="space-y-2">
-          <label className="text-sm font-medium">Role</label>
-          <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          <label htmlFor="edit-user-role" className="text-sm font-medium">Role</label>
+          <select id="edit-user-role" className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             value={role} onChange={(e) => setRole(e.target.value as 'admin' | 'viewer')}>
             <option value="viewer">viewer</option>
             <option value="admin">admin</option>
           </select>
         </div>
-        {role === 'viewer' && (
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Stock access</label>
-            <StockSelect stocks={stocks} value={stockAccess} onChange={setStockAccess} />
-          </div>
-        )}
+        <div className="space-y-2">
+          <label htmlFor="edit-user-tenant" className="text-sm font-medium">Tenant</label>
+          <TenantSelect id="edit-user-tenant" tenants={tenants} value={tenantId} onChange={setTenantId} />
+        </div>
         <Button type="submit" className="w-full" disabled={saving}>
           {saving ? 'Saving...' : 'Save changes'}
         </Button>

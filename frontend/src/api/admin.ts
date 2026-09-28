@@ -3,6 +3,8 @@ import {
   AdminUser,
   AdminUsersResponse,
   CreateUserRequest,
+  Tenant,
+  TenantsResponse,
   UpdatePermissionsRequest,
 } from '../types/api';
 
@@ -13,6 +15,15 @@ export const adminApi = {
   async listUsers(): Promise<AdminUser[]> {
     const response = await axios.get<AdminUsersResponse>('/admin/users');
     return response.data.users;
+  },
+
+  /**
+   * Lists all tenants, so one can be chosen when creating or editing a user.
+   * Read-only: there is no create, rename or delete from the client.
+   */
+  async listTenants(): Promise<Tenant[]> {
+    const response = await axios.get<TenantsResponse>('/admin/tenants');
+    return response.data.tenants;
   },
 
   async createUser(data: CreateUserRequest): Promise<AdminUser> {
