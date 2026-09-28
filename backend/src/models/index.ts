@@ -2,6 +2,7 @@ export {
   User,
   UserProfile,
   UserRole,
+  TenantRef,
   JWTPayload,
   hasStockAccess,
 } from './user.model';

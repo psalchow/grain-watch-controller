@@ -9,13 +9,18 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
-import { initDb, closeDb, getDb } from '../../src/db';
+import { initDb, closeDb, getDb, getSqliteHandle } from '../../src/db';
 import { runMigrations } from '../../src/db/migrate';
 import { UserRepository } from '../../src/db/repositories';
+import { DEFAULT_TENANT_ID } from '../../src/db/schema';
 import { UserService, AuthService } from '../../src/services/auth';
 import { setAuthService } from '../../src/middleware';
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
+
+/** A second tenant, so "switch a user's tenant" is more than a no-op. */
+const SECOND_TENANT_ID = 'tnt_second';
+const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };
 
 // Mock the config module
 jest.mock('../../src/config', () => ({
@@ -55,7 +60,7 @@ function createToken(payload: {
   userId: string;
   username: string;
   role: 'admin' | 'viewer';
-  stockAccess: string[];
+  tenants: { id: string; name: string }[];
 }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 }
@@ -69,6 +74,9 @@ describe('Admin Endpoints', () => {
   beforeAll(() => {
     initDb({ path: ':memory:' });
     runMigrations(getDb());
+    getSqliteHandle()
+      .prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+      .run(SECOND_TENANT_ID, 'Zweiter Betrieb', '2026-06-02T00:00:00.000Z');
     userService = new UserService(new UserRepository(getDb()));
 
     // Create auth service with our test user service
@@ -98,7 +106,7 @@ describe('Admin Endpoints', () => {
       password: 'adminpassword123',
       email: 'admin@test.com',
       role: 'admin',
-      stockAccess: ['*'],
+      tenantIds: [DEFAULT_TENANT_ID],
     });
 
     // Create viewer user
@@ -106,7 +114,7 @@ describe('Admin Endpoints', () => {
       username: 'testviewer',
       password: 'viewerpassword123',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenantIds: [DEFAULT_TENANT_ID],
     });
 
     // Create tokens
@@ -114,14 +122,14 @@ describe('Admin Endpoints', () => {
       userId: admin.id,
       username: 'testadmin',
       role: 'admin',
-      stockAccess: ['*'],
+      tenants: [DEFAULT_TENANT],
     });
 
     viewerToken = createToken({
       userId: viewer.id,
       username: 'testviewer',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenants: [DEFAULT_TENANT],
     });
   });
 
@@ -137,7 +145,7 @@ describe('Admin Endpoints', () => {
       expect(response.body.users[0]).toHaveProperty('id');
       expect(response.body.users[0]).toHaveProperty('username');
       expect(response.body.users[0]).toHaveProperty('role');
-      expect(response.body.users[0]).toHaveProperty('stockAccess');
+      expect(response.body.users[0]).toHaveProperty('tenants');
       expect(response.body.users[0]).toHaveProperty('active');
       expect(response.body.users[0]).toHaveProperty('createdAt');
       // Password hash should not be included
@@ -170,7 +178,7 @@ describe('Admin Endpoints', () => {
           password: 'newuserpass123',
           email: 'newuser@test.com',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(201);
@@ -178,7 +186,7 @@ describe('Admin Endpoints', () => {
       expect(response.body.username).toBe('newuser');
       expect(response.body.email).toBe('newuser@test.com');
       expect(response.body.role).toBe('viewer');
-      expect(response.body.stockAccess).toEqual(['corn-watch-1']);
+      expect(response.body.tenants).toEqual([DEFAULT_TENANT]);
       expect(response.body.active).toBe(true);
       expect(response.body).toHaveProperty('createdAt');
       expect(response.body).not.toHaveProperty('password');
@@ -193,7 +201,7 @@ describe('Admin Endpoints', () => {
           username: 'noemailuser',
           password: 'noemailpass123',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(201);
@@ -209,12 +217,12 @@ describe('Admin Endpoints', () => {
           username: 'newadmin',
           password: 'newadminpass123',
           role: 'admin',
-          stockAccess: ['*'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(201);
       expect(response.body.role).toBe('admin');
-      expect(response.body.stockAccess).toEqual(['*']);
+      expect(response.body.tenants).toEqual([DEFAULT_TENANT]);
     });
 
     it('should return 400 for duplicate username', async () => {
@@ -225,7 +233,7 @@ describe('Admin Endpoints', () => {
           username: 'testadmin',
           password: 'somepassword123',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(400);
@@ -241,7 +249,7 @@ describe('Admin Endpoints', () => {
           username: 'shortpass',
           password: 'short',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(400);
@@ -266,13 +274,13 @@ describe('Admin Endpoints', () => {
           username: 'invalidrole',
           password: 'validpassword123',
           role: 'superuser',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(400);
     });
 
-    it('should return 400 for empty stockAccess', async () => {
+    it('should return 400 for an empty tenant list', async () => {
       const response = await request(app)
         .post('/api/v1/admin/users')
         .set('Authorization', `Bearer ${adminToken}`)
@@ -280,7 +288,37 @@ describe('Admin Endpoints', () => {
           username: 'noaccess',
           password: 'validpassword123',
           role: 'viewer',
-          stockAccess: [],
+          tenantIds: [],
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should return 400 for an unknown tenant', async () => {
+      const response = await request(app)
+        .post('/api/v1/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          username: 'ghosttenant',
+          password: 'validpassword123',
+          role: 'viewer',
+          tenantIds: ['tnt_nonexistent'],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.message).toContain('tnt_nonexistent');
+      expect(await userService.findUserByUsername('ghosttenant')).toBeNull();
+    });
+
+    it('should reject more than one tenant while the cap stands', async () => {
+      const response = await request(app)
+        .post('/api/v1/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          username: 'twotenants',
+          password: 'validpassword123',
+          role: 'viewer',
+          tenantIds: [DEFAULT_TENANT_ID, SECOND_TENANT_ID],
         });
 
       expect(response.status).toBe(400);
@@ -294,10 +332,41 @@ describe('Admin Endpoints', () => {
           username: 'newuser',
           password: 'newuserpass123',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(403);
+    });
+  });
+
+  describe('GET /api/v1/admin/tenants', () => {
+    it('should list every tenant for admin', async () => {
+      const response = await request(app)
+        .get('/api/v1/admin/tenants')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.tenants).toEqual(
+        expect.arrayContaining([
+          DEFAULT_TENANT,
+          { id: SECOND_TENANT_ID, name: 'Zweiter Betrieb' },
+        ]),
+      );
+      expect(response.body.tenants).toHaveLength(2);
+    });
+
+    it('should return 403 for non-admin user', async () => {
+      const response = await request(app)
+        .get('/api/v1/admin/tenants')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request(app).get('/api/v1/admin/tenants');
+
+      expect(response.status).toBe(401);
     });
   });
 
@@ -318,21 +387,50 @@ describe('Admin Endpoints', () => {
       expect(response.body).toHaveProperty('updatedAt');
     });
 
-    it('should update user stockAccess', async () => {
+    it('should move a user to another tenant', async () => {
       const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
         .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
-          stockAccess: ['corn-watch-1', 'corn-watch-2'],
+          tenantIds: [SECOND_TENANT_ID],
         });
 
       expect(response.status).toBe(200);
-      expect(response.body.stockAccess).toEqual(['corn-watch-1', 'corn-watch-2']);
+      expect(response.body.tenants).toEqual([
+        { id: SECOND_TENANT_ID, name: 'Zweiter Betrieb' },
+      ]);
     });
 
-    it('should update both role and stockAccess', async () => {
+    it('should return 400 for an unknown tenant', async () => {
+      const viewer = await userService.findUserByUsername('testviewer');
+
+      const response = await request(app)
+        .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          tenantIds: ['tnt_nonexistent'],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.message).toContain('tnt_nonexistent');
+    });
+
+    it('should reject more than one tenant while the cap stands', async () => {
+      const viewer = await userService.findUserByUsername('testviewer');
+
+      const response = await request(app)
+        .put(`/api/v1/admin/users/${viewer?.id}/permissions`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          tenantIds: [DEFAULT_TENANT_ID, SECOND_TENANT_ID],
+        });
+
+      expect(response.status).toBe(400);
+    });
+
+    it('should update both role and tenant membership', async () => {
       const viewer = await userService.findUserByUsername('testviewer');
 
       const response = await request(app)
@@ -340,12 +438,12 @@ describe('Admin Endpoints', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
           role: 'admin',
-          stockAccess: ['*'],
+          tenantIds: [DEFAULT_TENANT_ID],
         });
 
       expect(response.status).toBe(200);
       expect(response.body.role).toBe('admin');
-      expect(response.body.stockAccess).toEqual(['*']);
+      expect(response.body.tenants).toEqual([DEFAULT_TENANT]);
     });
 
     it('should return 400 when no fields provided', async () => {
@@ -470,7 +568,7 @@ describe('Admin Endpoints', () => {
         userId: admin!.id,
         username: 'testadmin',
         role: 'admin',
-        stockAccess: ['*'],
+        tenants: [DEFAULT_TENANT],
       });
 
       const response = await request(app)

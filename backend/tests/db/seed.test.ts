@@ -30,6 +30,7 @@ describe('seedStocks', () => {
       devicePrefix: '1',
       hasHumidity: true,
       active: true,
+      tenantId: 'tnt_default',
     });
     const watch2 = await repo.findById('grain-watch-2');
     expect(watch2).toMatchObject({

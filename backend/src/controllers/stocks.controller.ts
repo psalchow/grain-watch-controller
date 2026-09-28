@@ -158,7 +158,11 @@ export class StocksController {
       const user = req.user!;
 
       const allStocks = await this.stockService.listStocks();
-      const accessibleStocks = allStocks.filter((s) => hasStockAccess(user, s.id));
+      // An administrator is not a member of every tenant; they skip the filter.
+      const accessibleStocks =
+        user.role === 'admin'
+          ? allStocks
+          : allStocks.filter((s) => hasStockAccess(user, s));
 
       const stocks = accessibleStocks.map((s) => ({
         id: s.id,

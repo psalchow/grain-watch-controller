@@ -101,7 +101,7 @@ export class AuthController {
    *     "id": "usr_001",
    *     "username": "admin",
    *     "role": "admin",
-   *     "stockAccess": ["*"]
+   *     "tenants": [{ "id": "tnt_default", "name": "Standard" }]
    *   }
    * }
    */
@@ -132,7 +132,7 @@ export class AuthController {
           id: decoded.userId,
           username: decoded.username,
           role: decoded.role,
-          stockAccess: decoded.stockAccess,
+          tenants: decoded.tenants,
           mustChangePassword: decoded.mustChangePassword,
         },
       });

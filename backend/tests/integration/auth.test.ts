@@ -65,7 +65,7 @@ describe('Auth Endpoints', () => {
       username: 'testadmin',
       password: 'testpassword123',
       role: 'admin',
-      stockAccess: ['*'],
+      tenantIds: ['tnt_default'],
     });
 
     // Create test viewer user
@@ -73,7 +73,7 @@ describe('Auth Endpoints', () => {
       username: 'testviewer',
       password: 'viewerpassword123',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenantIds: ['tnt_default'],
     });
 
     // Create disabled user
@@ -81,7 +81,7 @@ describe('Auth Endpoints', () => {
       username: 'disableduser',
       password: 'disabledpassword123',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenantIds: ['tnt_default'],
     });
     await userService.updateUser(disabledProfile.id, { active: false });
 
@@ -115,7 +115,7 @@ describe('Auth Endpoints', () => {
       expect(response.body.user).toHaveProperty('id');
       expect(response.body.user.username).toBe('testadmin');
       expect(response.body.user.role).toBe('admin');
-      expect(response.body.user.stockAccess).toEqual(['*']);
+      expect(response.body.user.tenants).toEqual([{ id: 'tnt_default', name: 'Standard' }]);
 
       // Verify token is valid JWT
       const decoded = jwt.verify(
@@ -154,7 +154,7 @@ describe('Auth Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.user.role).toBe('viewer');
-      expect(response.body.user.stockAccess).toEqual(['corn-watch-1']);
+      expect(response.body.user.tenants).toEqual([{ id: 'tnt_default', name: 'Standard' }]);
     });
 
     it('should return 401 for invalid username', async () => {

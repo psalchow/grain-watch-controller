@@ -16,9 +16,11 @@ import {
   validateParams,
   createUserSchema,
   resetPasswordSchema,
+  tenantIdsSchema,
   userIdParamsSchema,
   getAuthService,
 } from '../middleware';
+import { getTenantRepository } from '../services';
 import { z } from 'zod';
 
 /**
@@ -27,14 +29,11 @@ import { z } from 'zod';
 const updatePermissionsSchema = z.object({
   /** New role (optional) */
   role: z.enum(['admin', 'viewer']).optional(),
-  /** New stock access list (optional) */
-  stockAccess: z
-    .array(z.string())
-    .min(1, 'At least one stock access entry is required')
-    .optional(),
+  /** New tenant membership (optional) */
+  tenantIds: tenantIdsSchema.optional(),
 }).refine(
-  (data) => data.role !== undefined || data.stockAccess !== undefined,
-  { message: 'At least one permission field (role or stockAccess) must be provided' }
+  (data) => data.role !== undefined || data.tenantIds !== undefined,
+  { message: 'At least one permission field (role or tenantIds) must be provided' }
 );
 
 /**
@@ -57,11 +56,28 @@ export function createAdminRouter(): Router {
   const router = Router();
   const authService = getAuthService();
   const userService = authService.getUserService();
-  const controller = new AdminController(userService);
+  const controller = new AdminController(userService, getTenantRepository());
 
   // Apply authentication and admin role check to all routes
   router.use(authenticate);
   router.use(requireRole('admin'));
+
+  /**
+   * GET /tenants
+   *
+   * List all tenants, so a tenant can be chosen when creating a user.
+   *
+   * Response (200):
+   * - tenants: Array of { id, name }
+   *
+   * Errors:
+   * - 401: Authentication required
+   * - 403: Admin role required
+   */
+  router.get(
+    '/tenants',
+    (req, res, next) => controller.listTenants(req, res, next)
+  );
 
   /**
    * GET /users
@@ -90,7 +106,7 @@ export function createAdminRouter(): Router {
    * - password: string (8-100 characters)
    * - email: string (optional, valid email format)
    * - role: 'admin' or 'viewer'
-   * - stockAccess: Array of stock IDs
+   * - tenantIds: Array with exactly one tenant id
    *
    * Response (201):
    * - Created user object
@@ -109,14 +125,14 @@ export function createAdminRouter(): Router {
   /**
    * PUT /users/:userId/permissions
    *
-   * Update user permissions (role and/or stock access).
+   * Update user permissions (role and/or tenant membership).
    *
    * Parameters:
    * - userId: User identifier
    *
    * Request body:
    * - role: 'admin' or 'viewer' (optional)
-   * - stockAccess: Array of stock IDs (optional)
+   * - tenantIds: Array with exactly one tenant id (optional)
    *
    * Response (200):
    * - Updated user permissions

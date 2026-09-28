@@ -1,6 +1,7 @@
 import { createTestDb } from '../../setup/db';
 import { StockRepository } from '../../../src/db/repositories';
 import { FanStateRepository, FanEventsRepository } from '../../../src/db/repositories/fan.repository';
+import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
 async function seedStock(db: ReturnType<typeof createTestDb>): Promise<void> {
   await new StockRepository(db.db).upsertMany([
@@ -8,6 +9,7 @@ async function seedStock(db: ReturnType<typeof createTestDb>): Promise<void> {
       id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
       devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
       fanControlEnabled: true, fanTopicPrefix: '/p', fanSwitchId: 0,
+      tenantId: DEFAULT_TENANT_ID,
     },
   ]);
 }

@@ -1,13 +1,14 @@
 /**
  * User management service for the grainwatch-controller BFF.
  *
- * Handles user CRUD operations, password hashing, and stock access
- * permission checks. User data is persisted via the {@link UserRepository}
- * (SQLite-backed via Drizzle ORM).
+ * Handles user CRUD operations, password hashing, and tenant membership.
+ * User data is persisted via the {@link UserRepository} (SQLite-backed via
+ * Drizzle ORM).
  */
 
 import * as bcrypt from 'bcrypt';
-import { UserRepository } from '../../db/repositories';
+import { UserRepository, UserInsert } from '../../db/repositories';
+import { DEFAULT_TENANT_ID } from '../../db/schema';
 import { User, UserProfile, UserRole } from '../../models';
 
 /**
@@ -43,8 +44,8 @@ export interface CreateUserData {
   /** User role */
   role: UserRole;
 
-  /** Stock IDs the user can access (use ['*'] for all stocks) */
-  stockAccess: string[];
+  /** Ids of the tenants the user belongs to */
+  tenantIds: string[];
 
   /** Whether the user must change their password on next login */
   mustChangePassword?: boolean;
@@ -66,8 +67,8 @@ export interface UpdateUserData {
   /** New role (optional) */
   role?: UserRole;
 
-  /** New stock access list (optional) */
-  stockAccess?: string[];
+  /** New tenant membership (optional) */
+  tenantIds?: string[];
 
   /** Account active status (optional) */
   active?: boolean;
@@ -160,12 +161,12 @@ export class UserService {
     const id = await this.generateUserId();
     const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
 
-    const user: User = {
+    const user: UserInsert = {
       id,
       username: data.username.trim(),
       passwordHash,
       role: data.role,
-      stockAccess: data.stockAccess,
+      tenantIds: data.tenantIds,
       createdAt: new Date().toISOString(),
       active: true,
       mustChangePassword: data.mustChangePassword ?? false,
@@ -176,7 +177,7 @@ export class UserService {
     }
 
     await this.repo.insert(user);
-    return this.toUserProfile(user);
+    return this.buildProfile(user, user.tenantIds);
   }
 
   /**
@@ -217,7 +218,7 @@ export class UserService {
     if (updates.username !== undefined) patch.username = updates.username.trim();
     if (updates.role !== undefined) patch.role = updates.role;
     if (updates.active !== undefined) patch.active = updates.active;
-    if (updates.stockAccess !== undefined) patch.stockAccess = updates.stockAccess;
+    if (updates.tenantIds !== undefined) patch.tenantIds = updates.tenantIds;
     if (updates.mustChangePassword !== undefined)
       patch.mustChangePassword = updates.mustChangePassword;
     if (updates.password) {
@@ -256,24 +257,12 @@ export class UserService {
   }
 
   /**
-   * Checks if a user can access a specific grain stock.
-   *
-   * @param user - User object to check
-   * @param stockId - Stock ID to check access for
-   * @returns True if user has access to the stock
-   */
-  canAccessStock(user: User | UserProfile, stockId: string): boolean {
-    if (user.stockAccess.includes('*')) return true;
-    return user.stockAccess.includes(stockId);
-  }
-
-  /**
    * Initialises default admin user if no users exist.
    *
    * Creates an admin user with:
    * - Username: 'admin'
    * - Password: 'changeme123' (should be changed immediately)
-   * - Full stock access
+   * - Membership of the default tenant, whose row migration 0005 inserts
    *
    * @returns The created admin profile, or null if users already exist
    */
@@ -284,7 +273,7 @@ export class UserService {
       username: 'admin',
       password: 'changeme123',
       role: 'admin',
-      stockAccess: ['*'],
+      tenantIds: [DEFAULT_TENANT_ID],
       mustChangePassword: true,
     });
   }
@@ -296,11 +285,22 @@ export class UserService {
    * @returns User profile without password hash
    */
   toUserProfile(user: User): UserProfile {
+    return this.buildProfile(user, user.tenants.map((t) => t.id));
+  }
+
+  /**
+   * Builds a profile from whatever carries the membership — the stored user
+   * (tenant refs) or the data just written (ids).
+   */
+  private buildProfile(
+    user: Omit<User, 'tenants'>,
+    tenantIds: string[]
+  ): UserProfile {
     const profile: UserProfile = {
       id: user.id,
       username: user.username,
       role: user.role,
-      stockAccess: user.stockAccess,
+      tenantIds,
     };
     if (user.email !== undefined) profile.email = user.email;
     if (user.mustChangePassword !== undefined)

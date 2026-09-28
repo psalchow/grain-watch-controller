@@ -28,7 +28,7 @@ jest.mock('../../src/services/influx/influx.service', () => ({
   isValidWindowDuration: jest.fn().mockReturnValue(true),
 }));
 
-function createToken(payload: { userId: string; username: string; role: 'admin' | 'viewer'; stockAccess: string[] }): string {
+function createToken(payload: { userId: string; username: string; role: 'admin' | 'viewer'; tenants: { id: string; name: string }[] }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 }
 
@@ -57,10 +57,10 @@ describe('POST /api/v1/auth/change-password', () => {
       username: 'testviewer',
       password: 'viewerpassword123',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenantIds: ['tnt_default'],
       mustChangePassword: true,
     });
-    viewerToken = createToken({ userId: viewer.id, username: 'testviewer', role: 'viewer', stockAccess: ['corn-watch-1'] });
+    viewerToken = createToken({ userId: viewer.id, username: 'testviewer', role: 'viewer', tenants: [{ id: 'tnt_default', name: 'Standard' }] });
   });
 
   it('changes the password with a correct current password and clears the flag', async () => {

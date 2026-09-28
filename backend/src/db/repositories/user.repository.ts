@@ -1,7 +1,19 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../types';
-import { users, userStockAccess } from '../schema';
-import type { User } from '../../models';
+import { users, userTenants, tenants } from '../schema';
+import type { TenantRef, User } from '../../models';
+
+/**
+ * A user as it is written.
+ *
+ * Membership goes in as ids — the caller picks a tenant, it does not know or
+ * care about its display name — and comes back out as {@link TenantRef}s,
+ * joined to `tenants` on read.
+ */
+export interface UserInsert extends Omit<User, 'tenants'> {
+  /** Ids of the tenants the user belongs to */
+  tenantIds: string[];
+}
 
 export class UserRepository {
   constructor(private readonly db: Db) {}
@@ -24,21 +36,26 @@ export class UserRepository {
   async findAll(): Promise<User[]> {
     const rows = this.db.select().from(users).all();
     if (rows.length === 0) return [];
-    const access = this.db
-      .select()
-      .from(userStockAccess)
-      .where(inArray(userStockAccess.userId, rows.map((r) => r.id)))
+    const memberships = this.db
+      .select({
+        userId: userTenants.userId,
+        id: tenants.id,
+        name: tenants.name,
+      })
+      .from(userTenants)
+      .innerJoin(tenants, eq(tenants.id, userTenants.tenantId))
+      .where(inArray(userTenants.userId, rows.map((r) => r.id)))
       .all();
-    const grouped = new Map<string, string[]>();
-    for (const entry of access) {
+    const grouped = new Map<string, TenantRef[]>();
+    for (const entry of memberships) {
       const list = grouped.get(entry.userId) ?? [];
-      list.push(entry.stockId);
+      list.push({ id: entry.id, name: entry.name });
       grouped.set(entry.userId, list);
     }
     return rows.map((row) => this.toUser(row, grouped.get(row.id) ?? []));
   }
 
-  async insert(user: User): Promise<void> {
+  async insert(user: UserInsert): Promise<void> {
     this.db.transaction((tx) => {
       tx.insert(users)
         .values({
@@ -52,9 +69,9 @@ export class UserRepository {
           mustChangePassword: user.mustChangePassword ?? false,
         })
         .run();
-      if (user.stockAccess.length > 0) {
-        tx.insert(userStockAccess)
-          .values(user.stockAccess.map((stockId) => ({ userId: user.id, stockId })))
+      if (user.tenantIds.length > 0) {
+        tx.insert(userTenants)
+          .values(user.tenantIds.map((tenantId) => ({ userId: user.id, tenantId })))
           .run();
       }
     });
@@ -69,7 +86,7 @@ export class UserRepository {
       role?: 'admin' | 'viewer';
       active?: boolean;
       mustChangePassword?: boolean;
-      stockAccess?: string[];
+      tenantIds?: string[];
     }
   ): Promise<void> {
     this.db.transaction((tx) => {
@@ -91,11 +108,11 @@ export class UserRepository {
         tx.update(users).set(scalarUpdates).where(eq(users.id, id)).run();
       }
 
-      if (patch.stockAccess !== undefined) {
-        tx.delete(userStockAccess).where(eq(userStockAccess.userId, id)).run();
-        if (patch.stockAccess.length > 0) {
-          tx.insert(userStockAccess)
-            .values(patch.stockAccess.map((stockId) => ({ userId: id, stockId })))
+      if (patch.tenantIds !== undefined) {
+        tx.delete(userTenants).where(eq(userTenants.userId, id)).run();
+        if (patch.tenantIds.length > 0) {
+          tx.insert(userTenants)
+            .values(patch.tenantIds.map((tenantId) => ({ userId: id, tenantId })))
             .run();
         }
       }
@@ -108,21 +125,22 @@ export class UserRepository {
   }
 
   private hydrate(row: typeof users.$inferSelect): User {
-    const access = this.db
-      .select({ stockId: userStockAccess.stockId })
-      .from(userStockAccess)
-      .where(eq(userStockAccess.userId, row.id))
+    const memberships = this.db
+      .select({ id: tenants.id, name: tenants.name })
+      .from(userTenants)
+      .innerJoin(tenants, eq(tenants.id, userTenants.tenantId))
+      .where(eq(userTenants.userId, row.id))
       .all();
-    return this.toUser(row, access.map((a) => a.stockId));
+    return this.toUser(row, memberships);
   }
 
-  private toUser(row: typeof users.$inferSelect, stockAccess: string[]): User {
+  private toUser(row: typeof users.$inferSelect, userTenantRefs: TenantRef[]): User {
     const user: User = {
       id: row.id,
       username: row.username,
       passwordHash: row.passwordHash,
       role: row.role,
-      stockAccess,
+      tenants: userTenantRefs,
       createdAt: row.createdAt,
       active: row.active,
       mustChangePassword: row.mustChangePassword,

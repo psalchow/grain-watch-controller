@@ -3,6 +3,7 @@ import type { Stock } from '../../../src/db/types';
 import { createTestDb } from '../../setup/db';
 import { StockRepository, FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
 import { FanControlManager } from '../../../src/services/fan/fan.manager';
+import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
 function fakeMqtt() {
   const published: Array<{ topic: string; message: string; qos?: 0 | 1 | 2 }> = [];
@@ -30,6 +31,7 @@ async function setup() {
     id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
     devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
     fanControlEnabled: true, fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
   }]);
   const f = fakeMqtt();
   const enabledStockIds = new Set(['grain-watch-1']);
@@ -226,6 +228,7 @@ describe('FanControlManager', () => {
     id: 'x', name: 'X', deviceGroup: 'g', devicePrefix: '1',
     hasHumidity: false,
     hasGrainSensors: true, active: true, createdAt: 'x', fanControlEnabled: false, fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
   };
 
   it('keeps only fan-enabled stocks that have a topic prefix', () => {

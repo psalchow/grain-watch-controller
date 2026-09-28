@@ -227,6 +227,21 @@ export const userRoleEnum = z.enum(['admin', 'viewer'], {
 export type UserRole = z.infer<typeof userRoleEnum>;
 
 /**
+ * Tenant membership as it arrives in a request body.
+ *
+ * Capped at one entry: storage, claim, predicate and client type all carry a
+ * list, but no interface offers a second choice and no feature has answered
+ * what a multi-tenant user would mean. Lifting the cap is one line.
+ */
+export const tenantIdsSchema = z
+  .array(z.string(), {
+    required_error: 'Tenant list is required',
+    invalid_type_error: 'Tenants must be an array of tenant ids',
+  })
+  .min(1, 'At least one tenant is required')
+  .max(1, 'A user can belong to at most one tenant');
+
+/**
  * User creation request body schema.
  */
 export const createUserSchema = z.object({
@@ -261,69 +276,12 @@ export const createUserSchema = z.object({
   /** User role */
   role: userRoleEnum,
 
-  /** List of stock IDs the user can access */
-  stockAccess: z
-    .array(z.string(), {
-      required_error: 'Stock access list is required',
-      invalid_type_error: 'Stock access must be an array of strings',
-    })
-    .min(1, 'At least one stock access entry is required'),
+  /** Ids of the tenants the user belongs to */
+  tenantIds: tenantIdsSchema,
 });
 
 /** Type inferred from createUserSchema */
 export type CreateUserRequest = z.infer<typeof createUserSchema>;
-
-/**
- * User update request body schema.
- *
- * All fields are optional to allow partial updates.
- */
-export const updateUserSchema = z.object({
-  /** New username (optional) */
-  username: z
-    .string()
-    .min(3, 'Username must be at least 3 characters')
-    .max(50, 'Username must be at most 50 characters')
-    .regex(
-      /^[a-zA-Z0-9_]+$/,
-      'Username can only contain letters, numbers, and underscores'
-    )
-    .optional(),
-
-  /** New password (optional) */
-  password: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .max(100, 'Password must be at most 100 characters')
-    .optional(),
-
-  /** New email address (optional) */
-  email: z
-    .string()
-    .email('Invalid email address')
-    .optional(),
-
-  /** New role (optional) */
-  role: userRoleEnum.optional(),
-
-  /** New stock access list (optional) */
-  stockAccess: z
-    .array(z.string())
-    .min(1, 'At least one stock access entry is required')
-    .optional(),
-
-  /** Account active status (optional) */
-  active: z.boolean().optional(),
-}).refine(
-  (data) => {
-    // At least one field must be provided for an update
-    return Object.keys(data).length > 0;
-  },
-  { message: 'At least one field must be provided for update' }
-);
-
-/** Type inferred from updateUserSchema */
-export type UpdateUserRequest = z.infer<typeof updateUserSchema>;
 
 /**
  * Stock ID route parameter schema.

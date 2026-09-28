@@ -13,7 +13,6 @@ import {
   validateParams,
   loginSchema,
   createUserSchema,
-  updateUserSchema,
   stockIdParamsSchema,
   userIdParamsSchema,
   userRoleEnum,
@@ -344,7 +343,7 @@ describe('Validation Middleware', () => {
         password: 'password123',
         email: 'user@example.com',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -356,7 +355,7 @@ describe('Validation Middleware', () => {
         username: 'newuser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -368,7 +367,7 @@ describe('Validation Middleware', () => {
         username: 'ab',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -380,7 +379,7 @@ describe('Validation Middleware', () => {
         username: 'user@name',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -392,7 +391,7 @@ describe('Validation Middleware', () => {
         username: 'user_name_123',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -404,7 +403,7 @@ describe('Validation Middleware', () => {
         username: 'newuser',
         password: 'short',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -417,7 +416,7 @@ describe('Validation Middleware', () => {
         password: 'password123',
         email: 'not-an-email',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
@@ -430,7 +429,7 @@ describe('Validation Middleware', () => {
           username: 'newuser',
           password: 'password123',
           role,
-          stockAccess: ['corn-watch-1'],
+          tenantIds: ['tnt_default'],
         };
         const result = createUserSchema.safeParse(data);
         expect(result.success).toBe(true);
@@ -442,61 +441,46 @@ describe('Validation Middleware', () => {
         username: 'newuser',
         password: 'password123',
         role: 'superadmin',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: ['tnt_default'],
       };
       const result = createUserSchema.safeParse(data);
 
       expect(result.success).toBe(false);
     });
 
-    it('should reject empty stockAccess array', () => {
+    it('should reject an empty tenant list', () => {
       const data = {
         username: 'newuser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: [],
+        tenantIds: [],
       };
       const result = createUserSchema.safeParse(data);
 
       expect(result.success).toBe(false);
     });
-  });
 
-  describe('updateUserSchema', () => {
-    it('should accept valid partial update', () => {
-      const data = { username: 'newname' };
-      const result = updateUserSchema.safeParse(data);
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should accept multiple fields', () => {
+    // The cap is the only mechanism keeping multi-tenant users out of
+    // existence while the interface offers a single choice.
+    it('should reject more than one tenant', () => {
       const data = {
-        username: 'newname',
-        email: 'new@example.com',
-        role: 'admin',
+        username: 'newuser',
+        password: 'password123',
+        role: 'viewer',
+        tenantIds: ['tnt_default', 'tnt_other'],
       };
-      const result = updateUserSchema.safeParse(data);
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject empty object', () => {
-      const result = updateUserSchema.safeParse({});
+      const result = createUserSchema.safeParse(data);
 
       expect(result.success).toBe(false);
     });
 
-    it('should accept active status update', () => {
-      const data = { active: false };
-      const result = updateUserSchema.safeParse(data);
-
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject invalid password in update', () => {
-      const data = { password: 'short' };
-      const result = updateUserSchema.safeParse(data);
+    it('should reject a missing tenant list', () => {
+      const data = {
+        username: 'newuser',
+        password: 'password123',
+        role: 'viewer',
+      };
+      const result = createUserSchema.safeParse(data);
 
       expect(result.success).toBe(false);
     });

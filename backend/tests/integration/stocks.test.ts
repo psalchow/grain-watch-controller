@@ -9,11 +9,12 @@ import request from 'supertest';
 import { Express } from 'express';
 import * as jwt from 'jsonwebtoken';
 import { createApp, finaliseApp } from '../../src/app';
-import { initDb, closeDb, getDb } from '../../src/db';
+import { initDb, closeDb, getDb, getSqliteHandle } from '../../src/db';
 import { runMigrations } from '../../src/db/migrate';
 import { resetServiceSingletonsForTests } from '../../src/services';
 import { setAuthService } from '../../src/middleware';
 import { StockRepository } from '../../src/db/repositories';
+import { DEFAULT_TENANT_ID } from '../../src/db/schema';
 import { seedStocks } from '../../src/db/seed';
 import { setFanManager } from '../../src/services/fan';
 import type { FanControlManager } from '../../src/services/fan';
@@ -29,6 +30,16 @@ const fakeFanManager = {
 } as unknown as FanControlManager;
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
+
+/**
+ * A second tenant owning `grain-watch-2`.
+ *
+ * Without it both seeded halls sit in `tnt_default`, and the denied-access and
+ * list-filter cases below would pass while covering nothing.
+ */
+const SECOND_TENANT_ID = 'tnt_second';
+const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };
+const SECOND_TENANT = { id: SECOND_TENANT_ID, name: 'Zweiter Betrieb' };
 
 // Mock the config module
 jest.mock('../../src/config', () => ({
@@ -80,7 +91,7 @@ function createToken(payload: {
   userId: string;
   username: string;
   role: 'admin' | 'viewer';
-  stockAccess: string[];
+  tenants: { id: string; name: string }[];
 }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 }
@@ -100,6 +111,17 @@ describe('Stock Endpoints', () => {
     initDb({ path: ':memory:' });
     runMigrations(getDb());
     await seedStocks(new StockRepository(getDb()));
+
+    // Move the second hall into its own tenant, so "denied" and "filtered"
+    // remain reachable states. Tenants are SQL-managed, hence the raw handle.
+    const sqlite = getSqliteHandle();
+    sqlite
+      .prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+      .run(SECOND_TENANT_ID, SECOND_TENANT.name, '2026-06-02T00:00:00.000Z');
+    sqlite
+      .prepare('UPDATE stocks SET tenant_id = ? WHERE id = ?')
+      .run(SECOND_TENANT_ID, 'grain-watch-2');
+
     setAuthService(null);
 
     // Create test tokens
@@ -107,21 +129,22 @@ describe('Stock Endpoints', () => {
       userId: 'usr_001',
       username: 'admin',
       role: 'admin',
-      stockAccess: ['*'],
+      tenants: [DEFAULT_TENANT],
     });
 
+    // Belongs to both tenants, so this viewer reaches both halls.
     viewerToken = createToken({
       userId: 'usr_002',
       username: 'viewer',
       role: 'viewer',
-      stockAccess: ['grain-watch-1', 'grain-watch-2'],
+      tenants: [DEFAULT_TENANT, SECOND_TENANT],
     });
 
     restrictedViewerToken = createToken({
       userId: 'usr_003',
       username: 'restricted',
       role: 'viewer',
-      stockAccess: ['grain-watch-1'],
+      tenants: [DEFAULT_TENANT],
     });
 
     setFanManager(fakeFanManager);
@@ -189,7 +212,7 @@ describe('Stock Endpoints', () => {
       expect(response.body.stocks[0]).toHaveProperty('active', true);
     });
 
-    it('should return filtered stocks for viewer with limited access', async () => {
+    it('should return only the halls of the viewer tenant', async () => {
       const response = await request(app)
         .get('/api/v1/stocks')
         .set('Authorization', `Bearer ${restrictedViewerToken}`);
@@ -197,6 +220,17 @@ describe('Stock Endpoints', () => {
       expect(response.status).toBe(200);
       expect(response.body.stocks).toHaveLength(1);
       expect(response.body.stocks[0].id).toBe('grain-watch-1');
+    });
+
+    it('should return the halls of every tenant a viewer belongs to', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks')
+        .set('Authorization', `Bearer ${viewerToken}`);
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.stocks.map((s: { id: string }) => s.id).sort(),
+      ).toEqual(['grain-watch-1', 'grain-watch-2']);
     });
 
     it('reports fan control only for stocks with a live controller', async () => {
@@ -607,6 +641,7 @@ describe('Stock Endpoints', () => {
           fanControlEnabled: true,
           fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
           fanSwitchId: 0,
+          tenantId: DEFAULT_TENANT_ID,
         },
       ]);
     });

@@ -2,6 +2,7 @@ import { createTestDb } from '../../setup/db';
 import { StockRepository, FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
 import { FanController } from '../../../src/services/fan/fan.controller';
 import type { ShellyMonitorMessage } from '../../../src/services/fan/types';
+import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
 function successMsg(switchState: boolean): ShellyMonitorMessage {
   return { type: 'success', message: 'ok', switchState, inputState: switchState, timestamp: 1 };
@@ -13,6 +14,7 @@ async function makeController() {
     id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
     devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
     fanControlEnabled: true, fanTopicPrefix: '/p', fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
   }]);
   const published: Array<'on' | 'off'> = [];
   const controller = new FanController({

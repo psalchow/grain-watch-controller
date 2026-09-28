@@ -62,7 +62,7 @@ describe('Application Bootstrap', () => {
       const admin = await userService.findUserByUsername('admin');
       expect(admin?.username).toBe('admin');
       expect(admin?.role).toBe('admin');
-      expect(admin?.stockAccess).toEqual(['*']);
+      expect(admin?.tenants).toEqual([{ id: 'tnt_default', name: 'Standard' }]);
     });
 
     it('should not create default users when a user already exists', async () => {
@@ -155,7 +155,7 @@ describe('Application Bootstrap', () => {
       expect(admin).not.toBeNull();
       expect(admin?.username).toBe('admin');
       expect(admin?.role).toBe('admin');
-      expect(admin?.stockAccess).toEqual(['*']);
+      expect(admin?.tenants).toEqual([{ id: 'tnt_default', name: 'Standard' }]);
       expect(admin?.active).toBe(true);
 
       // Verify password hash exists

@@ -1,5 +1,6 @@
 import type { StockRepository } from './repositories';
 import type { Stock } from './types';
+import { DEFAULT_TENANT_ID } from './schema';
 
 const SEED_TIMESTAMP = '2026-06-02T00:00:00.000Z';
 
@@ -17,6 +18,7 @@ export const SEED_STOCKS: Stock[] = [
     fanControlEnabled: true,
     fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control',
     fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
   },
   {
     id: 'grain-watch-2',
@@ -30,6 +32,7 @@ export const SEED_STOCKS: Stock[] = [
     createdAt: SEED_TIMESTAMP,
     fanControlEnabled: false,
     fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
   },
 ];
 

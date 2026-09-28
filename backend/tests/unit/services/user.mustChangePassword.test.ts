@@ -18,7 +18,7 @@ describe('mustChangePassword persistence', () => {
       username: 'u1',
       password: 'password123',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenantIds: ['tnt_default'],
     });
     const user = await service.findUserById(profile.id);
     expect(user?.mustChangePassword).toBe(false);
@@ -29,7 +29,7 @@ describe('mustChangePassword persistence', () => {
       username: 'u2',
       password: 'password123',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenantIds: ['tnt_default'],
       mustChangePassword: true,
     });
     let user = await service.findUserById(profile.id);

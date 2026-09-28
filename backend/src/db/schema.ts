@@ -13,17 +13,33 @@ export const users = sqliteTable('users', {
     .default(false),
 });
 
-export const userStockAccess = sqliteTable(
-  'user_stock_access',
+/**
+ * The tenant every hall and every user starts out in.
+ *
+ * Migration 0005 inserts the row and backfills both `stocks.tenant_id` and
+ * `user_tenants` with it, so it exists on every database before any user does.
+ */
+export const DEFAULT_TENANT_ID = 'tnt_default';
+
+export const tenants = sqliteTable('tenants', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
+export const userTenants = sqliteTable(
+  'user_tenants',
   {
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    stockId: text('stock_id').notNull(),
+    tenantId: text('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.stockId] }),
-    stockIdIdx: index('user_stock_access_stock_id_idx').on(table.stockId),
+    pk: primaryKey({ columns: [table.userId, table.tenantId] }),
+    tenantIdIdx: index('user_tenants_tenant_id_idx').on(table.tenantId),
   })
 );
 
@@ -50,6 +66,14 @@ export const stocks = sqliteTable('stocks', {
     .default(false),
   fanTopicPrefix: text('fan_topic_prefix'),
   fanSwitchId: integer('fan_switch_id').notNull().default(0),
+  /**
+   * Owning tenant. Deliberately without a foreign key: SQLite refuses
+   * `ALTER TABLE … ADD COLUMN` carrying both `REFERENCES` and a non-null
+   * default while `PRAGMA foreign_keys = ON`, and rebuilding `stocks` would
+   * drag `fan_state` and `fan_events` along. A wrong value hides a hall from
+   * its tenant rather than corrupting anything.
+   */
+  tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),
 });
 
 export const fanState = sqliteTable('fan_state', {

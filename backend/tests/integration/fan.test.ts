@@ -22,7 +22,7 @@ jest.mock('../../src/config', () => ({
 }));
 
 function token(): string {
-  return jwt.sign({ userId: 'u1', username: 'admin', role: 'admin', stockAccess: ['*'] }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId: 'u1', username: 'admin', role: 'admin', tenants: [{ id: 'tnt_default', name: 'Standard' }] }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 const published: Array<{ topic: string; message: string }> = [];

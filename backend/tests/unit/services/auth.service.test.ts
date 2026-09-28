@@ -15,6 +15,10 @@ import {
   UserService,
 } from '../../../src/services/auth';
 import { User } from '../../../src/models';
+import type { UserInsert } from '../../../src/db/repositories';
+import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
+
+const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };
 
 // Mock the config module
 jest.mock('../../../src/config', () => ({
@@ -32,7 +36,7 @@ jest.mock('../../../src/config', () => ({
  * Inserts a fully-formed user into the repo without going through createUser
  * (so the test can control the password hash directly).
  */
-async function seedUser(repo: UserRepository, user: User): Promise<void> {
+async function seedUser(repo: UserRepository, user: UserInsert): Promise<void> {
   await repo.insert(user);
 }
 
@@ -60,7 +64,7 @@ describe('AuthService', () => {
         username: 'testuser',
         passwordHash: '$2b$10$hashedpassword',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       };
@@ -78,7 +82,7 @@ describe('AuthService', () => {
         passwordHash: '$2b$10$hashedpassword',
         email: 'test@example.com',
         role: 'admin',
-        stockAccess: ['*'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       };
@@ -89,7 +93,7 @@ describe('AuthService', () => {
       expect(decoded.userId).toBe('usr_001');
       expect(decoded.username).toBe('testuser');
       expect(decoded.role).toBe('admin');
-      expect(decoded.stockAccess).toEqual(['*']);
+      expect(decoded.tenants).toEqual([DEFAULT_TENANT]);
       expect(decoded.iat).toBeDefined();
       expect(decoded.exp).toBeDefined();
     });
@@ -101,7 +105,7 @@ describe('AuthService', () => {
         passwordHash: '$2b$10$hashedpassword',
         email: 'test@example.com',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       };
@@ -123,7 +127,7 @@ describe('AuthService', () => {
         username: 'testuser',
         passwordHash: '$2b$10$hashedpassword',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       };
@@ -134,7 +138,7 @@ describe('AuthService', () => {
       expect(decoded.userId).toBe('usr_001');
       expect(decoded.username).toBe('testuser');
       expect(decoded.role).toBe('viewer');
-      expect(decoded.stockAccess).toEqual(['corn-watch-1']);
+      expect(decoded.tenants).toEqual([DEFAULT_TENANT]);
     });
 
     it('should throw error for invalid token', () => {
@@ -160,7 +164,7 @@ describe('AuthService', () => {
           userId: 'usr_001',
           username: 'test',
           role: 'viewer',
-          stockAccess: [],
+          tenants: [DEFAULT_TENANT],
         },
         'test-secret-key-for-testing-only-must-be-long-enough',
         { expiresIn: '-1s' }
@@ -183,7 +187,7 @@ describe('AuthService', () => {
           userId: 'usr_001',
           username: 'test',
           role: 'viewer',
-          stockAccess: [],
+          tenants: [DEFAULT_TENANT],
         },
         'wrong-secret-key'
       );
@@ -197,12 +201,38 @@ describe('AuthService', () => {
       const incompleteToken = jwt.sign(
         {
           userId: 'usr_001',
-          // Missing username, role, stockAccess
+          // Missing username, role, tenants
         },
         'test-secret-key-for-testing-only-must-be-long-enough'
       );
 
       expect(() => authService.verifyToken(incompleteToken)).toThrow(
+        'Invalid token payload structure'
+      );
+    });
+
+    // A token minted before tenancy must not authorise under the retired
+    // model, and the degenerate shapes below would otherwise verify and hand
+    // out a session that silently reaches nothing.
+    it.each([
+      ['the retired stockAccess claim', { stockAccess: ['*'] }],
+      ['a tenants claim that is not an array', { tenants: 'tnt_default' }],
+      ['an empty tenants claim', { tenants: [] }],
+      ['a tenant without a string id', { tenants: [{ name: 'Standard' }] }],
+      ['tenants of bare strings', { tenants: ['tnt_default'] }],
+    ])('should reject a token carrying %s', (_label, claims) => {
+      const token = jwt.sign(
+        {
+          userId: 'usr_001',
+          username: 'testuser',
+          role: 'viewer',
+          ...claims,
+        },
+        'test-secret-key-for-testing-only-must-be-long-enough',
+        { expiresIn: '1h' }
+      );
+
+      expect(() => authService.verifyToken(token)).toThrow(
         'Invalid token payload structure'
       );
     });
@@ -217,7 +247,7 @@ describe('AuthService', () => {
         username: 'testuser',
         passwordHash,
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       });
@@ -226,7 +256,7 @@ describe('AuthService', () => {
         username: 'disableduser',
         passwordHash,
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: false,
       });
@@ -368,7 +398,7 @@ describe('AuthService', () => {
         username: 'testuser',
         passwordHash: '$2b$10$hashedpassword',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       };
@@ -405,7 +435,7 @@ describe('AuthService', () => {
       username: 'testuser',
       passwordHash: '$2b$10$hashedpassword',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenants: [DEFAULT_TENANT],
       createdAt: '2026-01-01T00:00:00.000Z',
       active: true,
     };
@@ -437,7 +467,7 @@ describe('AuthService', () => {
       username: 'testuser',
       passwordHash: '$2b$10$hashedpassword',
       role: 'viewer',
-      stockAccess: ['corn-watch-1'],
+      tenants: [DEFAULT_TENANT],
       createdAt: '2026-01-01T00:00:00.000Z',
       active: true,
     };
@@ -504,7 +534,7 @@ describe('AuthService', () => {
         username: 'loginuser',
         passwordHash,
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       });
@@ -530,7 +560,7 @@ describe('AuthService', () => {
         username: 'activeuser',
         passwordHash,
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       });
@@ -539,7 +569,7 @@ describe('AuthService', () => {
         username: 'disableduser',
         passwordHash,
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: false,
       });
@@ -551,7 +581,7 @@ describe('AuthService', () => {
         username: 'activeuser',
         passwordHash: 'x',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       });
@@ -570,7 +600,7 @@ describe('AuthService', () => {
         username: 'ghost',
         passwordHash: 'x',
         role: 'viewer',
-        stockAccess: [],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       });
@@ -589,7 +619,7 @@ describe('AuthService', () => {
         username: 'disableduser',
         passwordHash: 'x',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: false,
       });

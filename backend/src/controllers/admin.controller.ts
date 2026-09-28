@@ -9,6 +9,7 @@
 import { Request, Response, NextFunction } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { UserService, UserServiceError, CreateUserData, UpdateUserData } from '../services';
+import { TenantRepository } from '../db/repositories';
 import { CreateUserRequest } from '../middleware';
 
 /**
@@ -18,14 +19,43 @@ import { CreateUserRequest } from '../middleware';
  */
 export class AdminController {
   private readonly userService: UserService;
+  private readonly tenantRepository: TenantRepository;
 
   /**
    * Creates a new AdminController instance.
    *
    * @param userService - UserService instance for user management operations
+   * @param tenantRepository - Read-only tenant access, for listing and for
+   *   rejecting a membership that names a tenant which does not exist
    */
-  constructor(userService: UserService) {
+  constructor(userService: UserService, tenantRepository: TenantRepository) {
     this.userService = userService;
+    this.tenantRepository = tenantRepository;
+  }
+
+  /**
+   * Lists all tenants.
+   *
+   * GET /api/v1/admin/tenants
+   *
+   * Exists so an administrator can pick a tenant when creating a user.
+   * Tenants themselves are created with SQL, like hall configuration.
+   *
+   * @example
+   * Response (200):
+   * { "tenants": [{ "id": "tnt_default", "name": "Standard" }] }
+   */
+  async listTenants(
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const tenants = await this.tenantRepository.findAll();
+      res.status(200).json({ tenants });
+    } catch (error) {
+      next(error);
+    }
   }
 
   /**
@@ -48,7 +78,7 @@ export class AdminController {
    *       "username": "admin",
    *       "email": "admin@example.com",
    *       "role": "admin",
-   *       "stockAccess": ["*"],
+   *       "tenants": [{ "id": "tnt_default", "name": "Standard" }],
    *       "active": true,
    *       "createdAt": "2024-08-15T10:00:00Z"
    *     }
@@ -68,7 +98,7 @@ export class AdminController {
         username: user.username,
         email: user.email,
         role: user.role,
-        stockAccess: user.stockAccess,
+        tenants: user.tenants,
         active: user.active,
         createdAt: user.createdAt,
       }));
@@ -97,7 +127,7 @@ export class AdminController {
    *   "password": "secure123",
    *   "email": "farmer3@example.com",
    *   "role": "viewer",
-   *   "stockAccess": ["corn-watch-1"]
+   *   "tenantIds": ["tnt_default"]
    * }
    *
    * Response (201):
@@ -106,7 +136,7 @@ export class AdminController {
    *   "username": "farmer3",
    *   "email": "farmer3@example.com",
    *   "role": "viewer",
-   *   "stockAccess": ["corn-watch-1"],
+   *   "tenants": [{ "id": "tnt_default", "name": "Standard" }],
    *   "active": true,
    *   "createdAt": "2026-01-16T10:00:00Z"
    * }
@@ -117,13 +147,15 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const { username, password, email, role, stockAccess } = req.body;
+      const { username, password, email, role, tenantIds } = req.body;
+
+      if (await this.rejectUnknownTenant(tenantIds, res)) return;
 
       const createData: CreateUserData = {
         username,
         password,
         role,
-        stockAccess,
+        tenantIds,
         mustChangePassword: true,
       };
 
@@ -134,7 +166,8 @@ export class AdminController {
 
       const userProfile = await this.userService.createUser(createData);
 
-      // Get full user data for response
+      // Get full user data for the response: it carries the tenant names the
+      // profile deliberately leaves out, alongside active and createdAt.
       const fullUser = await this.userService.findUserById(userProfile.id);
 
       res.status(201).json({
@@ -142,7 +175,7 @@ export class AdminController {
         username: userProfile.username,
         email: userProfile.email,
         role: userProfile.role,
-        stockAccess: userProfile.stockAccess,
+        tenants: fullUser?.tenants ?? [],
         active: fullUser?.active ?? true,
         createdAt: fullUser?.createdAt ?? new Date().toISOString(),
       });
@@ -164,7 +197,7 @@ export class AdminController {
   }
 
   /**
-   * Updates user permissions (role and stock access).
+   * Updates user permissions (role and tenant membership).
    *
    * PUT /api/v1/admin/users/:userId/permissions
    *
@@ -176,7 +209,7 @@ export class AdminController {
    * Request body:
    * {
    *   "role": "admin",
-   *   "stockAccess": ["*"]
+   *   "tenantIds": ["tnt_default"]
    * }
    *
    * Response (200):
@@ -184,26 +217,26 @@ export class AdminController {
    *   "id": "usr_004",
    *   "username": "farmer3",
    *   "role": "admin",
-   *   "stockAccess": ["*"],
+   *   "tenants": [{ "id": "tnt_default", "name": "Standard" }],
    *   "updatedAt": "2026-01-16T10:05:00Z"
    * }
    */
   async updateUserPermissions(
-    req: Request<ParamsDictionary, unknown, { role?: string; stockAccess?: string[] }>,
+    req: Request<ParamsDictionary, unknown, { role?: string; tenantIds?: string[] }>,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     try {
       const userId = req.params['userId'] as string;
-      const { role, stockAccess } = req.body;
+      const { role, tenantIds } = req.body;
 
       // Validate that at least one field is provided
-      if (role === undefined && stockAccess === undefined) {
+      if (role === undefined && tenantIds === undefined) {
         res.status(400).json({
           error: {
             code: 'BAD_REQUEST',
             message: 'At least one permission field must be provided',
-            details: 'Provide either role or stockAccess (or both) to update',
+            details: 'Provide either role or tenantIds (or both) to update',
           },
         });
         return;
@@ -221,23 +254,29 @@ export class AdminController {
         return;
       }
 
+      if (tenantIds !== undefined && (await this.rejectUnknownTenant(tenantIds, res)))
+        return;
+
       const updateData: UpdateUserData = {};
 
       if (role !== undefined) {
         updateData.role = role as 'admin' | 'viewer';
       }
 
-      if (stockAccess !== undefined) {
-        updateData.stockAccess = stockAccess;
+      if (tenantIds !== undefined) {
+        updateData.tenantIds = tenantIds;
       }
 
       const updatedProfile = await this.userService.updateUser(userId, updateData);
+      // Re-read for the tenant names, so this route answers the same shape as
+      // the list and create routes.
+      const fullUser = await this.userService.findUserById(userId);
 
       res.status(200).json({
         id: updatedProfile.id,
         username: updatedProfile.username,
         role: updatedProfile.role,
-        stockAccess: updatedProfile.stockAccess,
+        tenants: fullUser?.tenants ?? [],
         updatedAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -388,6 +427,34 @@ export class AdminController {
       }
       next(error);
     }
+  }
+
+  /**
+   * Answers 400 when a membership names a tenant that does not exist.
+   *
+   * `user_tenants.tenant_id` has a foreign key, so an unknown id would fail as
+   * a database error deep in the insert; this turns it into the client error
+   * it is.
+   *
+   * @returns true when a response has been sent and the caller must stop
+   */
+  private async rejectUnknownTenant(
+    tenantIds: string[],
+    res: Response
+  ): Promise<boolean> {
+    for (const tenantId of tenantIds) {
+      if ((await this.tenantRepository.findById(tenantId)) === null) {
+        res.status(400).json({
+          error: {
+            code: 'BAD_REQUEST',
+            message: `Unknown tenant: ${tenantId}`,
+            details: 'Every tenant id must name an existing tenant',
+          },
+        });
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

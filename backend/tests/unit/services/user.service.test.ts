@@ -14,6 +14,9 @@ import {
   CreateUserData,
 } from '../../../src/services/auth';
 import { User } from '../../../src/models';
+import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
+
+const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };
 
 describe('UserService', () => {
   let testDb: TestDb;
@@ -36,13 +39,13 @@ describe('UserService', () => {
         username: 'admin',
         password: 'adminpassword',
         role: 'admin',
-        stockAccess: ['*'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
       await service.createUser({
         username: 'viewer',
         password: 'viewerpassword',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
     });
 
@@ -67,7 +70,7 @@ describe('UserService', () => {
         username: 'admin',
         password: 'adminpassword',
         role: 'admin',
-        stockAccess: ['*'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
     });
 
@@ -92,7 +95,7 @@ describe('UserService', () => {
         password: 'securepassword123',
         email: 'new@example.com',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       };
 
       const profile = await service.createUser(userData);
@@ -101,7 +104,7 @@ describe('UserService', () => {
       expect(profile.username).toBe('newuser');
       expect(profile.email).toBe('new@example.com');
       expect(profile.role).toBe('viewer');
-      expect(profile.stockAccess).toEqual(['corn-watch-1']);
+      expect(profile.tenantIds).toEqual([DEFAULT_TENANT_ID]);
 
       // Profile should not contain password hash
       expect((profile as unknown as { passwordHash?: unknown }).passwordHash).toBeUndefined();
@@ -124,14 +127,14 @@ describe('UserService', () => {
         username: 'user1',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       await service.createUser({
         username: 'user2',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       const user1 = await service.findUserByUsername('user1');
@@ -147,7 +150,7 @@ describe('UserService', () => {
           username: '',
           password: 'password123',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         })
       ).rejects.toThrow('Username is required');
     });
@@ -158,7 +161,7 @@ describe('UserService', () => {
           username: 'testuser',
           password: 'short',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         })
       ).rejects.toThrow('Password must be at least 8 characters');
     });
@@ -168,7 +171,7 @@ describe('UserService', () => {
         username: 'existing',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       await expect(
@@ -176,7 +179,7 @@ describe('UserService', () => {
           username: 'existing',
           password: 'password456',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         })
       ).rejects.toThrow("Username 'existing' already exists");
 
@@ -185,7 +188,7 @@ describe('UserService', () => {
           username: 'existing',
           password: 'password456',
           role: 'viewer',
-          stockAccess: ['corn-watch-1'],
+          tenantIds: [DEFAULT_TENANT_ID],
         })
       ).rejects.toMatchObject({ code: 'USERNAME_EXISTS' });
     });
@@ -195,7 +198,7 @@ describe('UserService', () => {
         username: 'newuser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       const user = await service.findUserByUsername('newuser');
@@ -209,7 +212,7 @@ describe('UserService', () => {
         username: 'newuser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       const afterCreate = new Date();
@@ -230,7 +233,7 @@ describe('UserService', () => {
         password: 'password123',
         email: 'existing@example.com',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
     });
 
@@ -261,12 +264,16 @@ describe('UserService', () => {
       expect(profile.role).toBe('admin');
     });
 
-    it('should update stockAccess', async () => {
+    it('should update tenant membership', async () => {
+      testDb.sqlite
+        .prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
+        .run('tnt_other', 'Zweiter Betrieb', '2026-01-01T00:00:00.000Z');
+
       const profile = await service.updateUser('usr_001', {
-        stockAccess: ['corn-watch-1', 'corn-watch-2'],
+        tenantIds: ['tnt_other'],
       });
 
-      expect(profile.stockAccess).toEqual(['corn-watch-1', 'corn-watch-2']);
+      expect(profile.tenantIds).toEqual(['tnt_other']);
     });
 
     it('should update password with new hash', async () => {
@@ -310,7 +317,7 @@ describe('UserService', () => {
         username: 'otheruser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       await expect(
@@ -341,7 +348,7 @@ describe('UserService', () => {
         username: 'userToDelete',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
     });
 
@@ -365,80 +372,6 @@ describe('UserService', () => {
     });
   });
 
-  describe('canAccessStock', () => {
-    it('should return true for wildcard access', () => {
-      const user: User = {
-        id: 'usr_001',
-        username: 'admin',
-        passwordHash: 'hash',
-        role: 'admin',
-        stockAccess: ['*'],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        active: true,
-      };
-
-      expect(service.canAccessStock(user, 'corn-watch-1')).toBe(true);
-      expect(service.canAccessStock(user, 'corn-watch-2')).toBe(true);
-      expect(service.canAccessStock(user, 'any-stock')).toBe(true);
-    });
-
-    it('should return true for stock in access list', () => {
-      const user: User = {
-        id: 'usr_001',
-        username: 'viewer',
-        passwordHash: 'hash',
-        role: 'viewer',
-        stockAccess: ['corn-watch-1', 'corn-watch-2'],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        active: true,
-      };
-
-      expect(service.canAccessStock(user, 'corn-watch-1')).toBe(true);
-      expect(service.canAccessStock(user, 'corn-watch-2')).toBe(true);
-    });
-
-    it('should return false for stock not in access list', () => {
-      const user: User = {
-        id: 'usr_001',
-        username: 'viewer',
-        passwordHash: 'hash',
-        role: 'viewer',
-        stockAccess: ['corn-watch-1'],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        active: true,
-      };
-
-      expect(service.canAccessStock(user, 'corn-watch-2')).toBe(false);
-      expect(service.canAccessStock(user, 'other-stock')).toBe(false);
-    });
-
-    it('should return false for empty access list', () => {
-      const user: User = {
-        id: 'usr_001',
-        username: 'viewer',
-        passwordHash: 'hash',
-        role: 'viewer',
-        stockAccess: [],
-        createdAt: '2026-01-01T00:00:00.000Z',
-        active: true,
-      };
-
-      expect(service.canAccessStock(user, 'corn-watch-1')).toBe(false);
-    });
-
-    it('should work with UserProfile as well', () => {
-      const profile = {
-        id: 'usr_001',
-        username: 'viewer',
-        role: 'viewer' as const,
-        stockAccess: ['corn-watch-1'],
-      };
-
-      expect(service.canAccessStock(profile, 'corn-watch-1')).toBe(true);
-      expect(service.canAccessStock(profile, 'corn-watch-2')).toBe(false);
-    });
-  });
-
   describe('initializeDefaultUsers', () => {
     it('should create admin user when no users exist', async () => {
       const profile = await service.initializeDefaultUsers();
@@ -446,7 +379,7 @@ describe('UserService', () => {
       expect(profile).not.toBeNull();
       expect(profile?.username).toBe('admin');
       expect(profile?.role).toBe('admin');
-      expect(profile?.stockAccess).toEqual(['*']);
+      expect(profile?.tenantIds).toEqual([DEFAULT_TENANT_ID]);
 
       // Verify password is correct
       const user = await service.findUserByUsername('admin');
@@ -462,7 +395,7 @@ describe('UserService', () => {
         username: 'existinguser',
         password: 'password123',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
 
       const profile = await service.initializeDefaultUsers();
@@ -481,7 +414,7 @@ describe('UserService', () => {
         username: 'user1',
         password: 'password123',
         role: 'admin',
-        stockAccess: ['*'],
+        tenantIds: [DEFAULT_TENANT_ID],
       });
     });
 
@@ -504,7 +437,7 @@ describe('UserService', () => {
         passwordHash: '$2b$10$secrethash',
         email: 'test@example.com',
         role: 'viewer',
-        stockAccess: ['corn-watch-1'],
+        tenants: [DEFAULT_TENANT],
         createdAt: '2026-01-01T00:00:00.000Z',
         active: true,
       };
@@ -515,7 +448,7 @@ describe('UserService', () => {
       expect(profile.username).toBe('testuser');
       expect(profile.email).toBe('test@example.com');
       expect(profile.role).toBe('viewer');
-      expect(profile.stockAccess).toEqual(['corn-watch-1']);
+      expect(profile.tenantIds).toEqual([DEFAULT_TENANT_ID]);
 
       // These should not be in profile
       const asUnknown = profile as unknown as {

@@ -19,6 +19,8 @@ export interface Stock {
   fanControlEnabled: boolean;
   fanTopicPrefix?: string;
   fanSwitchId: number;
+  /** Id of the owning tenant; a hall belongs to exactly one. */
+  tenantId: string;
 }
 
 export { drizzle, schema };

@@ -6,7 +6,12 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { AuthService, AuthenticationError, authService as defaultAuthService } from '../services';
+import {
+  AuthService,
+  AuthenticationError,
+  authService as defaultAuthService,
+  stockService,
+} from '../services';
 import { UserRole, UserProfile, hasStockAccess } from '../models';
 
 
@@ -70,7 +75,7 @@ export function authenticate(
       id: decoded.userId,
       username: decoded.username,
       role: decoded.role,
-      stockAccess: decoded.stockAccess,
+      tenantIds: decoded.tenants.map((tenant) => tenant.id),
       mustChangePassword: decoded.mustChangePassword,
     };
 
@@ -144,9 +149,15 @@ export function requireRole(role: UserRole) {
 /**
  * Middleware that ensures the user can access the stock in req.params.stockId.
  *
- * Checks if the user has access to the specific stock based on their
- * stockAccess list. Wildcards ('*') grant access to all stocks.
- * Must be used after the `authenticate` middleware.
+ * An administrator passes without a lookup; everybody else has the hall read
+ * and its tenant compared against their membership. A hall of another tenant
+ * and a hall that does not exist both answer 403 — deliberately the same
+ * answer as before, because the client reads a 404 on the fan stream as fan
+ * control having been withdrawn.
+ *
+ * Must be used after the `authenticate` middleware. Asynchronous because the
+ * hall lookup is; Express 4 does not forward a rejected promise, so failures
+ * are passed to `next` here.
  *
  * @param req - Express request object
  * @param res - Express response object
@@ -160,11 +171,11 @@ export function requireRole(role: UserRole) {
  *   getTemperatureHandler
  * );
  */
-export function requireStockAccess(
+export async function requireStockAccess(
   req: Request,
   res: Response,
   next: NextFunction
-): void {
+): Promise<void> {
   const user = req.user;
 
   if (!user) {
@@ -191,18 +202,29 @@ export function requireStockAccess(
     return;
   }
 
-  if (!hasStockAccess(user, stockId)) {
-    res.status(403).json({
-      statusCode: 403,
-      message: `Access denied to stock: ${stockId}`,
-      error: 'FORBIDDEN',
-      timestamp: new Date().toISOString(),
-      path: req.path,
-    });
+  if (user.role === 'admin') {
+    next();
     return;
   }
 
-  next();
+  try {
+    const stock = await stockService.getStock(stockId);
+
+    if (!stock || !hasStockAccess(user, stock)) {
+      res.status(403).json({
+        statusCode: 403,
+        message: `Access denied to stock: ${stockId}`,
+        error: 'FORBIDDEN',
+        timestamp: new Date().toISOString(),
+        path: req.path,
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 /**

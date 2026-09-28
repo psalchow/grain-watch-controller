@@ -1,5 +1,5 @@
 import { getDb } from '../db';
-import { UserRepository, StockRepository } from '../db/repositories';
+import { UserRepository, StockRepository, TenantRepository } from '../db/repositories';
 import { InfluxDBService } from './influx';
 import { UserService, AuthService } from './auth';
 import { StockService } from './stock';
@@ -7,6 +7,7 @@ import { StockService } from './stock';
 let _userService: UserService | null = null;
 let _authService: AuthService | null = null;
 let _stockService: StockService | null = null;
+let _tenantRepository: TenantRepository | null = null;
 
 export const influxService = new InfluxDBService();
 
@@ -31,11 +32,23 @@ export function getStockService(): StockService {
   return _stockService;
 }
 
+/**
+ * Tenants have no service of their own: nothing is created, validated or
+ * derived, so the admin routes read the repository directly.
+ */
+export function getTenantRepository(): TenantRepository {
+  if (!_tenantRepository) {
+    _tenantRepository = new TenantRepository(getDb());
+  }
+  return _tenantRepository;
+}
+
 /** Test-only reset hook. Call after closing/recreating the DB so the next getX() rewires. */
 export function resetServiceSingletonsForTests(): void {
   _userService = null;
   _authService = null;
   _stockService = null;
+  _tenantRepository = null;
 }
 
 export const userService = new Proxy({} as UserService, {

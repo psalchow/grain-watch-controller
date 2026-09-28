@@ -1,6 +1,7 @@
 import { createTestDb, TestDb } from '../../setup/db';
 import { StockRepository } from '../../../src/db/repositories/stock.repository';
 import type { Stock } from '../../../src/db/types';
+import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
 describe('StockRepository', () => {
   let testDb: TestDb;
@@ -25,6 +26,7 @@ describe('StockRepository', () => {
     createdAt: '2026-06-02T00:00:00.000Z',
     fanControlEnabled: false,
     fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
   };
 
   it('returns null when stock is missing', async () => {
@@ -75,6 +77,7 @@ describe('StockRepository', () => {
           fanControlEnabled: true,
           fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
           fanSwitchId: 0,
+          tenantId: DEFAULT_TENANT_ID,
         },
       ]);
       const stock = await repo.findById('grain-watch-9');
@@ -98,6 +101,7 @@ describe('StockRepository', () => {
           createdAt: '2026-06-02T00:00:00.000Z',
           fanControlEnabled: false,
           fanSwitchId: 0,
+          tenantId: DEFAULT_TENANT_ID,
         },
       ]);
       const stock = await repo.findById('grain-watch-10');

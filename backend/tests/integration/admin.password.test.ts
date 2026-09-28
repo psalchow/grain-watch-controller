@@ -28,7 +28,7 @@ jest.mock('../../src/services/influx/influx.service', () => ({
   isValidWindowDuration: jest.fn().mockReturnValue(true),
 }));
 
-function createToken(payload: { userId: string; username: string; role: 'admin' | 'viewer'; stockAccess: string[] }): string {
+function createToken(payload: { userId: string; username: string; role: 'admin' | 'viewer'; tenants: { id: string; name: string }[] }): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
 }
 
@@ -54,10 +54,10 @@ describe('Admin password management', () => {
 
   beforeEach(async () => {
     for (const u of await userService.listFullUsers()) await userService.deleteUser(u.id);
-    const admin = await userService.createUser({ username: 'testadmin', password: 'adminpassword123', role: 'admin', stockAccess: ['*'] });
-    const viewer = await userService.createUser({ username: 'testviewer', password: 'viewerpassword123', role: 'viewer', stockAccess: ['corn-watch-1'] });
-    adminToken = createToken({ userId: admin.id, username: 'testadmin', role: 'admin', stockAccess: ['*'] });
-    viewerToken = createToken({ userId: viewer.id, username: 'testviewer', role: 'viewer', stockAccess: ['corn-watch-1'] });
+    const admin = await userService.createUser({ username: 'testadmin', password: 'adminpassword123', role: 'admin', tenantIds: ['tnt_default'] });
+    const viewer = await userService.createUser({ username: 'testviewer', password: 'viewerpassword123', role: 'viewer', tenantIds: ['tnt_default'] });
+    adminToken = createToken({ userId: admin.id, username: 'testadmin', role: 'admin', tenants: [{ id: 'tnt_default', name: 'Standard' }] });
+    viewerToken = createToken({ userId: viewer.id, username: 'testviewer', role: 'viewer', tenants: [{ id: 'tnt_default', name: 'Standard' }] });
   });
 
   it('admin resets a password (204) and forces a change', async () => {
@@ -104,7 +104,7 @@ describe('Admin password management', () => {
     const res = await request(app)
       .post('/api/v1/admin/users')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ username: 'freshuser', password: 'temppass123456', role: 'viewer', stockAccess: ['corn-watch-1'] });
+      .send({ username: 'freshuser', password: 'temppass123456', role: 'viewer', tenantIds: ['tnt_default'] });
 
     expect(res.status).toBe(201);
     const created = await userService.findUserByUsername('freshuser');

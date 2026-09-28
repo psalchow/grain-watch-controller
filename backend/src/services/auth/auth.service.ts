@@ -8,7 +8,7 @@
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcrypt';
 import { config } from '../../config';
-import { User, JWTPayload, UserRole } from '../../models';
+import { User, JWTPayload, TenantRef, UserRole } from '../../models';
 import { UserService } from './user.service';
 
 /**
@@ -61,8 +61,8 @@ export interface DecodedToken {
   /** User role for authorisation checks */
   role: UserRole;
 
-  /** Stock IDs the user can access */
-  stockAccess: string[];
+  /** Tenants the user belongs to */
+  tenants: TenantRef[];
 
   /** Whether the user must change their password on next login */
   mustChangePassword: boolean;
@@ -150,7 +150,7 @@ export class AuthService {
   /**
    * Generates a JWT token for a user.
    *
-   * The token includes user ID, username, role, and stock access claims.
+   * The token includes user ID, username, role, and tenant claims.
    *
    * @param user - User to generate token for
    * @returns JWT access token string
@@ -160,7 +160,7 @@ export class AuthService {
       userId: user.id,
       username: user.username,
       role: user.role,
-      stockAccess: user.stockAccess,
+      tenants: user.tenants,
       mustChangePassword: user.mustChangePassword ?? false,
     };
 
@@ -242,12 +242,21 @@ export class AuthService {
     try {
       const decoded = jwt.verify(token, this.jwtSecret) as jwt.JwtPayload;
 
-      // Validate required claims are present
+      // Validate required claims are present. `tenants` must be a non-empty
+      // array of objects carrying a string id: a token minted before tenancy
+      // must not authorise under the retired model, an empty list would yield
+      // a session that answers 403 to every hall without saying why, and a
+      // list of bare strings would survive with `undefined` ids.
       if (
         typeof decoded.userId !== 'string' ||
         typeof decoded.username !== 'string' ||
         typeof decoded.role !== 'string' ||
-        !Array.isArray(decoded.stockAccess)
+        !Array.isArray(decoded.tenants) ||
+        decoded.tenants.length === 0 ||
+        !decoded.tenants.every(
+          (tenant: unknown) =>
+            typeof (tenant as TenantRef | null)?.id === 'string'
+        )
       ) {
         throw new AuthenticationError(
           'Invalid token payload structure',
@@ -259,7 +268,7 @@ export class AuthService {
         userId: decoded.userId,
         username: decoded.username,
         role: decoded.role as UserRole,
-        stockAccess: decoded.stockAccess as string[],
+        tenants: decoded.tenants as TenantRef[],
         mustChangePassword: decoded.mustChangePassword === true,
       };
     } catch (error) {
@@ -441,7 +450,7 @@ export class AuthService {
   /**
    * Exchanges a valid refresh token for a fresh access/refresh token pair.
    *
-   * The user is re-loaded from the store so that role, stock access, and
+   * The user is re-loaded from the store so that role, tenant membership, and
    * account status changes take effect on refresh. A new refresh token is
    * issued (rotation). Note: being stateless, the previous refresh token
    * remains cryptographically valid until it expires.

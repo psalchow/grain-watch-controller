@@ -34,6 +34,7 @@ export class StockRepository {
           fanControlEnabled: s.fanControlEnabled,
           fanTopicPrefix: s.fanTopicPrefix ?? null,
           fanSwitchId: s.fanSwitchId,
+          tenantId: s.tenantId,
         }))
       )
       .onConflictDoNothing({ target: stocks.id })
@@ -52,6 +53,7 @@ export class StockRepository {
       createdAt: row.createdAt,
       fanControlEnabled: row.fanControlEnabled,
       fanSwitchId: row.fanSwitchId,
+      tenantId: row.tenantId,
     };
     if (row.description !== null) {
       stock.description = row.description;

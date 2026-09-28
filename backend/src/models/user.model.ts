@@ -7,9 +7,21 @@
 /**
  * User role determining access level within the system.
  * - 'admin': Full access to all stocks and administrative functions
- * - 'viewer': Read-only access to assigned stocks
+ * - 'viewer': Read-only access to the stocks of their tenants
  */
 export type UserRole = 'admin' | 'viewer';
+
+/**
+ * A tenant as it travels with a user: the id authorises, the name is display
+ * data so the client can label a session without a second request.
+ */
+export interface TenantRef {
+  /** Unique tenant identifier (e.g. 'tnt_default') */
+  id: string;
+
+  /** Display name, free text */
+  name: string;
+}
 
 /**
  * Complete user entity as stored in the user database.
@@ -31,11 +43,8 @@ export interface User {
   /** User role determining access level */
   role: UserRole;
 
-  /**
-   * Stock IDs the user can access.
-   * Use ['*'] to grant access to all stocks (typically for admin users).
-   */
-  stockAccess: string[];
+  /** Tenants the user belongs to, with their display names */
+  tenants: TenantRef[];
 
   /** Account creation timestamp (ISO 8601 format) */
   createdAt: string;
@@ -64,22 +73,35 @@ export interface UserProfile {
   /** User role */
   role: UserRole;
 
-  /** Stock IDs the user can access */
-  stockAccess: string[];
+  /**
+   * Ids of the tenants the user belongs to.
+   *
+   * Ids only: this profile feeds `req.user` and the access predicate, neither
+   * of which has any use for a display name. Responses that need names project
+   * them from the full {@link User} instead.
+   */
+  tenantIds: string[];
 
   /** Whether the user must change their password on next login */
   mustChangePassword?: boolean;
 }
 
 /**
- * Checks whether a user has access to a specific stock.
+ * Checks whether a user reaches a specific stock.
+ *
+ * Tenant membership only — the administrator bypass lives at the call sites,
+ * because an administrator is not a member of every tenant, they simply skip
+ * the filter.
  *
  * @param user - User profile to check
- * @param stockId - Stock identifier to check access for
- * @returns true if the user has wildcard or explicit access
+ * @param stock - The stock to check access for
+ * @returns true if the stock belongs to one of the user's tenants
  */
-export function hasStockAccess(user: UserProfile, stockId: string): boolean {
-  return user.stockAccess.includes('*') || user.stockAccess.includes(stockId);
+export function hasStockAccess(
+  user: UserProfile,
+  stock: { tenantId: string }
+): boolean {
+  return user.tenantIds.includes(stock.tenantId);
 }
 
 /**
@@ -96,8 +118,8 @@ export interface JWTPayload {
   /** User role for authorisation checks */
   role: UserRole;
 
-  /** Stock IDs the user can access */
-  stockAccess: string[];
+  /** Tenants the user belongs to; the ids authorise, the names are display data */
+  tenants: TenantRef[];
 
   /** Whether the user must change their password on next login */
   mustChangePassword?: boolean;

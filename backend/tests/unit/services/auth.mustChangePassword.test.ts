@@ -18,7 +18,7 @@ function makeUser(overrides: Partial<User> = {}): User {
     username: 'admin',
     passwordHash: 'hash',
     role: 'admin',
-    stockAccess: ['*'],
+    tenants: [{ id: 'tnt_default', name: 'Standard' }],
     createdAt: '2026-01-01T00:00:00Z',
     active: true,
     ...overrides,
