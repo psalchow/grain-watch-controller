@@ -86,6 +86,16 @@ belongs to it.
 When it is unclear which side a finding falls on, ask: fix now or backlog? Do
 not decide it by fixing it.
 
+**This applies to the assistant's own proposals during design, not only to
+findings during implementation.** Answering a design question with the more
+thorough option is easy to justify once and expensive in aggregate: each
+addition brings its own edge cases, its own failure modes and its own review
+findings, and several of them together deliver a different feature from the one
+that was asked for. When proposing an option, say what it costs beyond the code
+— what it forces elsewhere, what it makes reachable that was not. If a feature
+was not requested and nothing in the operating reality demands it, the default
+answer is no; the backlog is where it waits for a case.
+
 Before starting a feature, read `docs/BACKLOG.md` and pick up the entries that
 belong to the same area — a backlog item is cheapest to clear while its code is
 already open. Entries may also be worked off in dedicated rounds.
@@ -96,6 +106,24 @@ each one as *in scope* (a defect in the code under review) or *backlog*
 repaired on the spot. Repeating a finding the author has already resolved as a
 deliberate, documented decision is noise — check `docs/BACKLOG.md` and the
 relevant spec first.
+
+## Specs and Plans
+
+A spec records the decisions and why they were taken. A plan shows the route
+through the code — which files, in what order, what must be true at the end.
+
+**Neither contains the implementation.** A plan carrying finished source files
+and whole test bodies is the change written twice: reviewers then review that
+copy instead of the route, defects get found in code nobody will paste, and the
+real work still has to be done afterwards. Name files, state decisions, give the
+verification command. Quote code only where the exact value is the requirement —
+a migration's SQL, a schema constant, a magic string.
+
+What does belong in a plan, and is worth more than any snippet, is the set of
+traps: the things that would cost an hour to rediscover. A library that folds
+only ASCII, a build step that type-checks files the task never touched, a
+migration whose statement order is load-bearing. Those go in a list of their
+own.
 
 ## Branching
 
