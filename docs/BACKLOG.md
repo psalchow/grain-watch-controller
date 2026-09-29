@@ -346,6 +346,17 @@ changes the behaviour of ordinary switching, so it wants its own look:
 `FAULT` currently means "the device reported a problem", and a missing ack is a
 different thing.
 
+**Extended 2026-09-29**, while specifying the automation core. It does not take
+a silent device: monitor messages are QoS 0 without retain, so an ordinary
+switch-off that works exactly as designed locks the page whenever that one
+packet is lost. The automation spec establishes the opposite doctrine for the
+local-switching case — never enter a pending state you cannot leave — which
+makes the gap here visible by contrast, and the button ordering that spec adds
+to `FanControlPage` does not close it: pending is tested first, so the page
+stays locked although `desiredOn` is already false and would render a usable
+button. Second option alongside the watchdog: let the page fall back to
+`desiredOn` once a pending state has stood for longer than the watchdog window.
+
 ## No in-app prompt when a new bundle is available
 
 **Deferred:** 2026-09-17 — the update banner was reverted in `b68be57`.
