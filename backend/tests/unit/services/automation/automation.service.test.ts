@@ -399,6 +399,25 @@ describe('AutomationService — selection', () => {
     expect(h.events).toEqual([]);
   });
 
+  it('issues no command when the controller disappears between the read and the action', async () => {
+    const h = setup();
+    // The stock is declared unserviceable while the two awaited queries run.
+    // `FanControlManager.markRetiring` does that without touching `enabled`,
+    // so the flag re-read below the decision cannot catch it — only a
+    // controller resolved immediately before acting can (design spec §5.2).
+    h.getOutdoorReading.mockImplementation(async () => {
+      h.wired.delete(STOCK_ID);
+      return outdoorReading(5, 50);
+    });
+
+    h.service.start();
+    await flush();
+    h.service.stop();
+
+    expect(h.controller.commands).toEqual([]);
+    expect(h.events).toEqual([]);
+  });
+
   it('leaves out a stock without fan control and one without grain thermometers', async () => {
     const h = setup({
       stocks: [

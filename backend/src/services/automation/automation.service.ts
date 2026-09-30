@@ -242,9 +242,10 @@ export class AutomationService {
 
     // Resolved separately from the availability check above, and later: a stock
     // can be retired in between, and the cycle must not assume a controller it
-    // did not just obtain. Skipped without an event and without a read.
-    const controller = this.deps.getController(stock.id);
-    if (controller === null) return;
+    // did not just obtain. Skipped without an event and without a read — this
+    // one only saves the two queries; the controller that is acted on is
+    // resolved once more below, after them.
+    if (this.deps.getController(stock.id) === null) return;
 
     const readings = await this.read(stock);
     if (readings === null) return;
@@ -257,15 +258,30 @@ export class AutomationService {
       evaluatedAt: at.toISOString(),
     });
 
-    if (decision.desiredOn !== null && decision.desiredOn !== controller.getStatus().desiredOn) {
-      // Two awaited InfluxDB queries sit between the selection and this point,
-      // and Express handlers share the event loop, so a manual command can have
-      // landed in that window. Without this re-read the tick would command the
-      // fan against the user who just took it over (design spec §5.4).
-      if (this.deps.automationRepo.get(stock.id).enabled) {
+    if (decision.desiredOn !== null) {
+      // Both guards are resolved again here rather than reused from above: two
+      // awaited InfluxDB queries sit between the selection and this point, and
+      // Express handlers share the event loop, so the window is real.
+      //
+      // The controller, because a request can have declared the stock
+      // unserviceable in it. `FanControlManager.markRetiring` sets that mark
+      // without touching `enabled`, so the flag re-read does not catch it, and
+      // a real retirement drops the wiring and stops the controller — arming
+      // the keep-alive on it would leave a fan running on a controller no
+      // endpoint and no reconciliation tick can reach again (design spec §5.2).
+      //
+      // The flag, because a manual command can have switched automation off in
+      // the same window, and the tick would otherwise command the fan against
+      // the user who just took it over (design spec §5.4).
+      const current = this.deps.getController(stock.id);
+      if (
+        current !== null &&
+        decision.desiredOn !== current.getStatus().desiredOn &&
+        this.deps.automationRepo.get(stock.id).enabled
+      ) {
         this.act(
           stock.id,
-          controller,
+          current,
           decision.desiredOn,
           decision.reason,
           readings,

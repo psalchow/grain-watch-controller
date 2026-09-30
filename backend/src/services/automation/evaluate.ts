@@ -29,13 +29,25 @@ function withMinRunFilter(
   return decision;
 }
 
-/** Rule 6 becomes hold while less than the minimum has passed since the last switch-off. */
+/**
+ * Rule 6 becomes hold while less than the minimum has passed since the last
+ * switch-off.
+ *
+ * Only while the fan is off. `fan_state.last_command_at` is stamped by every
+ * command, the switch-on included, so on a running fan it measures the time
+ * since this run *started* — the pause is defined against the last switch-off
+ * (design spec §3.3, §4.2). Applying it there would cost no actuation (hold
+ * and on coincide for a fan already running) but would report `min_pause`, and
+ * the page would say "Mindestpause läuft noch" beneath a card saying the fan
+ * is running.
+ */
 function withMinPauseFilter(
   decision: Decision,
   state: FanTimingState,
   minPauseMinutes: number,
   now: Date,
 ): Decision {
+  if (state.desiredOn) return decision;
   if (elapsedMinutes(state.lastCommandAt, now) < minPauseMinutes) {
     return { desiredOn: null, reason: 'min_pause' };
   }

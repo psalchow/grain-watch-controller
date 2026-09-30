@@ -320,6 +320,21 @@ describe('evaluate — minimum times', () => {
     expect(result).toEqual({ desiredOn: null, reason: 'min_pause' });
   });
 
+  it('leaves rule 6 alone while the fan is running, however recent the last command', () => {
+    // `fan_state.last_command_at` is stamped by every command, including the
+    // switch-on that started this very run (design spec §3.3), and the filter
+    // is defined as the time since the last switch-*off* (§4.2). Testing it on
+    // a running fan would report "Mindestpause läuft noch" beside a status
+    // card saying the fan is on.
+    const result = evaluate(
+      baseReadings({ grainMeanC: 10, outdoorTempC: 0 }), // ΔT = 10, satisfies deltaOnK
+      baseParameters({ deltaOnK: 10, minPauseMinutes: 30 }),
+      baseState({ desiredOn: true, since: minutesAgo(10), lastCommandAt: minutesAgo(10) }),
+      NOW,
+    );
+    expect(result).toEqual({ desiredOn: true, reason: 'delta_ok' });
+  });
+
   it('a null since counts as elapsed, so rule 4a switches off without waiting', () => {
     const result = evaluate(
       baseReadings({ grainMeanC: 12 }),
