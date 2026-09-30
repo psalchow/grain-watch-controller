@@ -104,7 +104,12 @@ export class ShellyMachine {
 
   manualContactorToggle(): void {
     this.inputState = !this.inputState;
-    this.contactorHeldLocally = !this.contactorHeldLocally;
+    // Held by hand is the engaged case only: closing the contactor by hand
+    // takes it away from the relay, opening it hands it back. Flipping the
+    // flag on every toggle would leave it set after a local switch-off during
+    // a backend-on run, where nobody is holding anything, and every later
+    // command would then find the contactor unreachable.
+    this.contactorHeldLocally = this.inputState;
     if (this.inputState === this.desiredInputState) {
       this.publishMonitor('success', 'Contactor switched correctly');
     } else {

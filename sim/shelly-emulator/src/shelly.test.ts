@@ -127,5 +127,30 @@ describe('ShellyMachine', () => {
       vi.advanceTimersByTime(3000);               // grace elapses
       expect(e.monitors.at(-1)).toEqual({ type: 'success', switchState: false, inputState: false });
     });
+
+    it('a hand switch-off during a backend-on run leaves nothing held, so the next on engages normally', () => {
+      // The person released the contactor; they are not holding it. A flag
+      // that stayed set here would make the emulator refuse every later
+      // command and answer a perfectly ordinary switch-on with a spurious
+      // alert and safety_shutoff, with no way back short of a restart.
+      const e = makeEmit();
+      const s = new ShellyMachine(e.emit, OPTS);
+
+      s.setSwitch(true);
+      vi.advanceTimersByTime(3500);              // engage + grace, settles on success
+
+      s.manualContactorToggle();                 // opened by hand
+      s.setSwitch(false);                        // backend stands down
+      vi.advanceTimersByTime(3000);              // grace elapses on that off
+
+      s.setSwitch(true);                         // a fresh run afterwards
+      vi.advanceTimersByTime(500);               // contactor engages again
+      expect(s.getSnapshot().inputState).toBe(true);
+      vi.advanceTimersByTime(2500);              // grace elapses
+      expect(e.monitors.at(-1)).toEqual({ type: 'success', switchState: true, inputState: true });
+      const types = e.monitors.map((m) => m.type);
+      expect(types).not.toContain('alert');
+      expect(types).not.toContain('safety_shutoff');
+    });
   });
 });
