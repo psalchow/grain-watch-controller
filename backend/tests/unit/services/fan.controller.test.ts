@@ -1,14 +1,14 @@
 import { createTestDb } from '../../setup/db';
 import { StockRepository, FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
-import { FanController } from '../../../src/services/fan/fan.controller';
-import type { ShellyMonitorMessage } from '../../../src/services/fan/types';
+import { FanController, type FanControllerDeps } from '../../../src/services/fan/fan.controller';
+import type { FanState, InterferenceCause, ShellyMonitorMessage } from '../../../src/services/fan/types';
 import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
 function successMsg(switchState: boolean): ShellyMonitorMessage {
   return { type: 'success', message: 'ok', switchState, inputState: switchState, timestamp: 1 };
 }
 
-async function makeController() {
+async function makeController(overrides: Partial<FanControllerDeps> = {}) {
   const db = createTestDb();
   await new StockRepository(db.db).upsertMany([{
     id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
@@ -24,6 +24,7 @@ async function makeController() {
     eventsRepo: new FanEventsRepository(db.db),
     timings: { keepAliveMs: 900000, watchdogMs: 10000 },
     now: () => new Date('2026-07-09T10:00:00.000Z'),
+    ...overrides,
   });
   return { db, controller, published };
 }
@@ -163,5 +164,113 @@ describe('FanController', () => {
     controller.onChange((s) => seen.push(s.state));
     controller.command('on');
     expect(seen).toContain('TURN_ON_PENDING');
+  });
+
+  describe('contactor overlay and local switching (automation core)', () => {
+    it('contactorEngaged starts null and follows inputState, never switchState', async () => {
+      const { controller } = await makeController();
+      expect(controller.getStatus().contactorEngaged).toBeNull();
+
+      controller.handleShellyMessage(successMsg(true));
+      expect(controller.getStatus().contactorEngaged).toBe(true);
+
+      // switchState deliberately disagrees with inputState here: a warning
+      // carries desiredInputState in switchState, not the real input.
+      controller.handleShellyMessage({ type: 'warning', message: 'manual', switchState: false, inputState: true, timestamp: 2 });
+      expect(controller.getStatus().contactorEngaged).toBe(true);
+
+      controller.handleShellyMessage({ type: 'alert', message: 'stuck', switchState: true, inputState: false, timestamp: 3 });
+      expect(controller.getStatus().contactorEngaged).toBe(false);
+    });
+
+    it('a warning while off publishes exactly one off, stays desiredOn false, logs a command with source shelly, calls onInterference, and reports ON from inputState — never TURN_OFF_PENDING', async () => {
+      const interference: InterferenceCause[] = [];
+      const { controller, published } = await makeController({ onInterference: (c) => interference.push(c) });
+      expect(controller.getStatus().state).toBe('OFF');
+      expect(controller.getStatus().desiredOn).toBe(false);
+      const seen: FanState[] = [];
+      controller.onChange((s) => seen.push(s.state));
+
+      controller.handleShellyMessage({ type: 'warning', message: 'local on', switchState: false, inputState: true, timestamp: 1 });
+
+      expect(published).toEqual(['off']);
+      expect(controller.getStatus().desiredOn).toBe(false);
+      const commandEvent = controller.getRecentEvents(10).find((e) => e.kind === 'command');
+      expect(commandEvent?.source).toBe('shelly');
+      expect(interference).toEqual(['local_switch']);
+      expect(controller.getStatus().state).toBe('ON');
+      expect(seen).not.toContain('TURN_OFF_PENDING');
+    });
+
+    it('the same warning with inputState false reports OFF', async () => {
+      const { controller, published } = await makeController();
+
+      controller.handleShellyMessage({ type: 'warning', message: 'still off', switchState: false, inputState: false, timestamp: 1 });
+
+      expect(published).toEqual(['off']);
+      expect(controller.getStatus().state).toBe('OFF');
+    });
+
+    it('a warning while the fan was on clears the keep-alive, so no further on is published', async () => {
+      const { controller, published } = await makeController();
+      controller.command('on');
+      controller.handleShellyMessage(successMsg(true));
+      expect(published).toEqual(['on']);
+
+      controller.handleShellyMessage({ type: 'warning', message: 'local off', switchState: true, inputState: false, timestamp: 2 });
+      expect(published).toEqual(['on', 'off']);
+
+      jest.advanceTimersByTime(900000);
+      expect(published).toEqual(['on', 'off']); // no keep-alive re-assert after the warning
+    });
+
+    it('an alert calls onInterference with fault', async () => {
+      const interference: InterferenceCause[] = [];
+      const { controller } = await makeController({ onInterference: (c) => interference.push(c) });
+      controller.command('on');
+
+      controller.handleShellyMessage({ type: 'alert', message: 'no follow', switchState: true, inputState: false, timestamp: 2 });
+
+      expect(interference).toEqual(['fault']);
+    });
+
+    it('a safety_shutoff calls onInterference with fault', async () => {
+      const interference: InterferenceCause[] = [];
+      const { controller } = await makeController({ onInterference: (c) => interference.push(c) });
+      controller.command('on');
+      controller.handleShellyMessage(successMsg(true));
+
+      controller.handleShellyMessage({ type: 'safety_shutoff', message: 'self-protect', switchState: false, inputState: false, timestamp: 2 });
+
+      expect(interference).toEqual(['fault']);
+    });
+
+    it('a watchdog_off does not call onInterference', async () => {
+      const interference: InterferenceCause[] = [];
+      const { controller } = await makeController({ onInterference: (c) => interference.push(c) });
+
+      controller.command('on');
+      jest.advanceTimersByTime(10000);
+
+      expect(controller.getStatus().state).toBe('FAULT');
+      expect(interference).toEqual([]);
+    });
+
+    it('a user off while the desired state is already false publishes, persists and logs but leaves the reported state unchanged', async () => {
+      const { controller, published } = await makeController();
+      expect(controller.getStatus().state).toBe('OFF');
+      expect(controller.getStatus().desiredOn).toBe(false);
+      const seen: FanState[] = [];
+      controller.onChange((s) => seen.push(s.state));
+
+      controller.command('off');
+
+      expect(published).toEqual(['off']);
+      expect(controller.getStatus().state).toBe('OFF');
+      expect(controller.getStatus().desiredOn).toBe(false);
+      const commandEvent = controller.getRecentEvents(10).find((e) => e.kind === 'command');
+      expect(commandEvent?.source).toBe('user');
+      expect(seen).not.toContain('TURN_OFF_PENDING');
+    });
   });
 });

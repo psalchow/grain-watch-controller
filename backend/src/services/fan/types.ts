@@ -25,7 +25,20 @@ export type FanEventKind =
   | 'online_change'
   | 'watchdog_off'
   | 'stand_down'
-  | 'recovery';
+  | 'recovery'
+  | 'auto_on'
+  | 'auto_off'
+  | 'automation_disabled'
+  | 'automation_configured';
+
+/**
+ * Why `FanController` reported an interference with its own desired state to
+ * `FanControllerDeps.onInterference`: `local_switch` for a `warning` (the
+ * contactor moved without a command), `fault` for an `alert` or a
+ * `safety_shutoff` (the contactor did not follow one). Deliberately excludes
+ * `watchdog_off` — see design spec §5.5.
+ */
+export type InterferenceCause = 'local_switch' | 'fault';
 
 export interface FanStatus {
   stockId: string;
@@ -41,6 +54,17 @@ export interface FanStatus {
    * can arrive and the last value stands unchanged.
    */
   fanControlReachable: boolean | null;
+  /**
+   * Whether the contactor's auxiliary contact is closed, i.e. the fan is
+   * physically running — whoever switched it. Fed from `inputState` on every
+   * monitor message; `null` until the Shelly has said anything.
+   *
+   * Deliberately not fed from `switchState`: in a `warning` and an `alert`
+   * that field carries `desiredInputState`, the Shelly's last commanded
+   * output, not the relay's actual state — the two disagree exactly in the
+   * situation this overlay exists to report (design spec §6).
+   */
+  contactorEngaged: boolean | null;
   lastWarning: { message: string; ts: string } | null;
   lastAlert: { message: string; ts: string } | null;
   since: string | null;

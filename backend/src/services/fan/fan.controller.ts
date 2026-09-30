@@ -1,5 +1,10 @@
 import type { FanStateRepository, FanEventsRepository, FanEvent } from '../../db/repositories';
-import type { FanState, FanStatus, FanEventKind, ShellyMonitorMessage } from './types';
+import type { FanState, FanStatus, FanEventKind, ShellyMonitorMessage, InterferenceCause } from './types';
+
+/** Who asked for a switch, or who is telling us the state changed. */
+type FanEventSource = 'user' | 'shelly' | 'backend' | 'auto';
+/** Callers of `command()`: never 'shelly' — that source only ever arises internally, from a monitor message. */
+type CommandSource = 'user' | 'backend' | 'auto';
 
 export interface FanControllerDeps {
   /** Stock (Halle) this controller drives. */
@@ -14,6 +19,14 @@ export interface FanControllerDeps {
   timings: { keepAliveMs: number; watchdogMs: number };
   /** Injectable clock for deterministic tests; defaults to real time. */
   now?: () => Date;
+  /**
+   * Notified when the contactor moved outside our control: a `warning`
+   * (`local_switch`) or an `alert` / `safety_shutoff` (`fault`). Deliberately
+   * not fired for `watchdog_off` (design spec §5.5). Set by the automation
+   * service, wired through `FanControlManager` — `FanController` itself does
+   * not know who is listening.
+   */
+  onInterference?: (cause: InterferenceCause) => void;
 }
 
 /** Notified with the latest status on every state/overlay change (drives SSE). */
@@ -34,6 +47,8 @@ export class FanController {
   private since: string | null = null;
   /** Whether the fan control currently answers; null = not yet heard from. */
   private fanControlReachable: boolean | null = null;
+  /** Whether the contactor's auxiliary contact is closed; null = not yet heard from. */
+  private contactorEngaged: boolean | null = null;
   /** Last unsolicited-switching warning (overlay, independent of state). */
   private lastWarning: { message: string; ts: string } | null = null;
   /** Last contactor-failure alert / safety shutoff (overlay, independent of state). */
@@ -64,22 +79,34 @@ export class FanController {
 
   /**
    * Switch request. `source` records who asked: the API passes the default,
-   * the manager passes 'backend' when it switches a fan off on retirement.
+   * the manager passes 'backend' when it switches a fan off on retirement,
+   * and the automation service (a later task) will pass 'auto'.
+   *
+   * An `off` while the desired state is already false has nothing to wait
+   * for — the Shelly's output does not need to move — so it does not enter
+   * TURN_OFF_PENDING; see `turnOffImmediately`.
    */
-  command(action: 'on' | 'off', source: 'user' | 'backend' = 'user'): void {
+  command(action: 'on' | 'off', source: CommandSource = 'user'): void {
     if (action === 'on') {
       this.beginTurnOn(source, true, this.now().toISOString());
-    } else {
+    } else if (this.desiredOn) {
       this.beginTurnOff(source);
+    } else {
+      this.turnOffImmediately(source);
     }
   }
 
   /**
    * Processes a Shelly monitor message. success(on) confirms the pending switch;
-   * warning is logged as an overlay only; alert/safety_shutoff drive a FAULT.
+   * a warning stands the desired state down (§5.6/§6 of the automation-core
+   * design); alert/safety_shutoff drive a FAULT.
    */
   handleShellyMessage(msg: ShellyMonitorMessage): void {
     const ts = this.now().toISOString();
+    // Fed from every message, and from `inputState` specifically: it is the
+    // auxiliary contact in all four, whereas `switchState` carries the last
+    // *commanded* output during a warning/alert, not the relay's real state.
+    this.contactorEngaged = msg.inputState;
     switch (msg.type) {
       case 'success':
         this.log('success', msg, 'shelly');
@@ -98,20 +125,29 @@ export class FanController {
           this.clearKeepAlive();
         }
         break;
-      case 'warning':
+      case 'warning': {
         this.lastWarning = { message: msg.message, ts };
         this.log('warning', msg, 'shelly');
-        this.emit();
+        // The contactor moved without our command: stand down rather than
+        // fight it (the backend cannot open a contactor held by hand), then
+        // report what the device just told us instead of a pending state we
+        // could never leave (design spec §5.6).
+        this.turnOffImmediately('shelly');
+        this.deps.onInterference?.('local_switch');
+        this.setState(msg.inputState ? 'ON' : 'OFF');
         break;
+      }
       case 'alert':
         this.lastAlert = { message: msg.message, ts };
         this.log('alert', msg, 'shelly');
         this.enterFault();
+        this.deps.onInterference?.('fault');
         break;
       case 'safety_shutoff':
         this.lastAlert = { message: msg.message, ts };
         this.log('safety_shutoff', msg, 'shelly');
         this.enterFault();
+        this.deps.onInterference?.('fault');
         break;
     }
   }
@@ -149,6 +185,7 @@ export class FanController {
       state: this.state,
       desiredOn: this.desiredOn,
       fanControlReachable: this.fanControlReachable,
+      contactorEngaged: this.contactorEngaged,
       lastWarning: this.lastWarning,
       lastAlert: this.lastAlert,
       since: this.since,
@@ -179,7 +216,7 @@ export class FanController {
   // --- internals ---
 
   /** Enters TURN_ON_PENDING, publishes 'on', arms the watchdog and keep-alive. */
-  private beginTurnOn(source: 'user' | 'backend', persist: boolean, since: string | null): void {
+  private beginTurnOn(source: CommandSource, persist: boolean, since: string | null): void {
     this.desiredOn = true;
     this.since = since;
     if (persist) this.persistState();
@@ -190,14 +227,38 @@ export class FanController {
     this.ensureKeepAlive();
   }
 
-  /** Enters TURN_OFF_PENDING, stops timers, publishes 'off'. */
-  private beginTurnOff(source: 'user' | 'backend' = 'user'): void {
+  /** Enters TURN_OFF_PENDING, stops timers, publishes 'off'. Only reachable while desiredOn is true — there is a 'success' to wait for. */
+  private beginTurnOff(source: CommandSource = 'user'): void {
     this.desiredOn = false;
     this.since = null;
     this.persistState();
     this.clearWatchdog();
     this.clearKeepAlive();
     this.setState('TURN_OFF_PENDING');
+    this.log('command', { action: 'off' }, source);
+    this.deps.publish('off');
+  }
+
+  /**
+   * Releases the desired state and timers without waiting for an
+   * acknowledgement, so it never enters TURN_OFF_PENDING. The only exit from
+   * that state is a `success`, and neither caller here can ever receive one:
+   * an `off` on an already-off fan changes nothing on the Shelly's output for
+   * it to confirm, and a local switch bypasses the Shelly's relay entirely, so
+   * no status event, no grace timer and no acknowledgement follow (design
+   * spec §5.6, §6).
+   *
+   * Publishes, persists and logs the command row. What gets reported is the
+   * caller's business — this method never touches `state` itself; the
+   * warning handler sets it explicitly from `inputState` right afterwards,
+   * while an ordinary already-off `off` leaves it exactly as it stands.
+   */
+  private turnOffImmediately(source: FanEventSource): void {
+    this.desiredOn = false;
+    this.since = null;
+    this.persistState();
+    this.clearWatchdog();
+    this.clearKeepAlive();
     this.log('command', { action: 'off' }, source);
     this.deps.publish('off');
   }
@@ -263,7 +324,7 @@ export class FanController {
   }
 
   /** Appends one entry to the per-stock event log. */
-  private log(kind: FanEventKind, payload: unknown, source: 'user' | 'shelly' | 'backend'): void {
+  private log(kind: FanEventKind, payload: unknown, source: FanEventSource): void {
     this.deps.eventsRepo.insert({
       stockId: this.deps.stockId,
       ts: this.now().toISOString(),
