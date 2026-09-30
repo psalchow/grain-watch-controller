@@ -338,7 +338,6 @@ describe('AutomationService — read failures', () => {
     expect(h.controller.commands).toEqual([]);
 
     await tick();
-    h.service.stop();
 
     expect(h.controller.commands).toEqual([{ action: 'off', source: 'auto' }]);
     const event = h.events.find((e) => e.kind === 'auto_off');
@@ -348,6 +347,17 @@ describe('AutomationService — read failures', () => {
       outdoorTempC: null,
       deltaT: null,
     });
+
+    // The fourth and fifth failures decide no_data again, but the fan is
+    // already off, so the comparison against the controller's desired state
+    // blocks any further command. Held in place here because the service
+    // keeps no remembered decision to compare against instead.
+    await tick();
+    await tick();
+    h.service.stop();
+
+    expect(h.controller.commands).toHaveLength(1);
+    expect(h.events.filter((e) => e.kind === 'auto_off')).toHaveLength(1);
   });
 
   it('resets the counter on a successful read', async () => {
@@ -533,6 +543,29 @@ describe('AutomationService — the cycle and the listeners', () => {
       reason: null,
       evaluatedAt: null,
     });
+  });
+
+  it('confines a throw outside the read path to that stock, and evaluateStock never rejects', async () => {
+    // `getController` sits outside the try/catch the failure counter owns, so
+    // only the per-stock containment can catch this one.
+    const h = setup({
+      stocks: [stock({ id: 'broken', deviceGroup: 'group-broken' }), stock()],
+    });
+    h.getController.mockImplementation((stockId: string) => {
+      if (stockId === 'broken') throw new Error('the controller registry broke');
+      return h.controller.asController();
+    });
+
+    // The documented contract: a failed evaluation must not reject into the
+    // request that triggered it.
+    await expect(h.service.evaluateStock('broken')).resolves.toBeUndefined();
+    expect(h.controller.commands).toEqual([]);
+
+    h.service.start();
+    await flush();
+    h.service.stop();
+
+    expect(h.controller.commands).toEqual([{ action: 'on', source: 'auto' }]);
   });
 
   it('confines an error in one stock to that stock', async () => {
