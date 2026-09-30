@@ -8,3 +8,4 @@ export { AuthController } from './auth.controller';
 export { StocksController } from './stocks.controller';
 export { AdminController } from './admin.controller';
 export { FanHttpController } from './fan.controller';
+export type { AutomationSnapshot } from './fan.controller';

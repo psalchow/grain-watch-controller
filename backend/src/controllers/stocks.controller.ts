@@ -7,6 +7,8 @@ import {
   buildOutdoorConditions,
 } from '../services/conditions';
 import { NotFoundError } from '../middleware';
+import { getDb } from '../db';
+import { AutomationRepository } from '../db/repositories';
 import { hasStockAccess } from '../models';
 import { getRange, Resolution } from '../utils/timeRange';
 
@@ -31,6 +33,11 @@ export class StocksController {
           ? allStocks
           : allStocks.filter((s) => hasStockAccess(user, s));
 
+      // One query for the whole list rather than one per stock (design spec §7.2).
+      const automation = new AutomationRepository(getDb()).getMany(
+        accessibleStocks.map((s) => s.id)
+      );
+
       const stocks = accessibleStocks.map((s) => ({
         id: s.id,
         name: s.name,
@@ -38,6 +45,13 @@ export class StocksController {
         hasGrainSensors: s.hasGrainSensors,
         fanControlEnabled: fanControlAvailable(s),
         active: s.active,
+        automation: {
+          // `available` implies fan control, never the reverse: a hall with a
+          // fan but no grain thermometers cannot be automated in v1, because
+          // the differential rule has nothing to compare (design spec §3.2).
+          available: fanControlAvailable(s) && s.hasGrainSensors,
+          enabled: automation.get(s.id)?.enabled ?? false,
+        },
       }));
 
       res.status(200).json({

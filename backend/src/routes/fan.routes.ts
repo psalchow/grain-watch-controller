@@ -7,6 +7,7 @@ import {
   validateBody,
   stockIdParamsSchema,
   fanCommandSchema,
+  automationConfigSchema,
 } from '../middleware';
 
 export function createFanRouter(): Router {
@@ -28,6 +29,23 @@ export function createFanRouter(): Router {
     requireStockAccess,
     validateBody(fanCommandSchema),
     (req, res, next) => controller.sendCommand(req, res, next)
+  );
+
+  router.get(
+    '/:stockId/fan/automation',
+    authenticate,
+    validateParams(stockIdParamsSchema),
+    requireStockAccess,
+    (req, res, next) => controller.getAutomation(req, res, next)
+  );
+
+  router.put(
+    '/:stockId/fan/automation',
+    authenticate,
+    validateParams(stockIdParamsSchema),
+    requireStockAccess,
+    validateBody(automationConfigSchema),
+    (req, res, next) => controller.putAutomation(req, res, next)
   );
 
   router.get(

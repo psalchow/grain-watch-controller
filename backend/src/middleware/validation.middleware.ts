@@ -340,3 +340,70 @@ export const fanCommandSchema = z.object({
 
 /** Type inferred from fanCommandSchema */
 export type FanCommandRequest = z.infer<typeof fanCommandSchema>;
+
+/**
+ * Automation configuration request body schema.
+ *
+ * The switch and the seven parameters arrive in one call: the form submits them
+ * together, and re-enabling after a self-disable is then the same request
+ * (design spec §7). Bounds per §3.1, including the two cross-field conditions.
+ */
+export const automationConfigSchema = z
+  .object({
+    enabled: z.boolean({
+      required_error: 'enabled is required',
+      invalid_type_error: 'enabled must be a boolean',
+    }),
+    /** Upper bound only: the lower one is `deltaOffK`, checked across the fields below. */
+    deltaOnK: z
+      .number({ required_error: 'deltaOnK is required', invalid_type_error: 'deltaOnK must be a number' })
+      .max(20, 'deltaOnK must be at most 20'),
+    deltaOffK: z
+      .number({ required_error: 'deltaOffK is required', invalid_type_error: 'deltaOffK must be a number' })
+      .min(2, 'deltaOffK must be at least 2'),
+    maxOutdoorHumidityPct: z
+      .number({
+        required_error: 'maxOutdoorHumidityPct is required',
+        invalid_type_error: 'maxOutdoorHumidityPct must be a number',
+      })
+      .min(40, 'maxOutdoorHumidityPct must be at least 40')
+      .max(100, 'maxOutdoorHumidityPct must be at most 100'),
+    /** Null switches the target-temperature rule off altogether. */
+    targetTempC: z
+      .number({ invalid_type_error: 'targetTempC must be a number or null' })
+      .min(-10, 'targetTempC must be at least -10')
+      .max(30, 'targetTempC must be at most 30')
+      .nullable(),
+    targetHysteresisK: z
+      .number({
+        required_error: 'targetHysteresisK is required',
+        invalid_type_error: 'targetHysteresisK must be a number',
+      })
+      .min(0, 'targetHysteresisK must be at least 0')
+      .max(5, 'targetHysteresisK must be at most 5'),
+    minRunMinutes: z
+      .number({ required_error: 'minRunMinutes is required', invalid_type_error: 'minRunMinutes must be a number' })
+      .int('minRunMinutes must be a whole number of minutes')
+      .min(0, 'minRunMinutes must be at least 0')
+      .max(240, 'minRunMinutes must be at most 240'),
+    /**
+     * Five, not zero: below the evaluation interval a pause cannot take effect
+     * at all, and it is the only thing bounding the retry loop a broken monitor
+     * path produces (design spec §3.1).
+     */
+    minPauseMinutes: z
+      .number({ required_error: 'minPauseMinutes is required', invalid_type_error: 'minPauseMinutes must be a number' })
+      .int('minPauseMinutes must be a whole number of minutes')
+      .min(5, 'minPauseMinutes must be at least 5')
+      .max(240, 'minPauseMinutes must be at most 240'),
+  })
+  // Reported against `deltaOffK`, the field the form lets the user lower: the
+  // switch-off threshold has to sit strictly below the switch-on one, or the
+  // fan would start and stop on the same reading.
+  .refine((c) => c.deltaOffK < c.deltaOnK, {
+    message: 'deltaOffK must be below deltaOnK',
+    path: ['deltaOffK'],
+  });
+
+/** Type inferred from automationConfigSchema */
+export type AutomationConfigRequest = z.infer<typeof automationConfigSchema>;

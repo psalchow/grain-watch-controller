@@ -13,8 +13,8 @@ import { initDb, closeDb, getDb, getSqliteHandle } from '../../src/db';
 import { runMigrations } from '../../src/db/migrate';
 import { resetServiceSingletonsForTests } from '../../src/services';
 import { setAuthService } from '../../src/middleware';
-import { StockRepository } from '../../src/db/repositories';
-import { DEFAULT_TENANT_ID } from '../../src/db/schema';
+import { StockRepository, AutomationRepository } from '../../src/db/repositories';
+import { DEFAULT_TENANT_ID, AUTOMATION_DEFAULTS } from '../../src/db/schema';
 import { seedStocks } from '../../src/db/seed';
 import { setFanManager } from '../../src/services/fan';
 import type { FanControlManager } from '../../src/services/fan';
@@ -248,6 +248,57 @@ describe('Stock Endpoints', () => {
       expect(byId['grain-watch-1']).toBe(true);
       // No controller was built for this one, so the fan endpoints would 404
       expect(byId['grain-watch-2']).toBe(false);
+    });
+
+    it('reports the automation state for every stock', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      const byId = Object.fromEntries(
+        response.body.stocks.map((s: { id: string; automation: unknown }) => [s.id, s.automation]),
+      );
+      // Wired controller plus grain thermometers, no row yet: available, off.
+      expect(byId['grain-watch-1']).toEqual({ available: true, enabled: false });
+      // No controller, so the automation could not drive it either.
+      expect(byId['grain-watch-2']).toEqual({ available: false, enabled: false });
+    });
+
+    it('reports a configured automation as enabled', async () => {
+      const repo = new AutomationRepository(getDb());
+      repo.upsert('grain-watch-1', { ...AUTOMATION_DEFAULTS, enabled: true });
+
+      try {
+        const response = await request(app)
+          .get('/api/v1/stocks')
+          .set('Authorization', `Bearer ${adminToken}`);
+
+        expect(response.status).toBe(200);
+        const stock = response.body.stocks.find((s: { id: string }) => s.id === 'grain-watch-1');
+        expect(stock.automation).toEqual({ available: true, enabled: true });
+      } finally {
+        repo.upsert('grain-watch-1', AUTOMATION_DEFAULTS);
+      }
+    });
+
+    it('reads the automation rows in one query for the whole list', async () => {
+      const getMany = jest.spyOn(AutomationRepository.prototype, 'getMany');
+      const get = jest.spyOn(AutomationRepository.prototype, 'get');
+
+      try {
+        const response = await request(app)
+          .get('/api/v1/stocks')
+          .set('Authorization', `Bearer ${adminToken}`);
+
+        expect(response.status).toBe(200);
+        expect(getMany).toHaveBeenCalledTimes(1);
+        // One read per stock would not scale with the hall count.
+        expect(get).not.toHaveBeenCalled();
+      } finally {
+        getMany.mockRestore();
+        get.mockRestore();
+      }
     });
 
     it('reports no fan control when fan control never came up in this process', async () => {
@@ -658,6 +709,28 @@ describe('Stock Endpoints', () => {
       expect(response.body.devices).toEqual([]);
       expect(response.body.fanControlEnabled).toBe(true);
       expect(mockGetLatestReadings).not.toHaveBeenCalled();
+    });
+
+    it('reports fan control without automation for a hall without thermometers', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      const stock = response.body.stocks.find((s: { id: string }) => s.id === 'fan-only');
+      // `available` implies fan control, never the other way round: this hall is
+      // served by the fan endpoints but cannot be automated in v1, because the
+      // differential rule needs grain thermometers (design spec §3.2).
+      expect(stock.fanControlEnabled).toBe(true);
+      expect(stock.automation).toEqual({ available: false, enabled: false });
+
+      // And nowhere in this payload does automation claim more than fan control.
+      for (const s of response.body.stocks as Array<{
+        fanControlEnabled: boolean;
+        automation: { available: boolean };
+      }>) {
+        if (s.automation.available) expect(s.fanControlEnabled).toBe(true);
+      }
     });
 
     it('returns an empty history without querying InfluxDB', async () => {

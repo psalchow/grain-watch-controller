@@ -28,6 +28,7 @@ export {
   userRoleEnum,
   historyQuerySchema,
   fanCommandSchema,
+  automationConfigSchema,
 } from './validation.middleware';
 
 export type {
@@ -40,4 +41,5 @@ export type {
   UserRole,
   HistoryQuery,
   FanCommandRequest,
+  AutomationConfigRequest,
 } from './validation.middleware';
