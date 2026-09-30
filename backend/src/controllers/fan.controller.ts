@@ -3,7 +3,7 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { NotFoundError } from '../middleware';
 import { getFanManager } from '../services/fan';
 import { getStockService } from '../services';
-import { FanController, fanControlAvailable } from '../services/fan';
+import { FanController, automationAvailable } from '../services/fan';
 import { getAutomationService } from '../services/automation';
 import type { AutomationState } from '../services/automation';
 import { getDb } from '../db';
@@ -243,10 +243,15 @@ export class FanHttpController {
    * v1 implements the differential rule only, so without thermometers the
    * automation could never switch on — the parameters would be a form with no
    * effect (design spec §3.2).
+   *
+   * `requireController` first, for its 404 and its retirement mark on the fan
+   * half; `automationAvailable` then restates the whole predicate rather than
+   * only the thermometer half, so the refusal here and the `available` the
+   * snapshot reports can never mean different things.
    */
   private async requireAutomatableStock(stockId: string): Promise<Stock> {
     const { stock } = await this.requireController(stockId);
-    if (!stock.hasGrainSensors) {
+    if (!automationAvailable(stock)) {
       throw new NotFoundError(`Automation not available for stock: ${stockId}`);
     }
     return stock;
@@ -278,9 +283,6 @@ export class FanHttpController {
       reason: null,
       evaluatedAt: null,
     };
-    return {
-      ...state,
-      available: fanControlAvailable(stock) && stock.hasGrainSensors,
-    };
+    return { ...state, available: automationAvailable(stock) };
   }
 }

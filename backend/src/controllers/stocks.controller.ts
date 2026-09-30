@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { InfluxDBService, SeriesPoint, StockService } from '../services';
-import { fanControlAvailable } from '../services/fan';
+import { fanControlAvailable, automationAvailable } from '../services/fan';
 import {
   offlineAfterMs,
   isOffline,
@@ -49,7 +49,7 @@ export class StocksController {
           // `available` implies fan control, never the reverse: a hall with a
           // fan but no grain thermometers cannot be automated in v1, because
           // the differential rule has nothing to compare (design spec §3.2).
-          available: fanControlAvailable(s) && s.hasGrainSensors,
+          available: automationAvailable(s),
           enabled: automation.get(s.id)?.enabled ?? false,
         },
       }));

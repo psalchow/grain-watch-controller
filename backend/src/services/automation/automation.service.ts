@@ -6,7 +6,7 @@ import type {
 import type { Stock } from '../../db/types';
 import type { DeviceReading, OutdoorReading } from '../influx';
 import type { FanController } from '../fan';
-import { fanControlAvailable } from '../fan';
+import { automationAvailable } from '../fan';
 import { offlineAfterMs, buildOutdoorConditions, summariseGrain } from '../conditions';
 import { evaluate } from './evaluate';
 import type { AutomationReadings, AutomationReason, FanTimingState } from './types';
@@ -231,10 +231,11 @@ export class AutomationService {
   }
 
   private async evaluateOne(stock: Stock): Promise<void> {
-    // Available: the row asks for fan control, a controller exists for it, and
-    // the stock has grain thermometers — v1 implements the differential rule
-    // only, so without them rule 1 would hold permanently (design spec §3.2).
-    if (!fanControlAvailable(stock) || !stock.hasGrainSensors) return;
+    // The row asks for fan control, a controller exists for it, and the stock
+    // has grain thermometers — the same predicate the HTTP layer reports as
+    // `available`, so the cycle cannot select a stock the API says it will not
+    // drive (design spec §3.2).
+    if (!automationAvailable(stock)) return;
 
     const parameters = this.deps.automationRepo.get(stock.id);
     if (!parameters.enabled) return;

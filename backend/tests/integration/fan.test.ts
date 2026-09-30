@@ -426,7 +426,60 @@ describe('automation configuration endpoints', () => {
       stream.close();
     }
   });
+
+  it('releases both subscriptions when the stream closes', async () => {
+    const service = realService();
+    setAutomationService(service);
+    // Wrapped rather than replaced: the subscriptions still work, and the
+    // functions they hand back are now observable. A subscription that is
+    // created but never released leaks one listener per connect for the
+    // lifetime of the process, and nothing else in this suite would notice.
+    const automationOff = watchUnsubscribe(service, 'onChange');
+    const statusOff = watchUnsubscribe(manager.getController('grain-watch-1')!, 'onChange');
+
+    const stream = await openFanStream(app(), 'grain-watch-1');
+    await stream.next();
+    expect(automationOff()).toHaveLength(1);
+    expect(statusOff()).toHaveLength(1);
+
+    stream.close();
+
+    await waitFor(
+      () => automationOff()[0]!.mock.calls.length > 0 && statusOff()[0]!.mock.calls.length > 0,
+      'both subscriptions to be released'
+    );
+  });
 });
+
+/**
+ * Wraps an `onChange` so every unsubscribe function it returns can be checked.
+ *
+ * Returns an accessor for the collected spies rather than the array itself, so
+ * a subscription taken after the call is still seen.
+ */
+function watchUnsubscribe<T extends { [K in M]: (...args: never[]) => () => void }, M extends string>(
+  target: T,
+  method: M
+): () => jest.Mock[] {
+  const spies: jest.Mock[] = [];
+  const original = target[method].bind(target) as (...args: never[]) => () => void;
+  jest.spyOn(target as never, method as never).mockImplementation(((...args: never[]) => {
+    const unsubscribe = jest.fn(original(...args));
+    spies.push(unsubscribe);
+    return unsubscribe;
+  }) as never);
+  return () => spies;
+}
+
+/** Polls a condition rather than sleeping for a fixed span. */
+async function waitFor(condition: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (Date.now() < deadline) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error(`Timed out waiting for ${what}`);
+}
 
 /** The same request on both endpoints, so the shared refusals are stated once. */
 function call(method: 'get' | 'put', url: string, bearer: string): request.Test {

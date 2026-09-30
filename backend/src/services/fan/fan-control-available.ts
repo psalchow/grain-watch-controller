@@ -16,3 +16,24 @@ export const fanControlAvailable = (stock: {
   fanControlEnabled: boolean;
 }): boolean =>
   stock.fanControlEnabled && getFanManager()?.getController(stock.id) != null;
+
+/**
+ * Whether this stock can be driven by the automation (design spec §3.2).
+ *
+ * Composes `fanControlAvailable` — a fan the endpoints refuse to serve is one
+ * the automation must not drive either — with the grain thermometers. The
+ * second half is a genuine precondition in v1, not a convenience: only the
+ * differential rule is implemented, so without thermometers rule 1 holds
+ * permanently and the automation could never switch on.
+ *
+ * One predicate for all three readers — the HTTP snapshot, the stock list and
+ * the evaluation cycle — because the implication runs one way only:
+ * `automationAvailable` implies `fanControlAvailable`, never the reverse. Three
+ * copies of that conjunction are three chances for the halves to drift apart on
+ * a decision about driving a fan unattended.
+ */
+export const automationAvailable = (stock: {
+  id: string;
+  fanControlEnabled: boolean;
+  hasGrainSensors: boolean;
+}): boolean => fanControlAvailable(stock) && stock.hasGrainSensors;
