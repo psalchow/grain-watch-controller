@@ -120,10 +120,23 @@ export function FanAutomationPanel({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [saving, setSaving] = useState(false);
+  /**
+   * Bumped by the retry button to re-run the load.
+   *
+   * Without the parameters the `PUT` cannot be composed — it carries the
+   * switch and all seven values in one call — so a failed `GET` would
+   * otherwise lock the switch in both directions, including the re-enable
+   * after a self-disable that the single endpoint exists to make easy. A
+   * retry rather than a local copy of the defaults: those live in the backend
+   * (`AUTOMATION_DEFAULTS`), and saving them from here would silently
+   * overwrite whatever the stock had stored.
+   */
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!snapshot.available) return;
     let cancelled = false;
+    setLoadError(null);
     fanApi
       .getAutomation(stockId)
       .then((config) => {
@@ -135,7 +148,7 @@ export function FanAutomationPanel({
     return () => {
       cancelled = true;
     };
-  }, [stockId, snapshot.available]);
+  }, [stockId, snapshot.available, reloadKey]);
 
   if (!snapshot.available) return null;
 
@@ -191,7 +204,20 @@ export function FanAutomationPanel({
         Letzte Auswertung: {evaluatedAtText(snapshot.evaluatedAt)}
       </p>
 
-      {loadError && <p className="mt-2 text-sm text-destructive">{loadError}</p>}
+      {loadError && (
+        <div className="mt-2">
+          <p className="text-sm text-destructive">{loadError}</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-2"
+            onClick={() => setReloadKey((key) => key + 1)}
+          >
+            Erneut laden
+          </Button>
+        </div>
+      )}
 
       {draft && (
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">

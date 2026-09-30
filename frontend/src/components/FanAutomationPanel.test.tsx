@@ -72,6 +72,25 @@ describe('FanAutomationPanel', () => {
     );
   });
 
+  it('offers a retry when the configuration cannot be loaded, and unlocks the switch once it arrives', async () => {
+    // Without the parameters the single-endpoint PUT cannot be composed, so a
+    // failed GET locks the switch in both directions — including re-enabling
+    // after a self-disable, the case that endpoint exists to make easy.
+    vi.mocked(fanApi.getAutomation).mockRejectedValueOnce(new Error('offline'));
+    render(<FanAutomationPanel stockId="grain-watch-1" snapshot={snapshot({ enabled: true })} />);
+
+    expect(await screen.findByText(/konnten nicht geladen werden/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Automatik deaktivieren/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Erneut laden/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Automatik deaktivieren/i })).toBeEnabled(),
+    );
+    expect(screen.queryByText(/konnten nicht geladen werden/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Einschaltschwelle/i)).toHaveValue(10);
+  });
+
   it('shows the field error from the 400 response instead of a generic failure', async () => {
     vi.mocked(fanApi.putAutomation).mockRejectedValue({
       response: {
