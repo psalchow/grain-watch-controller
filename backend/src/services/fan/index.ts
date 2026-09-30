@@ -2,6 +2,7 @@ import { FanControlManager } from './fan.manager';
 
 export { FanControlManager, selectFanStocks } from './fan.manager';
 export { FanController } from './fan.controller';
+export { fanControlAvailable } from './fan-control-available';
 export * from './types';
 
 let manager: FanControlManager | null = null;
