@@ -84,8 +84,11 @@ describe('evaluate — rule 1: no_data', () => {
   });
 
   it('yields no_data when there is no valid grain mean', () => {
+    // grainMinC stays present (9, from baseReadings) so this isolates the
+    // grainMeanC guard: a mutant that dropped it would fall through to the
+    // delta rules with `null - outdoorTempC` coercing to a number.
     const result = evaluate(
-      baseReadings({ grainMeanC: null, grainMinC: null }),
+      baseReadings({ grainMeanC: null }),
       baseParameters(),
       baseState(),
       NOW,
@@ -201,17 +204,19 @@ describe('evaluate — rule 4: target_reached', () => {
   });
 
   it('is skipped entirely when targetTempC is null', () => {
-    // Without the skip, a running fan with the mean at what would have been
-    // the target would switch off under 4a. With targetTempC null it must
-    // fall through to the delta rules instead.
+    // Fan off, mean(0.5) deliberately low: without the `targetTempC !== null`
+    // guard, 4b's `grainMeanC < targetTempC + targetHysteresisK` would coerce
+    // the null targetTempC to 0, and 0.5 < 0 + 1 would wrongly fire
+    // target_reached even though no target is configured. With the guard in
+    // place it falls through to the delta rules instead.
     const result = evaluate(
-      baseReadings({ grainMeanC: 10, outdoorTempC: 5 }), // ΔT = 5, hold zone
-      baseParameters({ targetTempC: null }),
-      baseState({ desiredOn: true, since: minutesAgo(60) }),
+      baseReadings({ grainMeanC: 0.5, outdoorTempC: 5 }), // ΔT = -4.5, below deltaOffK(2)
+      baseParameters({ targetTempC: null, targetHysteresisK: 1, deltaOffK: 2 }),
+      baseState({ desiredOn: false }),
       NOW,
     );
     expect(result.reason).not.toBe('target_reached');
-    expect(result).toEqual({ desiredOn: null, reason: 'hold' });
+    expect(result).toEqual({ desiredOn: false, reason: 'delta_too_small' });
   });
 });
 
