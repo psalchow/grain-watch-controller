@@ -216,6 +216,15 @@ describe('Configuration', () => {
       );
     });
 
+    it('rejects an automation interval below a second', async () => {
+      process.env['NODE_ENV'] = 'development';
+      process.env['FAN_AUTOMATION_INTERVAL_MS'] = '300';
+
+      await expect(import('../../src/config/index')).rejects.toThrow(
+        /FAN_AUTOMATION_INTERVAL_MS must be at least 1000 ms/
+      );
+    });
+
     it('provides mqtt and fan defaults', async () => {
       jest.resetModules();
       process.env['NODE_ENV'] = 'development';
@@ -223,6 +232,7 @@ describe('Configuration', () => {
       expect(config.fan.keepAliveMs).toBe(900000);
       expect(config.fan.watchdogMs).toBe(10000);
       expect(config.fan.retentionDays).toBe(90);
+      expect(config.fan.automationIntervalMs).toBe(300000);
       expect(config.mqtt.url).toBe('mqtt://localhost:1883');
     });
   });

@@ -115,6 +115,8 @@ interface FanConfig {
   retentionSweepMs: number;
   /** Interval at which the stock rows are re-read to catch revoked fan control (ms). */
   reconcileIntervalMs: number;
+  /** Interval at which the automation evaluates every enabled stock (ms). */
+  automationIntervalMs: number;
 }
 
 /**
@@ -289,6 +291,14 @@ function validateConfig(
       `FAN_RECONCILE_INTERVAL_MS must be at least 1000 ms, got: ${cfg.fan.reconcileIntervalMs}`
     );
   }
+  // The same bound and the same reason, only heavier: an automation tick reads
+  // the stock table and then two InfluxDB queries per enabled stock, so a value
+  // meant as seconds would put the database under a continuous load.
+  if (cfg.fan.automationIntervalMs < 1000) {
+    errors.push(
+      `FAN_AUTOMATION_INTERVAL_MS must be at least 1000 ms, got: ${cfg.fan.automationIntervalMs}`
+    );
+  }
 
   // Reject the pre-rename variable outright: silently ignoring it would swap
   // the operator's window for the default without any sign of it.
@@ -446,6 +456,7 @@ export const config: Config = {
     retentionDays: getEnvVarAsInt('FAN_EVENT_RETENTION_DAYS', 90),
     retentionSweepMs: getEnvVarAsInt('FAN_RETENTION_SWEEP_INTERVAL_MS', 21600000),
     reconcileIntervalMs: getEnvVarAsInt('FAN_RECONCILE_INTERVAL_MS', 60000),
+    automationIntervalMs: getEnvVarAsInt('FAN_AUTOMATION_INTERVAL_MS', 300000),
   },
 };
 
