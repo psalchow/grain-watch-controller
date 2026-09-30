@@ -32,6 +32,8 @@ current password returns 401, a new password outside 8–100 characters returns 
 | `GET` | `/stocks/:stockId/fan` | Authenticated + stock access | Current fan status |
 | `POST` | `/stocks/:stockId/fan/command` | Authenticated + stock access | Send `{action: 'on' \| 'off'}` |
 | `GET` | `/stocks/:stockId/fan/stream` | Authenticated + stock access | Server-sent events stream of fan state |
+| `GET` | `/stocks/:stockId/fan/automation` | Authenticated + stock access | Automation switch and parameters |
+| `PUT` | `/stocks/:stockId/fan/automation` | Authenticated + stock access | Set the switch and the parameters in one call |
 
 ### Admin user management — `/api/v1/admin`
 
@@ -227,6 +229,98 @@ directions of a hand-edit differ:
 - Setting `fan_control_enabled` (or adding a `fan_topic_prefix`) needs a restart
   to build the controller. Until then the stock reports `false` and the
   endpoints answer 404.
+
+### Fan automation
+
+Automation is available for a stock when it has fan control **and** grain
+thermometers — not a stored flag, derived the same way `fanControlEnabled`
+above is: v1 implements the differential rule only, which has nothing to
+compare without a grain reading. Whether automation is switched on is a
+separate, stored flag, off by default.
+
+Both endpoints sit behind `authenticate` and `requireStockAccess` only, no role
+check beyond that — the same shape as `POST …/fan/command` right next to them.
+That the `viewer` role can therefore write here is a known, recorded
+contradiction (see `docs/BACKLOG.md`).
+
+`GET /stocks/:stockId/fan/automation` returns the stored configuration, or the
+defaults below while no row exists yet:
+
+```json
+{
+  "enabled": false,
+  "deltaOnK": 10,
+  "deltaOffK": 2,
+  "maxOutdoorHumidityPct": 80,
+  "targetTempC": 12,
+  "targetHysteresisK": 1,
+  "minRunMinutes": 30,
+  "minPauseMinutes": 30
+}
+```
+
+`PUT /stocks/:stockId/fan/automation` takes the same shape and stores all
+eight fields in one call — the form submits the switch and the parameters
+together, so re-enabling after a self-disable is the same request as changing
+a parameter. Bounds, a violation of any of which answers 400 with the usual
+`VALIDATION_ERROR` envelope:
+
+| Field | Bounds |
+|-------|--------|
+| `deltaOnK` | ≤ 20, and strictly greater than `deltaOffK` |
+| `deltaOffK` | ≥ 2 |
+| `maxOutdoorHumidityPct` | 40–100 |
+| `targetTempC` | −10 to 30, or `null` to switch the target-temperature rule off |
+| `targetHysteresisK` | 0–5 |
+| `minRunMinutes` | 0–240, whole minutes |
+| `minPauseMinutes` | 5–240, whole minutes |
+
+`minPauseMinutes`'s lower bound of 5 rather than 0 is deliberate: below the
+evaluation interval a pause cannot take effect at all, and it is the only thing
+bounding the retry loop a broken monitor path produces — `watchdog_off`
+deliberately does not disable automation (see `docs/BACKLOG.md`).
+
+`PUT` writes an `automation_configured` event carrying the values before and
+after, and — only when `enabled` goes from `false` to `true` — evaluates the
+stock immediately rather than waiting for the next tick, so the stored state
+the response carries, and any open fan page, answer "will it run" straight
+away instead of for up to `FAN_AUTOMATION_INTERVAL_MS`.
+
+Both endpoints answer 404 for one of two reasons, indistinguishable from the
+outside: the stock has no fan control, or it has fan control but no grain
+thermometers.
+
+### New fan status fields
+
+`GET /stocks/:stockId/fan`, the response of `POST …/fan/command` and every SSE
+frame on `GET …/fan/stream` share one snapshot shape, `{status, events,
+automation}`. Two additions to it:
+
+- `status.contactorEngaged` (`boolean | null`) — whether the contactor's
+  auxiliary contact is closed, i.e. whether the fan is actually running,
+  **whoever switched it**. Fed from the Shelly's input on every monitor
+  message; `null` until it has reported anything. This is deliberately not the
+  relay output: the backend's own commanded state travels as `desiredOn`, and
+  the two disagree exactly when the contactor was switched by hand rather than
+  by the backend — a case the backend cannot end by itself (see
+  `docs/BACKLOG.md`).
+- `automation` — a slim object for the fan page's own card, distinct from the
+  full configuration `GET …/fan/automation` returns:
+
+  | Field | Meaning |
+  |-------|---------|
+  | `available` | The stock can be automated: fan control and grain thermometers |
+  | `enabled` | The user has switched automation on for this stock |
+  | `reason` | The last decision's reason (one of `no_data`, `condensation_risk`, `humidity_high`, `target_reached`, `delta_too_small`, `delta_ok`, `min_run_time`, `min_pause`, `hold`), or `null` before the first evaluation |
+  | `evaluatedAt` | Timestamp of the last evaluation, or `null` before the first one |
+
+  No parameters travel here — the automation panel fetches those separately
+  from `GET …/fan/automation`.
+
+`GET /stocks` gains the same two-field shape per stock, `automation:
+{available, enabled}` — one additional query over the whole list rather than
+one per stock, and no `reason` or `evaluatedAt`: the list has no SSE push to
+keep them current.
 
 ### Database
 

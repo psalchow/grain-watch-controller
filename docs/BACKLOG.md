@@ -101,6 +101,13 @@ will add further write endpoints for exactly that role. Renaming it to
 `operator` costs a migration on `users.role`, the enum in
 `updatePermissionsSchema`, the frontend strings and the two documents above.
 
+**Extended 2026-09-30**, by the automation core: `GET`/`PUT
+/api/v1/stocks/:stockId/fan/automation` (`backend/src/routes/fan.routes.ts`)
+apply the same `requireStockAccess`-only shape as the command endpoint beside
+them, so the `viewer` role can now also switch automation on and off and
+change its parameters. Same fix, same cost, one more endpoint pair to update
+when it lands.
+
 ## Per-hall grants inside a tenant are gone
 
 **Deferred:** 2026-09-23 — accepted alongside the tenants migration
@@ -294,6 +301,17 @@ Publishing first and logging afterwards would flip it, at the cost of losing the
 record when the publish throws. Worth deciding deliberately rather than in
 passing.
 
+**Extended 2026-09-30**, by the automation core: `AutomationService.act`
+(`backend/src/services/automation/automation.service.ts`) issues its MQTT
+command *before* writing the `auto_on`/`auto_off` event, the opposite order
+from `FanController.beginTurnOn`/`beginTurnOff` above, on the same reasoning
+inverted — there the audit trail is what a failing write must not cost the
+switch-off; here the command is the safety-relevant action and the event is
+only the record of why. The repository now carries both orderings for the same
+trade-off, decided separately each time rather than once. Worth settling which
+one a switch command should follow generally, now that there are two data
+points.
+
 ## Retirement never unsubscribes the stock's MQTT topics
 
 **Deferred:** 2026-09-19 — costs broker traffic, not correctness.
@@ -365,3 +383,126 @@ The service worker updates itself (`registerType: 'autoUpdate'`), but until it
 takes control a cached bundle can render fields the new backend no longer sends.
 The `deviceCount` removal is the current example, noted in
 `docs/DEPLOYMENT.md`.
+
+## Automation: no counter on repeated `watchdog_off`
+
+**Deferred:** 2026-09-29, in the fan automation core design (spec §5.5,
+concept §11) — no evidence yet that delivery failures occur in practice.
+
+`watchdog_off` deliberately does not disable automation
+(`backend/src/services/automation/automation.service.ts`, the callback wired
+in `backend/src/services/fan/fan.manager.ts`): a lost QoS-0 monitor packet must
+not cost a season of ventilation. But nothing bounds how often it can recur — a
+broken monitor path makes the automation retry `on` every
+`min_pause_minutes`, trip the watchdog again, and write four event rows per
+round indefinitely.
+
+Add a counter, on the same idea as the `local_switch`/`fault` counting this
+backlog already anticipates, once real-world data shows the trip rate worth
+reacting to.
+
+## Automation: no cause on the overview card, no event for a blocked start, short retention
+
+**Deferred:** 2026-09-29, in the fan automation core design (spec §11, concept
+§11) — three related gaps, none of them acted on in v1.
+
+- The overview card (`frontend/src/components/StockCard.tsx`) shows no cause
+  for the last self-disable. The event list already carries it in full
+  (`automation_disabled` with a `cause` of `manual_command`, `local_switch`,
+  `fault` or `fan_control_withdrawn`); showing it on the card needs the cause
+  stored somewhere the card can read cheaply and translated for German.
+- No event is written for a start a blocking rule prevented (a `min_pause` or
+  `min_run_time` hold that suppressed what would otherwise have switched) —
+  only realised decisions are logged. An edge-triggered event on the
+  transition into that hold would close it.
+- `fan_events` is swept wholesale after `FAN_EVENT_RETENTION_DAYS` (90 days by
+  default), which also governs automation's own `auto_on`/`auto_off`/
+  `automation_disabled`/`automation_configured` rows. A longer, separate
+  retention for automation decisions was named in the concept but not
+  implemented.
+
+All three were recorded only in the concept document's §11
+(`docs/superpowers/specs/2026-09-20-automatic-fan-control-concept.md`); this
+entry is where they now live.
+
+## Automation: the concept's later extensions
+
+**Deferred:** 2026-09-29, in the fan automation core design (spec §11, concept
+§10) — scoped out of sub-project C, left for D and later.
+
+The concept's §10 names four extensions this core does not implement: a
+seasonal switch (skip evaluation outside the ventilation months), a selectable
+control variable (something other than the grain/outdoor temperature delta), a
+trigger on the absolute outdoor temperature (needed for stocks with no grain
+thermometers, since the differential rule has nothing to compare there), and
+tenant-scoped automation profiles (sub-project D, which lifts the
+per-stock `stock_automation` row into the tenant profile mechanism — design
+spec §3.1 notes the table is already shaped for that move).
+
+## A contactor engaged by hand cannot be opened by the backend
+
+**Deferred:** 2026-09-29, in the fan automation core design (spec §6, §11).
+
+Switching by hand at the contactor bypasses the Shelly's relay entirely: the
+backend's `off` only releases its own relay, and the Shelly's one-hour auto-off
+does not help either, because the Shelly's output was never what carried the
+load. `FanStatus.contactorEngaged` (`backend/src/services/fan/types.ts`) makes
+the state visible, and automation disables itself rather than pretending to
+hold a safety rule it cannot enforce (design spec §6), but nothing turns the
+fan off in that situation short of somebody walking back to the contactor. No
+software closes this; it is worth writing down because it bounds the reach of
+every safety rule this system implements, present and future.
+
+## `FanControlManager.reconcile` only retires, never adds
+
+**Deferred:** 2026-09-29, in the fan automation core design (spec §3.2, §11).
+
+Controllers are built once, at startup, from `selectFanStocks`
+(`backend/src/services/fan/fan.manager.ts`). `reconcile` on the reconciliation
+tick only ever retires a stock whose row stopped asking for fan control; it
+never builds a controller for a row that started asking for one after the
+process came up. Enabling fan control for a stock therefore still needs a
+restart — and, because automation requires a controller
+(`automationAvailable`, design spec §3.2), a restart is also what makes
+automation reachable for that stock. `docs/specs/API.md` already documents the
+fan-control half of this under "Stocks without grain thermometers"; automation
+inherits it rather than working around it differently.
+
+## Backend validation messages reach the German UI in English
+
+**Deferred:** 2026-09-30, found while implementing the fan automation core.
+
+Zod messages from `automationConfigSchema`
+(`backend/src/middleware/validation.middleware.ts`, e.g. "deltaOnK must be at
+most 20") are English and travel verbatim to `FanAutomationPanel.tsx`'s field
+errors. The decided approach, matching how
+`frontend/src/lib/messages.ts` already translates device strings, is a lookup
+table at the UI boundary — roughly ten entries for the automation schema's
+messages plus a raw-string fallback for anything unmapped — keeping the API's
+own text in English as every other error message does.
+
+## The state diagram in the fan-control design no longer matches `off` from `FAULT`
+
+**Deferred:** 2026-09-30, found while implementing the fan automation core.
+
+`docs/superpowers/specs/2026-07-09-fan-control-design.md` §3.3 still diagrams
+`FAULT ──command on/off (user retry)──▶ TURN_ON_PENDING / TURN_OFF_PENDING`. The
+automation core adds the rule *never enter a pending state you cannot leave*
+(design spec §5.6): a user `off` while the fan is in `FAULT` no longer enters
+`TURN_OFF_PENDING`, because there is nothing to acknowledge into it. That is the
+correct behaviour under the new rule, but it falsifies the older diagram, which
+was never updated. Redraw the `FAULT` → `off` edge (and its label) the next
+time that document is touched.
+
+## `Stock.active` is not filtered out of the automation cycle
+
+**Deferred:** 2026-09-30, found while implementing the fan automation core;
+pre-existing and shared with `selectFanStocks`.
+
+`AutomationService`'s cycle (`backend/src/services/automation/automation.service.ts`)
+evaluates every stock `automationAvailable` reports true for, without checking
+`Stock.active`. An inactive stock that still has fan control and grain
+thermometers is evaluated and can be switched by the rules like any other.
+`selectFanStocks` (`backend/src/services/fan/fan.manager.ts`) has the identical
+gap for ordinary fan control, so this is not new — automation just inherits it
+unchanged.
