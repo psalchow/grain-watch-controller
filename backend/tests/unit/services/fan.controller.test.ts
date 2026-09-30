@@ -92,13 +92,18 @@ describe('FanController', () => {
     expect(published).toEqual(['on']); // no keep-alive re-assert after fault
   });
 
-  it('warning only sets overlay, no state change', async () => {
-    const { controller } = await makeController();
+  it('a warning with the contactor still engaged sets the overlay, publishes off, clears the desired state, and reports ON', async () => {
+    const { controller, published } = await makeController();
     controller.command('on');
     controller.handleShellyMessage(successMsg(true));
     controller.handleShellyMessage({ type: 'warning', message: 'manual', switchState: true, inputState: true, timestamp: 3 });
+    // The reported state stays ON because the contactor is still engaged, but
+    // that is the device's report, not an unchanged state: a warning stands
+    // the desired state down and publishes one off (design spec §5.6).
     expect(controller.getStatus().state).toBe('ON');
     expect(controller.getStatus().lastWarning?.message).toBe('manual');
+    expect(published).toEqual(['on', 'off']);
+    expect(controller.getStatus().desiredOn).toBe(false);
   });
 
   it('clears the warning overlay once the device confirms the commanded state', async () => {

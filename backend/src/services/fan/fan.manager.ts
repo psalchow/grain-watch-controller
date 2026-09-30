@@ -193,7 +193,7 @@ export class FanControlManager {
 
     // Separate from the command on purpose, so this extra record does not add a
     // second way for the switch-off to fail. It does not make the command
-    // failure-proof: `beginTurnOff` writes its own audit row before publishing,
+    // failure-proof: `turnOffImmediately` writes its own audit row before publishing,
     // so a database failure still swallows the `off` — see the backlog entry
     // "A failing audit write blocks the MQTT command". The device's auto-off
     // covers that case.

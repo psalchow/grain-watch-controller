@@ -103,4 +103,21 @@ describe('FanControlPage', () => {
     expect(screen.queryByRole('button', { name: /Ausschalten/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Einschalten/i })).not.toBeInTheDocument();
   });
+
+  it('offers no button on FAULT while the contactor is held locally', () => {
+    // A reachable combination — a fault while somebody holds the contactor at
+    // the panel — and the branch order that resolves it is a spec decision
+    // (§8): the local run is tested before FAULT, because the backend has no
+    // authority over a contactor held by hand (§6). Swapping the two would
+    // silently offer a button again.
+    vi.mocked(useFanStream).mockReturnValue({
+      snapshot: snap('FAULT', { desiredOn: false, contactorEngaged: true }),
+      connected: true,
+      disabled: false,
+    });
+    renderPage();
+    expect(screen.queryByRole('button', { name: /Erneut einschalten/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ausschalten/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Einschalten$/ })).not.toBeInTheDocument();
+  });
 });

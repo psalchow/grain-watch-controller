@@ -50,9 +50,9 @@ describe('AutomationRepository', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('round-trips every field, including a null targetTempC', () => {
+  it('round-trips every field, including a null targetTempC', async () => {
     const db = createTestDb();
-    void seedStock(db);
+    await seedStock(db);
     const repo = new AutomationRepository(db.db);
 
     repo.upsert('grain-watch-1', configA);
