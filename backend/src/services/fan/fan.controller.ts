@@ -131,23 +131,25 @@ export class FanController {
         // The contactor moved without our command: stand down rather than
         // fight it (the backend cannot open a contactor held by hand), then
         // report what the device just told us instead of a pending state we
-        // could never leave (design spec §5.6).
+        // could never leave (design spec §5.6). The state machine must be
+        // left consistent — reported state set, listeners notified — before
+        // the interference callback (foreign code, contained below) runs.
         this.turnOffImmediately('shelly');
-        this.deps.onInterference?.('local_switch');
         this.setState(msg.inputState ? 'ON' : 'OFF');
+        this.notifyInterference('local_switch');
         break;
       }
       case 'alert':
         this.lastAlert = { message: msg.message, ts };
         this.log('alert', msg, 'shelly');
         this.enterFault();
-        this.deps.onInterference?.('fault');
+        this.notifyInterference('fault');
         break;
       case 'safety_shutoff':
         this.lastAlert = { message: msg.message, ts };
         this.log('safety_shutoff', msg, 'shelly');
         this.enterFault();
-        this.deps.onInterference?.('fault');
+        this.notifyInterference('fault');
         break;
     }
   }
@@ -332,6 +334,24 @@ export class FanController {
       payload,
       source,
     });
+  }
+
+  /**
+   * Notifies the interference callback, if one is wired. Its future
+   * implementation (the automation service's self-disable) writes a flag and
+   * an event row — a database call that can throw — and by the time this
+   * runs the state machine already reflects the interference (published,
+   * persisted, reported), so a throw here must not escape into it: nothing
+   * above `handleShellyMessage` catches it, and it would otherwise reach the
+   * MQTT client uncaught. Mirrors the containment `emit()` applies below.
+   */
+  private notifyInterference(cause: InterferenceCause): void {
+    if (!this.deps.onInterference) return;
+    try {
+      this.deps.onInterference(cause);
+    } catch (error) {
+      console.error(`Fan control: an interference listener for ${this.deps.stockId} threw`, error);
+    }
   }
 
   /** Pushes the current status to all subscribers. */

@@ -199,7 +199,11 @@ describe('FanController', () => {
       expect(commandEvent?.source).toBe('shelly');
       expect(interference).toEqual(['local_switch']);
       expect(controller.getStatus().state).toBe('ON');
-      expect(seen).not.toContain('TURN_OFF_PENDING');
+      // Covers both the no-pending-state rule and the listener notification
+      // that makes a locally running fan visible in the app: a bare field
+      // assignment instead of setState would leave `seen` empty and still
+      // satisfy a merely negative "not TURN_OFF_PENDING" check.
+      expect(seen).toEqual(['ON']);
     });
 
     it('the same warning with inputState false reports OFF', async () => {
@@ -211,14 +215,20 @@ describe('FanController', () => {
       expect(controller.getStatus().state).toBe('OFF');
     });
 
-    it('a warning while the fan was on clears the keep-alive, so no further on is published', async () => {
-      const { controller, published } = await makeController();
+    it('a warning while the fan was on clears the keep-alive and persists desiredOn=false, so no further on is published', async () => {
+      const { db, controller, published } = await makeController();
       controller.command('on');
       controller.handleShellyMessage(successMsg(true));
       expect(published).toEqual(['on']);
 
       controller.handleShellyMessage({ type: 'warning', message: 'local off', switchState: true, inputState: false, timestamp: 2 });
       expect(published).toEqual(['on', 'off']);
+      expect(controller.getStatus().desiredOn).toBe(false);
+      // Pins the persisted row, not just the in-memory flag: dropping
+      // persistState() from the stand-down would leave desiredOn=true here,
+      // and a restart's recover() would re-assert 'on' against the person
+      // standing at the contactor.
+      expect(new FanStateRepository(db.db).get('grain-watch-1')?.desiredOn).toBe(false);
 
       jest.advanceTimersByTime(900000);
       expect(published).toEqual(['on', 'off']); // no keep-alive re-assert after the warning
@@ -257,7 +267,7 @@ describe('FanController', () => {
     });
 
     it('a user off while the desired state is already false publishes, persists and logs but leaves the reported state unchanged', async () => {
-      const { controller, published } = await makeController();
+      const { db, controller, published } = await makeController();
       expect(controller.getStatus().state).toBe('OFF');
       expect(controller.getStatus().desiredOn).toBe(false);
       const seen: FanState[] = [];
@@ -270,6 +280,12 @@ describe('FanController', () => {
       expect(controller.getStatus().desiredOn).toBe(false);
       const commandEvent = controller.getRecentEvents(10).find((e) => e.kind === 'command');
       expect(commandEvent?.source).toBe('user');
+      // Pins the actual persisted row, not just the in-memory flag —
+      // `lastCommandAt` is what the automation's minimum pause is measured
+      // against (design spec §3.3), so it must move even on a redundant off.
+      const persisted = new FanStateRepository(db.db).get('grain-watch-1');
+      expect(persisted?.desiredOn).toBe(false);
+      expect(persisted?.lastCommandAt).toBe('2026-07-09T10:00:00.000Z');
       expect(seen).not.toContain('TURN_OFF_PENDING');
     });
   });
