@@ -1,4 +1,4 @@
-import { Fan, Thermometer } from 'lucide-react';
+import { Bot, BotOff, Fan, Thermometer } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { GrainStock } from '@/types/api';
 import { cn } from '@/lib/utils';
@@ -63,6 +63,29 @@ export function StockCard({ stock, onClick }: StockCardProps) {
               <span className="sr-only">Lüftersteuerung</span>
             </span>
           )}
+          {/* The automation marker sits beside the fan glyph (design spec §8):
+              switched off out of sight — by hand, at the contactor, on a
+              fault, or when fan control is withdrawn — would otherwise only
+              surface once somebody opens the stock's fan page. Absent or
+              unavailable shows nothing, the same as the equipment icons
+              above: a stock without fan control or grain thermometers has no
+              automation to report on. */}
+          {stock.automation?.available &&
+            (stock.automation.enabled ? (
+              <span className="inline-flex items-center">
+                <Bot className="h-4 w-4" aria-hidden="true">
+                  <title>Automatik aktiv</title>
+                </Bot>
+                <span className="sr-only">Automatik aktiv</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center">
+                <BotOff className="h-4 w-4" aria-hidden="true">
+                  <title>Automatik aus</title>
+                </BotOff>
+                <span className="sr-only">Automatik aus</span>
+              </span>
+            ))}
           {/* Worded after what the app can show, not after what is installed:
               fanControlEnabled reports whether a controller is up, not whether
               a fan exists. */}

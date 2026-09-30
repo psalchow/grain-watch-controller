@@ -10,6 +10,7 @@ const stock = (overrides: Partial<GrainStock> = {}): GrainStock => ({
   hasGrainSensors: true,
   fanControlEnabled: true,
   active: true,
+  automation: { available: true, enabled: true },
   ...overrides,
 });
 
@@ -55,5 +56,39 @@ describe('StockCard', () => {
     render(<StockCard stock={withoutFlag} />);
 
     expect(screen.getByText('Getreidethermometer', { selector: 'span' })).toBeInTheDocument();
+  });
+
+  it('marks a stock whose automation is available and enabled', () => {
+    render(<StockCard stock={stock({ automation: { available: true, enabled: true } })} />);
+
+    expect(screen.getByText('Automatik aktiv', { selector: 'span' })).toBeInTheDocument();
+  });
+
+  it('marks a stock whose automation is available but disabled', () => {
+    render(<StockCard stock={stock({ automation: { available: true, enabled: false } })} />);
+
+    expect(screen.getByText('Automatik aus', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('Automatik aktiv', { selector: 'span' })).not.toBeInTheDocument();
+  });
+
+  it('shows no automation marker where automation is not available', () => {
+    render(<StockCard stock={stock({ automation: { available: false, enabled: false } })} />);
+
+    expect(screen.queryByText('Automatik aktiv', { selector: 'span' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Automatik aus', { selector: 'span' })).not.toBeInTheDocument();
+  });
+
+  it('treats an absent automation field as not available', () => {
+    const { automation: _omitted, ...withoutFlag } = stock();
+    render(<StockCard stock={withoutFlag} />);
+
+    expect(screen.queryByText('Automatik aktiv', { selector: 'span' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Automatik aus', { selector: 'span' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the fan glyph and its accessible name unchanged beside the automation marker', () => {
+    render(<StockCard stock={stock({ automation: { available: true, enabled: true } })} />);
+
+    expect(screen.getByText('Lüftersteuerung', { selector: 'span' })).toBeInTheDocument();
   });
 });

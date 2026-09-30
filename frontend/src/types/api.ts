@@ -67,6 +67,16 @@ export interface UpdatePermissionsRequest {
   tenantIds?: string[];
 }
 
+/**
+ * Automatic ventilation status for a stock (design spec §7.2).
+ * `available` is derived, not stored: the stock has both fan control and
+ * grain thermometers. `enabled` is the user's switch.
+ */
+export interface AutomationStatus {
+  available: boolean;
+  enabled: boolean;
+}
+
 // Grain Stocks
 export interface GrainStock {
   id: string;
@@ -80,6 +90,13 @@ export interface GrainStock {
   /** Whether the stock has a controllable fan. */
   fanControlEnabled?: boolean;
   active: boolean;
+  /**
+   * Optional: a cached response from a pre-upgrade backend omits it. Absent
+   * is treated as unavailable, the same direction as `fanControlEnabled` —
+   * claiming automation that may not exist would promise a state the fan
+   * page then cannot show.
+   */
+  automation?: AutomationStatus;
 }
 
 export interface StocksResponse {
