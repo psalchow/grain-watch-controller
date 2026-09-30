@@ -224,6 +224,57 @@ describe('FanControlManager', () => {
     });
   });
 
+  describe('automation wiring', () => {
+    it("forwards a controller's interference to the manager's dependency with the stock id", async () => {
+      const { db } = await setup();
+      const f = fakeMqtt();
+      const interference: Array<{ stockId: string; cause: string }> = [];
+      const manager = new FanControlManager({
+        stocks: [{ stockId: 'grain-watch-1', topicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', switchId: 0 }],
+        mqtt: f.mqtt,
+        stateRepo: new FanStateRepository(db.db),
+        eventsRepo: new FanEventsRepository(db.db),
+        timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
+        fanEnabledStockIds: async () => new Set(['grain-watch-1']),
+        onInterference: (stockId, cause) => interference.push({ stockId, cause }),
+      });
+      manager.init();
+
+      f.emit(
+        '/corn-watch/actors/corn-watch-1/fan-control/monitor/status',
+        '{"type":"warning","message":"local switch","switchState":false,"inputState":true,"timestamp":1}'
+      );
+
+      expect(interference).toEqual([{ stockId: 'grain-watch-1', cause: 'local_switch' }]);
+    });
+
+    it('calls onControlWithdrawn with fan_control_withdrawn before switching the fan off', async () => {
+      const { db, enabledStockIds } = await setup();
+      const f = fakeMqtt();
+      const order: string[] = [];
+      const manager = new FanControlManager({
+        stocks: [{ stockId: 'grain-watch-1', topicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', switchId: 0 }],
+        mqtt: f.mqtt,
+        stateRepo: new FanStateRepository(db.db),
+        eventsRepo: new FanEventsRepository(db.db),
+        timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
+        fanEnabledStockIds: async () => enabledStockIds,
+        onControlWithdrawn: (stockId) => order.push(`withdrawn:${stockId}`),
+      });
+      manager.init();
+      const controller = manager.getController('grain-watch-1')!;
+      const commandSpy = jest.spyOn(controller, 'command').mockImplementation((action) => {
+        order.push(`command:${action}`);
+      });
+
+      enabledStockIds.delete('grain-watch-1');
+      await manager.reconcile();
+
+      expect(order).toEqual(['withdrawn:grain-watch-1', 'command:off']);
+      commandSpy.mockRestore();
+    });
+  });
+
   const base: Stock = {
     id: 'x', name: 'X', deviceGroup: 'g', devicePrefix: '1',
     hasHumidity: false,

@@ -2,10 +2,16 @@ import { config } from './config';
 import { initDb, closeDb, getDb } from './db';
 import { runMigrations } from './db/migrate';
 import { seedStocks } from './db/seed';
-import { StockRepository, FanStateRepository, FanEventsRepository } from './db/repositories';
-import { getUserService } from './services';
+import {
+  StockRepository,
+  FanStateRepository,
+  FanEventsRepository,
+  AutomationRepository,
+} from './db/repositories';
+import { getUserService, influxService } from './services';
 import { createMqttService } from './services/mqtt';
 import { FanControlManager, selectFanStocks, setFanManager, getFanManager } from './services/fan';
+import { AutomationService, setAutomationService, getAutomationService } from './services/automation';
 
 interface BootstrapResult {
   defaultUsersCreated: boolean;
@@ -106,6 +112,23 @@ export async function initFanControl(): Promise<void> {
     return;
   }
   const mqtt = createMqttService(config.mqtt);
+
+  // Step 1: the automation service first. Its `getController` and
+  // `listStocks` are closures resolved at call time, not now — the only
+  // reason this and the manager built next can reference each other at all
+  // (design spec §5.5).
+  const automationService = new AutomationService({
+    automationRepo: new AutomationRepository(db),
+    stateRepo: new FanStateRepository(db),
+    eventsRepo: new FanEventsRepository(db),
+    readings: influxService,
+    listStocks: () => new StockRepository(getDb()).findAll(),
+    getController: (stockId) => getFanManager()?.getController(stockId) ?? null,
+    intervalMs: config.fan.automationIntervalMs,
+  });
+
+  // Step 2: the manager, with an anonymous callback into the service above —
+  // it never learns the service's type (design spec §5.5).
   const manager = new FanControlManager({
     stocks: fanStocks,
     mqtt,
@@ -122,9 +145,20 @@ export async function initFanControl(): Promise<void> {
       const current = await new StockRepository(getDb()).findAll();
       return new Set(selectFanStocks(current).map((s) => s.stockId));
     },
+    onInterference: (stockId, cause) => automationService.disable(stockId, cause),
+    onControlWithdrawn: (stockId) => automationService.disable(stockId, 'fan_control_withdrawn'),
   });
+
+  // Steps 3 to 6, in this order — load-bearing (design spec §5.5, brief §Step 5):
+  // `manager.init()` resumes any desired state `recover()` finds before the
+  // automation service ever reads it; `setFanManager` makes `getController`
+  // resolve real controllers before the service's immediate first evaluation
+  // runs, so no stock is silently skipped for a full interval.
   manager.init();
   setFanManager(manager);
+  setAutomationService(automationService);
+  automationService.start();
+
   console.log(`Fan control: initialised for ${fanStocks.length} stock(s)`);
 }
 
@@ -133,6 +167,11 @@ export function shutdownFanControl(): void {
   if (manager) {
     manager.shutdown();
     setFanManager(null);
+  }
+  const automationService = getAutomationService();
+  if (automationService) {
+    automationService.stop();
+    setAutomationService(null);
   }
 }
 

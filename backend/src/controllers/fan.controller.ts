@@ -4,6 +4,7 @@ import { NotFoundError } from '../middleware';
 import { getFanManager } from '../services/fan';
 import { getStockService } from '../services';
 import { FanController } from '../services/fan';
+import { getAutomationService } from '../services/automation';
 import type { FanCommandRequest } from '../middleware';
 import type { FanStatus } from '../services/fan';
 
@@ -32,6 +33,10 @@ export class FanHttpController {
       const stockId = req.params['stockId'] as string;
       const controller = await this.requireController(stockId);
       const { action } = req.body;
+      // Unconditional: a manual command takes the fan over from automation
+      // regardless of whether it was already off, and the service — not this
+      // controller — decides whether that is a no-op (design spec §5.5).
+      getAutomationService()?.disable(stockId, 'manual_command');
       controller.command(action);
       res.status(200).json({
         status: controller.getStatus(),

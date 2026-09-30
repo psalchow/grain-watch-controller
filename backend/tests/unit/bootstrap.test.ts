@@ -5,13 +5,46 @@
 // Set DATABASE_PATH before config module loads so bootstrap uses :memory:
 process.env['DATABASE_PATH'] = ':memory:';
 
-import { closeDb } from '../../src/db';
+import { closeDb, initDb } from '../../src/db';
+import { runMigrations } from '../../src/db/migrate';
+import { seedStocks } from '../../src/db/seed';
+import {
+  StockRepository,
+  FanStateRepository,
+  FanEventsRepository,
+  AutomationRepository,
+} from '../../src/db/repositories';
+import type { DeviceReading, OutdoorReading } from '../../src/services/influx';
 import {
   getUserService,
   userService,
+  influxService,
   resetServiceSingletonsForTests,
 } from '../../src/services';
-import { bootstrapApplication, validateBootstrap } from '../../src/bootstrap';
+import { getFanManager } from '../../src/services/fan';
+import { getAutomationService } from '../../src/services/automation';
+import { config } from '../../src/config';
+import {
+  bootstrapApplication,
+  validateBootstrap,
+  initFanControl,
+  shutdownFanControl,
+} from '../../src/bootstrap';
+
+// Records what the fake MQTT client below would have sent, for the
+// automation-wiring tests. Prefixed `mock*` so `jest.mock` below may
+// reference it (babel-plugin-jest-hoist's one exception to "no out-of-scope
+// references" in a mock factory).
+const mockPublished: Array<{ topic: string; message: string }> = [];
+
+jest.mock('../../src/services/mqtt', () => ({
+  createMqttService: jest.fn(() => ({
+    publish: (topic: string, message: string) => { mockPublished.push({ topic, message }); },
+    subscribe: () => {},
+    onMessage: () => {},
+    end: () => {},
+  })),
+}));
 
 // Override config.database.path to use in-memory SQLite for all tests.
 // NOTE: `mqtt` and `fan` are intentionally omitted from this mock.
@@ -174,6 +207,133 @@ describe('Application Bootstrap', () => {
       const isValid = await bcrypt.compare('changeme123', admin!.passwordHash);
 
       expect(isValid).toBe(true);
+    });
+  });
+
+  describe('fan automation wiring', () => {
+    // A record view of the mocked config so `mqtt`/`fan` — absent everywhere
+    // else in this file to keep `initFanControl` short-circuiting (see the
+    // warning above) — can be added and removed per test.
+    const configRecord = config as unknown as Record<string, unknown>;
+
+    const FAN_TEST_CONFIG = {
+      mqtt: { url: 'mqtt://localhost:1883' },
+      fan: {
+        keepAliveMs: 900000,
+        watchdogMs: 10000,
+        retentionDays: 90,
+        retentionSweepMs: 21600000,
+        reconcileIntervalMs: 3600000,
+        // Long enough that the interval never fires again during a test.
+        automationIntervalMs: 3600000,
+      },
+    };
+
+    const AUTOMATION_ENABLED = {
+      enabled: true,
+      deltaOnK: 10,
+      deltaOffK: 2,
+      maxOutdoorHumidityPct: 80,
+      targetTempC: null,
+      targetHysteresisK: 1,
+      minRunMinutes: 30,
+      minPauseMinutes: 30,
+    };
+
+    function grainReading(tempC: number): DeviceReading[] {
+      return [{
+        device: '1.1', tempTop: tempC, tempMid: tempC, tempBottom: tempC,
+        humidity: 60, battery: 430, measurementTime: new Date().toISOString(),
+      }];
+    }
+
+    function outdoorReading(temperature: number, humidity: number): OutdoorReading {
+      const now = new Date().toISOString();
+      return { temperature, humidity, temperatureTime: now, humidityTime: now };
+    }
+
+    /**
+     * Settles the fire-and-forget cycle `automationService.start()` kicks off:
+     * a real (async) stock read, then two mocked InfluxDB reads awaited
+     * together, then the command and event write. Several macrotask hops
+     * cover all of it without pinning to internal await counts.
+     */
+    async function flushAutomationCycle(): Promise<void> {
+      for (let i = 0; i < 10; i += 1) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    }
+
+    async function primeDb() {
+      const db = initDb({ path: ':memory:' });
+      runMigrations(db);
+      await seedStocks(new StockRepository(db));
+      return db;
+    }
+
+    beforeEach(() => {
+      mockPublished.length = 0;
+    });
+
+    afterEach(() => {
+      shutdownFanControl();
+      delete configRecord['mqtt'];
+      delete configRecord['fan'];
+    });
+
+    it('does not construct the automation service when fan/MQTT configuration is missing', async () => {
+      // Deliberately no FAN_TEST_CONFIG here — mqtt/fan stay absent, as in
+      // every other test in this file.
+      await primeDb();
+
+      await initFanControl();
+
+      expect(getAutomationService()).toBeNull();
+    });
+
+    it("resolves a real controller on automation's immediate first evaluation, proving it was started after setFanManager", async () => {
+      Object.assign(configRecord, FAN_TEST_CONFIG);
+      const db = await primeDb();
+      new AutomationRepository(db).upsert('grain-watch-1', AUTOMATION_ENABLED);
+      const getLatestReadings = jest
+        .spyOn(influxService, 'getLatestReadings')
+        .mockResolvedValue(grainReading(20));
+      jest.spyOn(influxService, 'getOutdoorReading').mockResolvedValue(outdoorReading(5, 50));
+
+      await initFanControl();
+      await flushAutomationCycle();
+
+      expect(getFanManager()).not.toBeNull();
+      expect(getAutomationService()).not.toBeNull();
+      // A controller resolving to `null` would return before ever reading a
+      // measurement (design spec §5.2) — so this call happening at all proves
+      // `getController` already saw the manager `setFanManager` had installed.
+      expect(getLatestReadings).toHaveBeenCalledWith('corn-watch-1');
+    });
+
+    it('starts automation only after the manager has resumed a persisted desired state', async () => {
+      Object.assign(configRecord, FAN_TEST_CONFIG);
+      const db = await primeDb();
+      new AutomationRepository(db).upsert('grain-watch-1', AUTOMATION_ENABLED);
+      // A fan that was already running before the restart.
+      const since = '2026-09-29T00:00:00.000Z';
+      new FanStateRepository(db).upsert({
+        stockId: 'grain-watch-1', desiredOn: true, since, lastCommandAt: since, updatedAt: since,
+      });
+      // Readings the rules agree with: the fan should indeed be on.
+      jest.spyOn(influxService, 'getLatestReadings').mockResolvedValue(grainReading(20));
+      jest.spyOn(influxService, 'getOutdoorReading').mockResolvedValue(outdoorReading(5, 50));
+
+      await initFanControl();
+      await flushAutomationCycle();
+
+      // `manager.init()` (and with it `recover()`) publishes the one `on` that
+      // resumes the run. Had automation started first, it would have read a
+      // stale `desiredOn: false`, disagreed with the rules, and issued a
+      // second, redundant `on` with its own `auto_on` event.
+      expect(mockPublished.filter((p) => p.message === 'on')).toHaveLength(1);
+      const events = new FanEventsRepository(db).listRecent('grain-watch-1', 20);
+      expect(events.some((e) => e.kind === 'auto_on')).toBe(false);
     });
   });
 });

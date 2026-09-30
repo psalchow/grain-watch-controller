@@ -2,6 +2,7 @@ import type { FanStateRepository, FanEventsRepository } from '../../db/repositor
 import type { Stock } from '../../db/types';
 import { FanController } from './fan.controller';
 import { parseShellyMonitorMessage } from './shelly-message';
+import type { InterferenceCause } from './types';
 
 /**
  * Selects the MQTT wiring config for every fan-enabled stock. Pure.
@@ -42,6 +43,21 @@ export interface FanManagerDeps {
    * without HTTP traffic and without a restart.
    */
   fanEnabledStockIds: () => Promise<Set<string>>;
+  /**
+   * Notified when a controller reports an interference with its own desired
+   * state — a local switch or a fault — with the stock id attached. Set by
+   * `bootstrap.ts` to reach the automation service, which this class never
+   * imports the type of (design spec §5.5).
+   */
+  onInterference?: (stockId: string, cause: InterferenceCause) => void;
+  /**
+   * Notified when this stock's fan control is withdrawn, before the manager's
+   * own switch-off in `retireController` — the fourth way automation switches
+   * itself off (design spec §5.5). Separate from `onInterference`: the cause
+   * here is fixed and known only to this class, never reported by
+   * `FanController` itself.
+   */
+  onControlWithdrawn?: (stockId: string) => void;
   now?: () => Date;
 }
 
@@ -78,6 +94,12 @@ export class FanControlManager {
         eventsRepo: deps.eventsRepo,
         timings: { keepAliveMs: deps.timings.keepAliveMs, watchdogMs: deps.timings.watchdogMs },
         now: this.now,
+        // Always wired, even with no dependency configured: the wrapper itself
+        // checks for one, so there is nothing conditional to express in the
+        // property's type under `exactOptionalPropertyTypes`.
+        onInterference: (cause: InterferenceCause): void => {
+          deps.onInterference?.(s.stockId, cause);
+        },
       });
       this.fanStocks.set(s.stockId, {
         stockId: s.stockId,
@@ -150,6 +172,17 @@ export class FanControlManager {
     if (!wiring) return;
 
     wiring.retiring = true;
+
+    // Ahead of the switch-off below: automation could not enforce its rules on
+    // a stock it no longer has authority over, so it must not claim to (design
+    // spec §5.5). A transition, not an action — with automation already
+    // disabled the dependency writes nothing.
+    try {
+      this.deps.onControlWithdrawn?.(stockId);
+    } catch (error) {
+      console.error(`Fan control: notifying automation of ${stockId}'s withdrawal failed`, error);
+    }
+
     try {
       // Also clears the keep-alive and the persisted desired state, so nothing
       // re-asserts `on` and a later re-enable cannot resume the fan.

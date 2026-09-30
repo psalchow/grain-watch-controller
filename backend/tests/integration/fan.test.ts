@@ -10,6 +10,8 @@ import { StockRepository, FanStateRepository, FanEventsRepository } from '../../
 import { seedStocks } from '../../src/db/seed';
 import { FanControlManager } from '../../src/services/fan/fan.manager';
 import { setFanManager } from '../../src/services/fan';
+import { setAutomationService } from '../../src/services/automation';
+import type { AutomationService } from '../../src/services/automation';
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
 
@@ -50,7 +52,7 @@ beforeEach(async () => {
   setFanManager(manager);
 });
 
-afterEach(() => { manager.shutdown(); setFanManager(null); closeDb(); });
+afterEach(() => { manager.shutdown(); setFanManager(null); setAutomationService(null); closeDb(); });
 
 function app() { return finaliseApp(createApp({ enableLogging: false })); }
 
@@ -124,6 +126,28 @@ describe('fan endpoints', () => {
     // …the reconciliation tick is what switches the fan off.
     await manager.reconcile();
     expect(published).toContainEqual({ topic: '/p/command/switch:0', message: 'off' });
+  });
+
+  it('POST /fan/command disables automation with manual_command, unconditionally and before the switch', async () => {
+    const disable = jest.fn();
+    setAutomationService({ disable } as unknown as AutomationService);
+    const controller = manager.getController('grain-watch-1')!;
+    const commandSpy = jest.spyOn(controller, 'command');
+
+    const res = await request(app())
+      .post('/api/v1/stocks/grain-watch-1/fan/command')
+      .set('Authorization', `Bearer ${token()}`)
+      .send({ action: 'on' });
+
+    expect(res.status).toBe(200);
+    expect(disable).toHaveBeenCalledWith('grain-watch-1', 'manual_command');
+    // The controller reads no automation-enabled flag itself — whether this is
+    // a no-op for a stock already disabled is the service's call, not the
+    // controller's, and that assertion belongs to the service's own tests
+    // (design spec §5.5, brief Step 1). What this controller must get right is
+    // calling it every time, ahead of the switch.
+    expect(disable.mock.invocationCallOrder[0]).toBeLessThan(commandSpy.mock.invocationCallOrder[0]!);
+    commandSpy.mockRestore();
   });
 
   it('POST /fan/command rejects invalid action', async () => {
