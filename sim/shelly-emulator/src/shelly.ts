@@ -35,6 +35,12 @@ export class ShellyMachine {
   private contactorBehaviour: ContactorBehaviour = 'follow';
   private lastMonitor: ShellySnapshot['lastMonitor'] = null;
 
+  // True while the contactor's auxiliary contact is being driven by a hand
+  // switch at the panel rather than by our own relay (§6 of the design spec).
+  // Set and cleared by manualContactorToggle; consulted by setSwitch so an
+  // ordinary command does not pretend to release a contactor it never held.
+  private contactorHeldLocally = false;
+
   private grace: ReturnType<typeof setTimeout> | null = null;
   private follow: ReturnType<typeof setTimeout> | null = null;
   private autoOff: ReturnType<typeof setTimeout> | null = null;
@@ -52,13 +58,18 @@ export class ShellyMachine {
   }
 
   setSwitch(on: boolean): void {
+    const outputChanged = on !== this.switchOutput;
     this.switchOutput = on;
     this.desiredInputState = on;
     this.emit.publishStatus(on);
 
-    // Contactor reaction: follow after a short delay unless armed to fail.
+    // Contactor reaction: follow after a short delay unless armed to fail, or
+    // unless a hand switch at the panel is currently holding it — our relay
+    // does not reach the contactor in that case (§6).
     if (this.follow) { clearTimeout(this.follow); this.follow = null; }
-    if (on && this.contactorBehaviour === 'wontEngage') {
+    if (this.contactorHeldLocally) {
+      // held by hand — a command here has no physical effect on the contactor
+    } else if (on && this.contactorBehaviour === 'wontEngage') {
       // stays disengaged — the fault case
     } else {
       this.follow = setTimeout(() => {
@@ -77,19 +88,28 @@ export class ShellyMachine {
       }, this.autoOffMs);
     }
 
-    // Grace: evaluate whether the contactor reached the desired state.
-    if (this.grace) clearTimeout(this.grace);
-    this.grace = setTimeout(() => {
-      this.grace = null;
-      this.evaluateGrace();
-    }, this.gracePeriodMs);
+    // Grace: evaluate whether the contactor reached the desired state, but
+    // only when the output actually moved — the device script arms this from
+    // its status-change handler, not on every command (§9.1).
+    if (this.grace) { clearTimeout(this.grace); this.grace = null; }
+    if (outputChanged) {
+      this.grace = setTimeout(() => {
+        this.grace = null;
+        this.evaluateGrace();
+      }, this.gracePeriodMs);
+    }
 
     this.change();
   }
 
   manualContactorToggle(): void {
     this.inputState = !this.inputState;
-    this.publishMonitor('warning', 'Input changed without switch command');
+    this.contactorHeldLocally = !this.contactorHeldLocally;
+    if (this.inputState === this.desiredInputState) {
+      this.publishMonitor('success', 'Contactor switched correctly');
+    } else {
+      this.publishMonitor('warning', 'Input changed without switch command');
+    }
     this.change();
   }
 

@@ -72,4 +72,60 @@ describe('ShellyMachine', () => {
     vi.advanceTimersByTime(40000);             // 80s total but only 40s since re-assert
     expect(s.getSnapshot().switchOutput).toBe(true);
   });
+
+  it('publishes success on an ordinary setSwitch(false)', () => {
+    const e = makeEmit();
+    const s = new ShellyMachine(e.emit, OPTS);
+    s.setSwitch(true);
+    vi.advanceTimersByTime(3500);               // engage + grace, settles on success
+    s.setSwitch(false);
+    vi.advanceTimersByTime(500);                // contactor releases
+    expect(s.getSnapshot().inputState).toBe(false);
+    vi.advanceTimersByTime(2500);                // grace elapses
+    expect(e.monitors.at(-1)).toEqual({ type: 'success', switchState: false, inputState: false });
+  });
+
+  describe('local switching at the contactor (§6)', () => {
+    it('engaging by hand while the output is off: warning, then off leaves it held with no alert', () => {
+      const e = makeEmit();
+      const s = new ShellyMachine(e.emit, OPTS);
+
+      s.manualContactorToggle();                // engaged by hand, output still off
+      expect(e.monitors.at(-1)?.type).toBe('warning');
+      expect(s.getSnapshot().inputState).toBe(true);
+
+      s.setSwitch(false);                       // backend command, output unchanged (already off)
+      vi.advanceTimersByTime(3000);              // would-be grace period
+      expect(e.monitors.map((m) => m.type)).not.toContain('alert');
+      expect(s.getSnapshot().inputState).toBe(true); // still held by hand, not released by the relay
+    });
+
+    it('releasing by hand afterwards publishes success, not warning', () => {
+      const e = makeEmit();
+      const s = new ShellyMachine(e.emit, OPTS);
+
+      s.manualContactorToggle();                // engaged by hand
+      s.setSwitch(false);                       // ignored by the contactor, still held
+
+      s.manualContactorToggle();                // released by hand
+      expect(e.monitors.at(-1)?.type).toBe('success');
+      expect(s.getSnapshot().inputState).toBe(false);
+    });
+
+    it('opening the contactor by hand while the output is on: warning, then off resolves to success', () => {
+      const e = makeEmit();
+      const s = new ShellyMachine(e.emit, OPTS);
+
+      s.setSwitch(true);
+      vi.advanceTimersByTime(3500);              // engage + grace, settles on success
+
+      s.manualContactorToggle();                 // opened by hand while the backend still wants it on
+      expect(e.monitors.at(-1)?.type).toBe('warning');
+      expect(s.getSnapshot().inputState).toBe(false);
+
+      s.setSwitch(false);                        // backend stands down
+      vi.advanceTimersByTime(3000);               // grace elapses
+      expect(e.monitors.at(-1)).toEqual({ type: 'success', switchState: false, inputState: false });
+    });
+  });
 });
