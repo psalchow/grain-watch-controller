@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FanStatusCard } from '@/components/FanStatusCard';
+import { FanAutomationPanel } from '@/components/FanAutomationPanel';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { translateDeviceMessage } from '@/lib/messages';
@@ -25,6 +26,10 @@ const EVENT_LABEL: Record<string, string> = {
   watchdog_off: 'Zeitüberschreitung, abgeschaltet',
   stand_down: 'Steuerung entzogen',
   recovery: 'Zustand wiederhergestellt',
+  auto_on: 'Automatik: eingeschaltet',
+  auto_off: 'Automatik: ausgeschaltet',
+  automation_disabled: 'Automatik deaktiviert',
+  automation_configured: 'Automatik konfiguriert',
 };
 
 /** Event kinds that record a problem, highlighted in the history. */
@@ -151,6 +156,20 @@ export default function FanControlPage() {
 
             {error && (
               <p className="mt-4 text-center text-sm text-destructive">{error}</p>
+            )}
+
+            {stockId && (
+              <FanAutomationPanel
+                stockId={stockId}
+                snapshot={
+                  snapshot?.automation ?? {
+                    available: false,
+                    enabled: false,
+                    reason: null,
+                    evaluatedAt: null,
+                  }
+                }
+              />
             )}
           </>
         )}
