@@ -1,4 +1,4 @@
-import { getFanManager } from './index';
+import { getFanManager } from './manager-registry';
 
 /**
  * Whether the fan endpoints will serve this stock.
