@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -103,9 +103,57 @@ export const fanEvents = sqliteTable(
   })
 );
 
+/** Per-stock automation parameters, `stock_automation` (design spec §3.1). */
+export interface AutomationConfig {
+  enabled: boolean;
+  deltaOnK: number;
+  deltaOffK: number;
+  maxOutdoorHumidityPct: number;
+  targetTempC: number | null;
+  targetHysteresisK: number;
+  minRunMinutes: number;
+  minPauseMinutes: number;
+}
+
+/**
+ * Defaults for `stock_automation`, and the fallback `AutomationRepository.get`
+ * returns while no row exists yet (docs/superpowers/specs/2026-09-29-fan-automation-core-design.md §3.1).
+ *
+ * The single source for both the DDL defaults below and the read fallback, so
+ * the two cannot drift apart.
+ */
+export const AUTOMATION_DEFAULTS: AutomationConfig = {
+  enabled: false,
+  deltaOnK: 10,
+  deltaOffK: 2,
+  maxOutdoorHumidityPct: 80,
+  targetTempC: 12,
+  targetHysteresisK: 1,
+  minRunMinutes: 30,
+  minPauseMinutes: 30,
+};
+
+export const stockAutomation = sqliteTable('stock_automation', {
+  stockId: text('stock_id')
+    .primaryKey()
+    .references(() => stocks.id, { onDelete: 'cascade' }),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(AUTOMATION_DEFAULTS.enabled),
+  deltaOnK: real('delta_on_k').notNull().default(AUTOMATION_DEFAULTS.deltaOnK),
+  deltaOffK: real('delta_off_k').notNull().default(AUTOMATION_DEFAULTS.deltaOffK),
+  maxOutdoorHumidityPct: real('max_outdoor_humidity_pct')
+    .notNull()
+    .default(AUTOMATION_DEFAULTS.maxOutdoorHumidityPct),
+  targetTempC: real('target_temp_c').default(AUTOMATION_DEFAULTS.targetTempC as number),
+  targetHysteresisK: real('target_hysteresis_k').notNull().default(AUTOMATION_DEFAULTS.targetHysteresisK),
+  minRunMinutes: integer('min_run_minutes').notNull().default(AUTOMATION_DEFAULTS.minRunMinutes),
+  minPauseMinutes: integer('min_pause_minutes').notNull().default(AUTOMATION_DEFAULTS.minPauseMinutes),
+  updatedAt: text('updated_at').notNull(),
+});
+
 export type DbUser = typeof users.$inferSelect;
 export type DbUserInsert = typeof users.$inferInsert;
 export type DbStock = typeof stocks.$inferSelect;
 export type DbStockInsert = typeof stocks.$inferInsert;
 export type DbFanState = typeof fanState.$inferSelect;
 export type DbFanEvent = typeof fanEvents.$inferSelect;
+export type DbStockAutomation = typeof stockAutomation.$inferSelect;
