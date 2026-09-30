@@ -69,7 +69,14 @@ export default function FanControlPage() {
 
   const snapshot = live ?? initial;
   const state = snapshot?.status.state ?? 'OFF';
+  const desiredOn = snapshot?.status.desiredOn ?? false;
+  const contactorEngaged = snapshot?.status.contactorEngaged ?? null;
   const isPending = PENDING.includes(state) || busy;
+  // The backend reports a terminal ON/OFF for a fan switched locally at the
+  // contactor (design spec §5.6), so it must not offer a switch-off it has no
+  // authority to carry out (§6) — the status card above already says the fan
+  // is running locally.
+  const isLocallyRun = contactorEngaged === true && !desiredOn;
 
   const send = useCallback(
     async (action: 'on' | 'off') => {
@@ -95,11 +102,16 @@ export default function FanControlPage() {
         </Button>
       );
     }
-    if (state === 'ON') {
-      return <Button size="lg" variant="destructive" onClick={() => send('off')}>Ausschalten</Button>;
+    if (isLocallyRun) {
+      // No switch-off button: the fan is held on by the contactor by hand,
+      // and the backend cannot open it (design spec §6, §8).
+      return null;
     }
     if (state === 'FAULT') {
       return <Button size="lg" onClick={() => send('on')}>Erneut einschalten</Button>;
+    }
+    if (desiredOn) {
+      return <Button size="lg" variant="destructive" onClick={() => send('off')}>Ausschalten</Button>;
     }
     return <Button size="lg" onClick={() => send('on')}>Einschalten</Button>;
   };

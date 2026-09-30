@@ -10,9 +10,24 @@ vi.mock('../api/fan', () => ({ fanApi: { getStatus: vi.fn(), sendCommand: vi.fn(
 vi.mock('../hooks/useFanStream', () => ({ useFanStream: vi.fn() }));
 vi.mock('../components/Header', () => ({ Header: () => null }));
 
-const snap = (state: string): FanSnapshot => ({
-  status: { stockId: 'grain-watch-1', state: state as FanSnapshot['status']['state'], desiredOn: state === 'ON', fanControlReachable: true, lastWarning: null, lastAlert: null, since: null, updatedAt: 'x' },
+const snap = (
+  state: string,
+  overrides: Partial<FanSnapshot['status']> = {},
+): FanSnapshot => ({
+  status: {
+    stockId: 'grain-watch-1',
+    state: state as FanSnapshot['status']['state'],
+    desiredOn: state === 'ON',
+    fanControlReachable: true,
+    contactorEngaged: null,
+    lastWarning: null,
+    lastAlert: null,
+    since: null,
+    updatedAt: 'x',
+    ...overrides,
+  },
   events: [],
+  automation: { available: false, enabled: false, reason: null, evaluatedAt: null },
 });
 
 function renderPage() {
@@ -67,5 +82,25 @@ describe('FanControlPage', () => {
     vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('ON'), connected: true, disabled: false });
     renderPage();
     expect(screen.getByRole('button', { name: /Ausschalten/i })).toBeEnabled();
+  });
+
+  it('shows Erneut einschalten on FAULT', () => {
+    vi.mocked(useFanStream).mockReturnValue({ snapshot: snap('FAULT'), connected: true, disabled: false });
+    renderPage();
+    expect(screen.getByRole('button', { name: /Erneut einschalten/i })).toBeEnabled();
+  });
+
+  it('offers no switch-off button for a fan running on a locally held contactor', () => {
+    // The backend reports the terminal state the device told it about (design
+    // spec §5.6), so `state` alone would offer "Ausschalten" for a run it has
+    // no authority to stop (§6).
+    vi.mocked(useFanStream).mockReturnValue({
+      snapshot: snap('ON', { desiredOn: false, contactorEngaged: true }),
+      connected: true,
+      disabled: false,
+    });
+    renderPage();
+    expect(screen.queryByRole('button', { name: /Ausschalten/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Einschalten/i })).not.toBeInTheDocument();
   });
 });

@@ -108,6 +108,13 @@ export function FanStatusCard({
             <AlertTriangle className="h-3 w-3" /> Warnung: {translateDeviceMessage(status.lastWarning.message)}
           </span>
         )}
+        {status?.contactorEngaged && !status.desiredOn && (
+          // The backend cannot open a contactor held by hand (design spec §6):
+          // without this the locally running fan would be invisible in the app.
+          <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+            <AlertTriangle className="h-3 w-3" /> Gebläse läuft, vor Ort geschaltet
+          </span>
+        )}
         {status && (
           <ReachabilityBadge reachable={status.fanControlReachable} stale={!connected} />
         )}

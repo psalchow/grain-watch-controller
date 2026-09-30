@@ -4,7 +4,7 @@ import { FanStatusCard } from './FanStatusCard';
 import type { FanStatus } from '../types/fan';
 
 const base: FanStatus = {
-  stockId: 'grain-watch-1', state: 'ON', desiredOn: true, fanControlReachable: true,
+  stockId: 'grain-watch-1', state: 'ON', desiredOn: true, fanControlReachable: true, contactorEngaged: null,
   lastWarning: null, lastAlert: null, since: null, updatedAt: '2026-07-09T10:00:00.000Z',
 };
 
@@ -68,5 +68,25 @@ describe('FanStatusCard', () => {
   it('marks reachability as current while the stream is open', () => {
     render(<FanStatusCard status={{ ...base, fanControlReachable: true }} connected={true} />);
     expect(screen.getByText('Steuerung erreichbar')).toHaveAttribute('data-stale', 'false');
+  });
+
+  it('shows the local-run notice when the fan runs but the backend is not driving it', () => {
+    render(
+      <FanStatusCard
+        status={{ ...base, desiredOn: false, contactorEngaged: true }}
+        connected={true}
+      />,
+    );
+    expect(screen.getByText(/vor Ort geschaltet/i)).toBeInTheDocument();
+  });
+
+  it('does not show the local-run notice when the backend is driving the fan', () => {
+    render(
+      <FanStatusCard
+        status={{ ...base, desiredOn: true, contactorEngaged: true }}
+        connected={true}
+      />,
+    );
+    expect(screen.queryByText(/vor Ort geschaltet/i)).not.toBeInTheDocument();
   });
 });
