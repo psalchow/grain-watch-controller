@@ -494,6 +494,74 @@ correct behaviour under the new rule, but it falsifies the older diagram, which
 was never updated. Redraw the `FAULT` → `off` edge (and its label) the next
 time that document is touched.
 
+## Automation: `lastEvaluation` and the audit write are not kept in step
+
+**Deferred:** 2026-09-30, found in the final review of the fan automation core —
+both are consequences of the write order settled in "A failing audit write
+blocks the MQTT command" above, and belong with it when that one is picked up.
+
+Two ends of the same seam in `AutomationService`
+(`backend/src/services/automation/automation.service.ts`):
+
+- A throwing `eventsRepo.insert` inside `act` propagates out of `evaluateOne`
+  into `evaluateSafely`, which logs it — so the trailing `emit(stock.id)` never
+  runs, and an open page misses the push for the very tick that switched the
+  fan. The command itself went out first and is unaffected.
+- An evaluation that the `enabled` re-read (or the controller re-resolution
+  beside it) blocks still records its reason in `lastEvaluation` and pushes it.
+  The stock is reported as having decided something it deliberately did not
+  act on.
+
+Both are cosmetic against the plant and neither changes what the fan does.
+Settling the command/audit ordering question is what decides how the emit
+should be sequenced around the write.
+
+## Automation: `runCycle` has no re-entrancy guard
+
+**Deferred:** 2026-09-30, found in the final review of the fan automation core;
+an inherited pattern rather than a new one.
+
+`AutomationService.start` (`backend/src/services/automation/automation.service.ts`)
+arms `setInterval(() => void this.runCycle(), …)` with an async body and
+nothing that stops a second cycle starting while the first is still awaiting
+its InfluxDB reads. At the default interval of five minutes that needs a very
+slow database, but the reads are the only thing bounding it, and two cycles in
+flight both touch `readFailures` — so a failure counted by one and reset by the
+other can delay or bring forward the three-strike switch-off of §5.3.
+
+`FanControlManager.reconcile` (`backend/src/services/fan/fan.manager.ts`) is
+armed exactly the same way, so whatever guard is chosen (a boolean in flight,
+or a self-rescheduling timeout) should be applied to both.
+
+## `AUTOMATION_DEFAULTS` is handed out by reference
+
+**Deferred:** 2026-09-30, found in the final review of the fan automation core;
+no caller mutates it today.
+
+`AutomationRepository.get` returns the shared `AUTOMATION_DEFAULTS` object
+itself when no row exists, and `getMany` seeds every gap with the same
+reference (`backend/src/db/repositories/automation.repository.ts`,
+`backend/src/db/schema.ts`). Every current caller treats the result as
+read-only — the service copies it into the `upsert` payload with a spread —
+but one that edited a field in place would rewrite the defaults for the whole
+process, and for every unconfigured stock with it. Returning `{ ...AUTOMATION_DEFAULTS }`
+closes it; doing it now would be a change with no failing case behind it.
+
+## `EVENT_LABEL` resolves a wire value through `Object.prototype`
+
+**Deferred:** 2026-09-30, pre-existing; the automation core only added four
+keys to it.
+
+`EVENT_LABEL` in `frontend/src/pages/FanControlPage.tsx` is a plain `Record`
+indexed by `ev.kind`, a value that arrives from the wire, so a kind such as
+`constructor` resolves through the prototype chain instead of falling through
+to the `?? ev.kind` fallback and renders a function source in the history list.
+`REASON_LABEL` in `FanAutomationPanel.tsx` uses a `Map` for exactly that reason
+and says so in its doc comment, as does `FanStatusCard`'s reachability lookup.
+The repository therefore now carries both patterns for the same problem.
+Reaching it needs the backend to write an unexpected `kind`, which only its own
+code does — hence not repaired on the spot.
+
 ## `Stock.active` is not filtered out of the automation cycle
 
 **Deferred:** 2026-09-30, found while implementing the fan automation core;
