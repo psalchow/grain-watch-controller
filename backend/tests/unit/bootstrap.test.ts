@@ -291,7 +291,7 @@ describe('Application Bootstrap', () => {
       expect(getAutomationService()).toBeNull();
     });
 
-    it("resolves a real controller on automation's immediate first evaluation, proving it was started after setFanManager", async () => {
+    it("after initFanControl, automation is running and its first evaluation resolves a real controller", async () => {
       Object.assign(configRecord, FAN_TEST_CONFIG);
       const db = await primeDb();
       new AutomationRepository(db).upsert('grain-watch-1', AUTOMATION_ENABLED);
@@ -306,12 +306,16 @@ describe('Application Bootstrap', () => {
       expect(getFanManager()).not.toBeNull();
       expect(getAutomationService()).not.toBeNull();
       // A controller resolving to `null` would return before ever reading a
-      // measurement (design spec §5.2) — so this call happening at all proves
-      // `getController` already saw the manager `setFanManager` had installed.
+      // measurement (design spec §5.2), so this call happening at all shows
+      // the wiring is complete and a real controller was found — not, on its
+      // own, that any particular statement in `initFanControl` had to run
+      // before another: all four are synchronous and this evaluation only
+      // resumes on a later microtask, after the whole function has returned
+      // (see the comment above `manager.init()` in bootstrap.ts).
       expect(getLatestReadings).toHaveBeenCalledWith('corn-watch-1');
     });
 
-    it('starts automation only after the manager has resumed a persisted desired state', async () => {
+    it("a persisted desired state has been recovered before automation's first evaluation reads it", async () => {
       Object.assign(configRecord, FAN_TEST_CONFIG);
       const db = await primeDb();
       new AutomationRepository(db).upsert('grain-watch-1', AUTOMATION_ENABLED);
@@ -327,10 +331,12 @@ describe('Application Bootstrap', () => {
       await initFanControl();
       await flushAutomationCycle();
 
-      // `manager.init()` (and with it `recover()`) publishes the one `on` that
-      // resumes the run. Had automation started first, it would have read a
-      // stale `desiredOn: false`, disagreed with the rules, and issued a
-      // second, redundant `on` with its own `auto_on` event.
+      // `recover()` publishes the one `on` that resumes the run. Automation's
+      // first evaluation agrees with the already-resumed state and issues no
+      // second, redundant `on` and no `auto_on` event. This pins the outcome
+      // — the state automation reads is the recovered one — not a statement
+      // order: see the comment above `manager.init()` in bootstrap.ts for why
+      // that order is not, today, independently observable.
       expect(mockPublished.filter((p) => p.message === 'on')).toHaveLength(1);
       const events = new FanEventsRepository(db).listRecent('grain-watch-1', 20);
       expect(events.some((e) => e.kind === 'auto_on')).toBe(false);

@@ -149,11 +149,14 @@ export async function initFanControl(): Promise<void> {
     onControlWithdrawn: (stockId) => automationService.disable(stockId, 'fan_control_withdrawn'),
   });
 
-  // Steps 3 to 6, in this order — load-bearing (design spec §5.5, brief §Step 5):
-  // `manager.init()` resumes any desired state `recover()` finds before the
-  // automation service ever reads it; `setFanManager` makes `getController`
-  // resolve real controllers before the service's immediate first evaluation
-  // runs, so no stock is silently skipped for a full interval.
+  // Steps 3 to 6, in this order (design spec §5.5, brief §Step 5). All four
+  // are synchronous, and `start()`'s immediate evaluation only becomes
+  // observable after it awaits its first read — by which point this whole
+  // function has already run to completion — so today nothing distinguishes
+  // this order from the reverse. It is written this way anyway, so it stays
+  // correct if `start()` ever grows work ahead of that first await: `recover()`
+  // resuming a desired state, and `getController` resolving a real controller,
+  // are both meant to happen before the service can ever read them.
   manager.init();
   setFanManager(manager);
   setAutomationService(automationService);
