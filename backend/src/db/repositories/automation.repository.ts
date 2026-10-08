@@ -1,11 +1,11 @@
 import { eq, inArray } from 'drizzle-orm';
 import type { Db } from '../types';
 import { stockAutomation, AUTOMATION_DEFAULTS } from '../schema';
-import type { AutomationConfig } from '../schema';
+import type { AutomationConfig, DbStockAutomation } from '../schema';
 
 export type { AutomationConfig };
 
-function toConfig(row: typeof stockAutomation.$inferSelect): AutomationConfig {
+function toConfig(row: DbStockAutomation): AutomationConfig {
   return {
     enabled: row.enabled,
     deltaOnK: row.deltaOnK,

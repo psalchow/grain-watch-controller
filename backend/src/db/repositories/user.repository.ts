@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../types';
 import { users, userTenants, tenants } from '../schema';
+import type { DbUser } from '../schema';
 import type { TenantRef, User } from '../../models';
 
 /**
@@ -124,7 +125,7 @@ export class UserRepository {
     return result.changes > 0;
   }
 
-  private hydrate(row: typeof users.$inferSelect): User {
+  private hydrate(row: DbUser): User {
     const memberships = this.db
       .select({ id: tenants.id, name: tenants.name })
       .from(userTenants)
@@ -134,7 +135,7 @@ export class UserRepository {
     return this.toUser(row, memberships);
   }
 
-  private toUser(row: typeof users.$inferSelect, userTenantRefs: TenantRef[]): User {
+  private toUser(row: DbUser, userTenantRefs: TenantRef[]): User {
     const user: User = {
       id: row.id,
       username: row.username,

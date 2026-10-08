@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { Db } from '../types';
 import { stocks } from '../schema';
 import type { Stock } from '../types';
+import type { DbStock } from '../schema';
 
 export class StockRepository {
   constructor(private readonly db: Db) {}
@@ -41,7 +42,7 @@ export class StockRepository {
       .run();
   }
 
-  private toStock(row: typeof stocks.$inferSelect): Stock {
+  private toStock(row: DbStock): Stock {
     const stock: Stock = {
       id: row.id,
       name: row.name,

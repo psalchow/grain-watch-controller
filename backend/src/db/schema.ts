@@ -151,9 +151,6 @@ export const stockAutomation = sqliteTable('stock_automation', {
 });
 
 export type DbUser = typeof users.$inferSelect;
-export type DbUserInsert = typeof users.$inferInsert;
 export type DbStock = typeof stocks.$inferSelect;
-export type DbStockInsert = typeof stocks.$inferInsert;
 export type DbFanState = typeof fanState.$inferSelect;
-export type DbFanEvent = typeof fanEvents.$inferSelect;
 export type DbStockAutomation = typeof stockAutomation.$inferSelect;
