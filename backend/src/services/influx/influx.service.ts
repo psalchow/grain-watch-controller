@@ -89,6 +89,27 @@ interface InfluxQueryResult {
 }
 
 /**
+ * Flattens an error and its `cause` chain into one readable line.
+ *
+ * `fetch` reports every transport failure as `TypeError: fetch failed` and
+ * puts the reason one or more levels down in `cause`, where a plain
+ * `error.message` never reaches it.
+ *
+ * @param error - The thrown value, of any shape
+ * @returns The chain from outermost to innermost, with error codes where present
+ */
+function describeCause(error: unknown): string {
+  const parts: string[] = [];
+  let current: unknown = error;
+  while (current instanceof Error) {
+    const code = (current as NodeJS.ErrnoException).code;
+    parts.push(code ? `${current.message} [${code}]` : current.message);
+    current = current.cause;
+  }
+  return parts.length > 0 ? parts.join(' <- ') : String(error);
+}
+
+/**
  * InfluxDB service for querying grain stock measurement data.
  *
  * Uses InfluxDB 2.x with InfluxQL queries via the v1 compatibility API.
@@ -129,13 +150,30 @@ export class InfluxDBService {
   private async executeQuery(query: string): Promise<InfluxQueryResult> {
     const queryUrl = `${this.url}/query?db=${encodeURIComponent(this.bucket)}&q=${encodeURIComponent(query)}`;
 
-    const response = await fetch(queryUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Token ${this.token}`,
-        'Accept': 'application/json',
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(queryUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Token ${this.token}`,
+          'Accept': 'application/json',
+        },
+      });
+    } catch (error) {
+      // A request that never completes arrives as a bare `TypeError: fetch
+      // failed`; why it failed — refused, timed out, DNS, TLS — sits in
+      // `cause`, which is dropped unless it is read out here. The same
+      // reasoning as the body-level branch below, one layer further out: a log
+      // line saying only "fetch failed" is the whole record an operator gets,
+      // and `AutomationService` counts read failures without logging them at
+      // all, so a stock that stops ventilating would leave nothing to read.
+      // The original is kept as `cause` so a handler that walks the chain
+      // still sees everything.
+      throw new Error(
+        `InfluxDB request to ${this.url} failed: ${describeCause(error)}`,
+        { cause: error },
+      );
+    }
 
     if (!response.ok) {
       throw new Error(`InfluxDB query failed: ${response.statusText}`);

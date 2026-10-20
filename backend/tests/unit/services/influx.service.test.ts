@@ -308,6 +308,37 @@ describe('InfluxDBService', () => {
       );
     });
 
+    // A transport failure arrives from `fetch` as a bare `TypeError: fetch
+    // failed`; the reason sits in `cause` and is lost unless it is pulled out.
+    // That message is the entire record an operator gets of an unreachable
+    // InfluxDB, and the automation service counts read failures silently.
+    it('should name the reason and the target when the request never completes', async () => {
+      const cause = Object.assign(new Error('connect ECONNREFUSED 192.168.0.131:8086'), {
+        code: 'ECONNREFUSED',
+      });
+      mockFetch.mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), { cause })
+      );
+
+      await expect(service.getLatestReadings('corn-watch-1')).rejects.toThrow(
+        /connect ECONNREFUSED 192\.168\.0\.131:8086.*ECONNREFUSED/
+      );
+      await expect(service.getLatestReadings('corn-watch-1')).rejects.toThrow(
+        /http:\/\/localhost:8086/
+      );
+    });
+
+    it('should keep the original failure as the cause', async () => {
+      const original = Object.assign(new TypeError('fetch failed'), {
+        cause: new Error('other side closed'),
+      });
+      mockFetch.mockRejectedValue(original);
+
+      await expect(service.getLatestReadings('corn-watch-1')).rejects.toMatchObject({
+        cause: original,
+      });
+    });
+
     it('should surface errors from the outdoor query too', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
