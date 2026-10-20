@@ -53,6 +53,8 @@ export class FanController {
   private lastWarning: { message: string; ts: string } | null = null;
   /** Last contactor-failure alert / safety shutoff (overlay, independent of state). */
   private lastAlert: { message: string; ts: string } | null = null;
+  /** Output state of the last logged generic status update; null = none seen yet. */
+  private lastStatusOutput: boolean | null = null;
   /** Timestamp of the last state change. */
   private updatedAt: string;
   /** Deadline timer: switch off + FAULT if no success ack arrives in time. */
@@ -154,10 +156,22 @@ export class FanController {
     }
   }
 
-  /** Logs the Shelly's generic status update (authoritative output state) for the audit trail. */
+  /**
+   * Logs the Shelly's generic status update (authoritative output state).
+   *
+   * Only an actual change of `output` is recorded. The device republishes
+   * `switch:0` on its own with fresh energy and temperature readings, so
+   * logging every message buries the switching history under a row a minute
+   * and fills the retention window with nothing. A payload without a boolean
+   * `output` says nothing about the fan and is dropped.
+   */
   handleStatus(raw: string): void {
-    let payload: unknown = raw;
-    try { payload = JSON.parse(raw); } catch { /* keep raw string */ }
+    let payload: unknown;
+    try { payload = JSON.parse(raw); } catch { return; }
+    if (!payload || typeof payload !== 'object' || !('output' in payload)) return;
+    const output = (payload as { output?: unknown }).output;
+    if (typeof output !== 'boolean' || output === this.lastStatusOutput) return;
+    this.lastStatusOutput = output;
     this.log('status', payload, 'shelly');
   }
 

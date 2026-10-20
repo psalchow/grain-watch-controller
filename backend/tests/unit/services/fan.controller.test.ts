@@ -121,6 +121,29 @@ describe('FanController', () => {
     expect(controller.getRecentEvents(50).some((e) => e.kind === 'warning')).toBe(true);
   });
 
+  it('logs a status message only when the reported output changed', async () => {
+    const { controller } = await makeController();
+    const statusEvents = () => controller.getRecentEvents(50).filter((e) => e.kind === 'status');
+
+    controller.handleStatus('{"id":0,"output":false,"temperature":{"tC":39.1}}');
+    expect(statusEvents()).toHaveLength(1);
+
+    // The Shelly repeats switch:0 periodically with fresh energy and
+    // temperature readings; the output is unchanged, so there is nothing to record.
+    controller.handleStatus('{"id":0,"output":false,"temperature":{"tC":40.2}}');
+    expect(statusEvents()).toHaveLength(1);
+
+    controller.handleStatus('{"id":0,"output":true,"temperature":{"tC":40.2}}');
+    expect(statusEvents()).toHaveLength(2);
+  });
+
+  it('ignores a status payload that carries no output state', async () => {
+    const { controller } = await makeController();
+    controller.handleStatus('not json');
+    controller.handleStatus('{"id":0}');
+    expect(controller.getRecentEvents(50).filter((e) => e.kind === 'status')).toHaveLength(0);
+  });
+
   it('clears the alert overlay when the fan recovers from a fault', async () => {
     const { controller } = await makeController();
     controller.command('on');

@@ -51,11 +51,29 @@ describe('FanControlManager', () => {
   beforeEach(() => jest.useFakeTimers());
   afterEach(() => jest.useRealTimers());
 
-  it('subscribes to monitor + online topics on init', async () => {
+  it('subscribes to monitor + status + online topics on init', async () => {
     const { manager, f } = await setup();
     manager.init();
     expect(f.subscribed).toContain('/corn-watch/actors/corn-watch-1/fan-control/monitor/#');
     expect(f.subscribed).toContain('/corn-watch/actors/corn-watch-1/fan-control/online');
+    // The switch's own status only: a wildcard also delivers the device's
+    // peripheral components (temperature, system, wifi), which say nothing
+    // about the fan (design spec §2).
+    expect(f.subscribed).toContain('/corn-watch/actors/corn-watch-1/fan-control/status/switch:0');
+    expect(f.subscribed).not.toContain('/corn-watch/actors/corn-watch-1/fan-control/status/#');
+  });
+
+  it('routes the switch status to the controller and ignores other components', async () => {
+    const { manager, f } = await setup();
+    manager.init();
+    const controller = manager.getController('grain-watch-1')!;
+    const statusEvents = () => controller.getRecentEvents(50).filter((e) => e.kind === 'status');
+
+    f.emit('/corn-watch/actors/corn-watch-1/fan-control/status/temperature:100', '{"id":100,"tC":9.7}');
+    expect(statusEvents()).toHaveLength(0);
+
+    f.emit('/corn-watch/actors/corn-watch-1/fan-control/status/switch:0', '{"id":0,"output":true}');
+    expect(statusEvents()).toHaveLength(1);
   });
 
   it('routes a monitor success message to the controller', async () => {

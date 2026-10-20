@@ -65,6 +65,8 @@ interface StockFanWiring {
   stockId: string;
   topicPrefix: string;
   commandTopic: string;
+  /** The switch's own generic status update — the only status topic that concerns the fan. */
+  statusTopic: string;
   controller: FanController;
   /**
    * Set when a request observed that fan control was revoked for this stock.
@@ -85,6 +87,7 @@ export class FanControlManager {
     this.now = deps.now ?? (() => new Date());
     for (const s of deps.stocks) {
       const commandTopic = `${s.topicPrefix}/command/switch:${s.switchId}`;
+      const statusTopic = `${s.topicPrefix}/status/switch:${s.switchId}`;
       const controller = new FanController({
         stockId: s.stockId,
         // QoS 1: a switching command must survive a brief broker hiccup. Both
@@ -105,6 +108,7 @@ export class FanControlManager {
         stockId: s.stockId,
         topicPrefix: s.topicPrefix,
         commandTopic,
+        statusTopic,
         controller,
         retiring: false,
       });
@@ -117,7 +121,10 @@ export class FanControlManager {
     // re-subscribes automatically on reconnect (resubscribe default).
     for (const wiring of this.fanStocks.values()) {
       this.deps.mqtt.subscribe(`${wiring.topicPrefix}/monitor/#`);
-      this.deps.mqtt.subscribe(`${wiring.topicPrefix}/status/#`);
+      // Not `status/#`: that also carries the device's peripheral components
+      // (temperature, system, wifi), which report every few seconds and say
+      // nothing about the fan. The design spec names this one topic (§2).
+      this.deps.mqtt.subscribe(wiring.statusTopic);
       this.deps.mqtt.subscribe(`${wiring.topicPrefix}/online`);
       wiring.controller.recover();
     }
@@ -239,7 +246,7 @@ export class FanControlManager {
       if (suffix.startsWith('monitor/')) {
         const msg = parseShellyMonitorMessage(payload);
         if (msg) wiring.controller.handleShellyMessage(msg);
-      } else if (suffix.startsWith('status/')) {
+      } else if (topic === wiring.statusTopic) {
         wiring.controller.handleStatus(payload);
       } else if (suffix === 'online') {
         // The device's own topic name; the controller maps it onto the

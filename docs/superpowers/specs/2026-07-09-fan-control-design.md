@@ -125,6 +125,12 @@ Behaviour:
   action (warn-only).
 - **Status / online messages:** logged; `online` updates the `shellyOnline`
   overlay; `status` reconciles the authoritative output state.
+  A `status` message is logged **only when its `output` changes** (2026-10-20):
+  the device republishes `switch:0` by itself with fresh energy and temperature
+  readings, so logging every message buries the switching history under a row a
+  minute. Subscribe to `{prefix}/status/switch:{id}` alone — a `status/#`
+  wildcard also delivers the device's peripheral components (`temperature:100`,
+  system, wifi), which report every few seconds and say nothing about the fan.
 - **Startup recovery:** on boot, read `fan_state`. If `desiredOn = true`,
   resume the keep-alive loop and immediately re-assert; log `recovery`.
 - **Shutdown:** do **not** switch the fan off on a clean shutdown. The Shelly

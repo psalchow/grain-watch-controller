@@ -574,3 +574,19 @@ thermometers is evaluated and can be switched by the rules like any other.
 `selectFanStocks` (`backend/src/services/fan/fan.manager.ts`) has the identical
 gap for ordinary fan control, so this is not new — automation just inherits it
 unchanged.
+
+## The generic status update is logged but never reconciled
+
+**Deferred:** 2026-10-20, found while fixing the status-message flood in the
+switching history.
+
+Design spec §3.3 says the Shelly's generic status update "reconciles the
+authoritative output state". `FanController.handleStatus`
+(`backend/src/services/fan/fan.controller.ts`) only writes an audit row when
+`output` changes; it does not compare that output against the reported state or
+the desired state, so an output the backend did not command — an auto-off that
+fires without a monitor message, for instance — still shows as `ON` until the
+next monitor message or the watchdog corrects it. Repairing it means deciding
+what a divergence should do (correct the state, raise a fault, re-assert the
+command), which is a behaviour change, not a defect in the code this task
+touched.
