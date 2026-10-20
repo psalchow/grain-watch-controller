@@ -52,7 +52,7 @@ const FIELDS: Array<{ key: keyof Draft; label: string; step: string }> = [
   { key: 'deltaOffK', label: 'Ausschaltschwelle ΔT (K)', step: '0.1' },
   { key: 'maxOutdoorHumidityPct', label: 'Maximale Außenluftfeuchte (%)', step: '1' },
   { key: 'targetTempC', label: 'Zieltemperatur (°C, leer = kein Ziel)', step: '0.1' },
-  { key: 'targetHysteresisK', label: 'Hysterese der Zieltemperatur (K)', step: '0.1' },
+  { key: 'targetHysteresisK', label: 'Toleranz bei Zieltemperatur (K)', step: '0.1' },
   { key: 'minRunMinutes', label: 'Mindestlaufzeit (Minuten)', step: '1' },
   { key: 'minPauseMinutes', label: 'Mindestpause (Minuten)', step: '1' },
 ];

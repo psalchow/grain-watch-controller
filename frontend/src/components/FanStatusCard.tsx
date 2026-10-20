@@ -1,4 +1,4 @@
-import { Fan, AlertTriangle, Wifi, WifiOff, HelpCircle, Loader2 } from 'lucide-react';
+import { Fan, AlertTriangle, Wifi, WifiOff, HelpCircle, Loader2, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { translateDeviceMessage } from '@/lib/messages';
 import type { FanState, FanStatus } from '@/types/fan';
@@ -75,19 +75,48 @@ function ReachabilityBadge({ reachable, stale }: { reachable: boolean | null; st
   );
 }
 
+/**
+ * The fan's state, optionally as the way into its controls.
+ *
+ * With `onClick` the whole card becomes the control — the card carries no
+ * interactive children of its own, so a plain `<button>` around it stays valid
+ * and brings keyboard and screen-reader support for free. `label` names the
+ * destination for anyone who cannot see the chevron; the visible text alone
+ * reads as a status, not as something to press.
+ */
 export function FanStatusCard({
   status,
   connected,
+  onClick,
+  label,
 }: {
   status: FanStatus | null;
   connected: boolean;
+  onClick?: () => void;
+  label?: string;
 }) {
   const state = status?.state ?? 'OFF';
   const isPending = PENDING.includes(state);
   const isOn = state === 'ON';
+  const clickable = onClick !== undefined;
+
+  const Root = clickable ? 'button' : 'div';
 
   return (
-    <div className="rounded-lg border bg-card p-4 text-card-foreground shadow-sm">
+    <Root
+      {...(clickable
+        ? {
+            type: 'button' as const,
+            onClick,
+            'aria-label': label,
+          }
+        : {})}
+      className={cn(
+        'block w-full rounded-lg border bg-card p-4 text-left text-card-foreground shadow-sm',
+        clickable &&
+          'cursor-pointer transition-colors hover:border-primary/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+      )}
+    >
       <div className="flex items-center gap-2">
         <Fan className={cn('h-5 w-5', isOn && 'animate-spin text-green-600')} />
         <span className="font-medium">Lüfter</span>
@@ -95,6 +124,7 @@ export function FanStatusCard({
         <span className="ml-auto text-sm font-semibold">
           {status ? STATE_LABEL[state] : '—'}
         </span>
+        {clickable && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
       </div>
 
       <div className="mt-2 flex flex-wrap gap-2">
@@ -122,6 +152,6 @@ export function FanStatusCard({
           <span className="text-xs text-muted-foreground/60">Verbindung…</span>
         )}
       </div>
-    </div>
+    </Root>
   );
 }

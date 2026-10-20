@@ -48,7 +48,7 @@ describe('FanAutomationPanel', () => {
     expect(screen.getByLabelText(/Ausschaltschwelle/i)).toHaveValue(2);
     expect(screen.getByLabelText(/Maximale Außenluftfeuchte/i)).toHaveValue(80);
     expect(screen.getByLabelText(/^Zieltemperatur \(/i)).toHaveValue(12);
-    expect(screen.getByLabelText(/Hysterese/i)).toHaveValue(1);
+    expect(screen.getByLabelText(/Toleranz bei Zieltemperatur/i)).toHaveValue(1);
     expect(screen.getByLabelText(/Mindestlaufzeit/i)).toHaveValue(30);
     expect(screen.getByLabelText(/Mindestpause/i)).toHaveValue(30);
   });

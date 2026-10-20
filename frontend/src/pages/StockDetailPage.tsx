@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Fan, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FanStatusCard } from '@/components/FanStatusCard';
 import { SensorCard } from '@/components/SensorCard';
@@ -117,15 +117,14 @@ export default function StockDetailPage() {
           <>
             {fanEnabled && (
               <div className="mb-4">
-                <FanStatusCard status={fanSnapshot?.status ?? null} connected={fanConnected} />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2"
+                {/* The card is the way into the controls: a separate button
+                    below it read as unrelated to the state above. */}
+                <FanStatusCard
+                  status={fanSnapshot?.status ?? null}
+                  connected={fanConnected}
                   onClick={() => navigate(`/stocks/${stockId}/fan`)}
-                >
-                  <Fan className="mr-2 h-4 w-4" /> Lüfter steuern
-                </Button>
+                  label="Lüfter steuern"
+                />
               </div>
             )}
             {/* Nothing to show — worded after availability rather than after

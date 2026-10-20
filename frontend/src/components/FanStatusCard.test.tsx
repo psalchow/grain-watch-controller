@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { FanStatusCard } from './FanStatusCard';
 import type { FanStatus } from '../types/fan';
 
@@ -88,5 +88,19 @@ describe('FanStatusCard', () => {
       />,
     );
     expect(screen.queryByText(/vor Ort geschaltet/i)).not.toBeInTheDocument();
+  });
+
+  it('stays inert without an onClick', () => {
+    render(<FanStatusCard status={base} connected={true} />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('becomes a labelled button that calls back when clicked', () => {
+    const onClick = vi.fn();
+    render(
+      <FanStatusCard status={base} connected={true} onClick={onClick} label="Lüfter steuern" />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Lüfter steuern' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });
