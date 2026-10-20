@@ -27,7 +27,6 @@ export function OutdoorSummary({ outdoor, className }: OutdoorSummaryProps) {
     lastMeasurement,
     offline,
     offlineReason,
-    derivedUnavailableReason,
   } = outdoor;
 
   /**
@@ -41,13 +40,6 @@ export function OutdoorSummary({ outdoor, className }: OutdoorSummaryProps) {
       offline === true &&
       (temperature === null) !== (humidity === null));
 
-  /**
-   * The backend refused to combine both inputs because their measurement times
-   * lie too far apart. Taken from the response rather than inferred: a derived
-   * value can be absent for other reasons too.
-   */
-  const skewed = derivedUnavailableReason === 'skew';
-
   return (
     <div
       className={cn(
@@ -60,9 +52,7 @@ export function OutdoorSummary({ outdoor, className }: OutdoorSummaryProps) {
       <span className="font-semibold">{fmt1(temperature)}°C</span>
       <span className="text-muted-foreground">{fmtInt(humidity)}%</span>
       <span className="text-[10px] text-muted-foreground">
-        {skewed
-          ? 'Tp: Messzeiten zu weit auseinander'
-          : `Tp ${fmt1(dewPoint)}°C · ${fmt1(absoluteHumidity)} g/m³`}
+        {`Tp ${fmt1(dewPoint)}°C · ${fmt1(absoluteHumidity)} g/m³`}
       </span>
       <span className="text-[10px] text-muted-foreground/60">
         {/* A missing half gets its own wording: the age belongs to the value

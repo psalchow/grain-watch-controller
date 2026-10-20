@@ -11,7 +11,6 @@ const withData: OutdoorConditions = {
   lastMeasurement: new Date().toISOString(),
   offline: false,
   offlineReason: null,
-  derivedUnavailableReason: null,
 };
 
 const empty: OutdoorConditions = {
@@ -22,7 +21,6 @@ const empty: OutdoorConditions = {
   lastMeasurement: null,
   offline: false,
   offlineReason: null,
-  derivedUnavailableReason: null,
 };
 
 describe('OutdoorSummary', () => {
@@ -75,20 +73,6 @@ describe('OutdoorSummary', () => {
       />,
     );
     expect(screen.getByText(/Wert fehlt/)).toBeInTheDocument();
-  });
-
-  it('explains why the derived values are missing when the measurement times drift apart', () => {
-    render(
-      <OutdoorSummary
-        outdoor={{
-          ...withData,
-          dewPoint: null,
-          absoluteHumidity: null,
-          derivedUnavailableReason: 'skew',
-        }}
-      />,
-    );
-    expect(screen.getByText(/Messzeiten zu weit auseinander/)).toBeInTheDocument();
   });
 
   it('renders placeholders when values are missing', () => {

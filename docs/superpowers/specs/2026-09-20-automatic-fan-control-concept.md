@@ -202,9 +202,10 @@ follows from what rule 2 protects.
 ### Stale data
 
 Rule 1 uses the same staleness window as `GET /latest`
-(`INFLUXDB_OFFLINE_AFTER`) and the same skew guard as `buildOutdoorConditions`
-(`INFLUXDB_OUTDOOR_MAX_SKEW`). Blind means: stop the fan, do not restart, state
-the reason on the card.
+(`INFLUXDB_OFFLINE_AFTER`), applied as `buildOutdoorConditions` applies it: the
+outdoor readings are two series from one sensor, so the age that counts is that
+of the newer one. Blind means: stop the fan, do not restart, state the reason on
+the card.
 
 ## 6. Switching protection (sub-project C)
 

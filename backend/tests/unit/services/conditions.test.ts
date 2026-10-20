@@ -1,4 +1,7 @@
-import { summariseGrain } from '../../../src/services/conditions';
+import {
+  buildOutdoorConditions,
+  summariseGrain,
+} from '../../../src/services/conditions';
 import type { DeviceReading } from '../../../src/services/influx';
 
 const THRESHOLD = new Date('2026-09-30T10:00:00.000Z').getTime();
@@ -18,6 +21,99 @@ function reading(
     ...overrides,
   };
 }
+
+describe('buildOutdoorConditions', () => {
+  // Both values come from one sensor; the sink splits them into two series
+  // because it publishes only what changed. The newest of the two timestamps
+  // therefore says whether the sensor is alive, and an old partner is a value
+  // that did not change rather than a value that went missing.
+  it('derives the dew point from a partner hours older than the fresh reading', () => {
+    const result = buildOutdoorConditions(
+      {
+        temperature: 10,
+        humidity: 80,
+        temperatureTime: '2026-09-30T10:30:00.000Z',
+        humidityTime: '2026-09-30T08:30:00.000Z',
+      },
+      THRESHOLD,
+    );
+
+    expect(result.dewPoint).toBeCloseTo(6.7, 1);
+    expect(result.absoluteHumidity).not.toBeNull();
+    expect(result.offline).toBe(false);
+    expect(result.offlineReason).toBeNull();
+  });
+
+  it('reports the newest of the two timestamps as the last measurement', () => {
+    const result = buildOutdoorConditions(
+      {
+        temperature: 10,
+        humidity: 80,
+        temperatureTime: '2026-09-30T10:30:00.000Z',
+        humidityTime: '2026-09-30T08:30:00.000Z',
+      },
+      THRESHOLD,
+    );
+
+    expect(result.lastMeasurement).toBe('2026-09-30T10:30:00.000Z');
+  });
+
+  it('counts as offline once the newer of the two readings has aged out', () => {
+    const result = buildOutdoorConditions(
+      {
+        temperature: 10,
+        humidity: 80,
+        temperatureTime: '2026-09-30T09:30:00.000Z',
+        humidityTime: '2026-09-30T08:30:00.000Z',
+      },
+      THRESHOLD,
+    );
+
+    expect(result.offline).toBe(true);
+    expect(result.offlineReason).toBe('stale');
+    expect(result.lastMeasurement).toBe('2026-09-30T09:30:00.000Z');
+  });
+
+  it('counts as offline when one of the two measurements is absent entirely', () => {
+    // Outside the look-back window the sink has nothing to pair: with one half
+    // gone there is no evidence the sensor is alive, whatever the other says.
+    const result = buildOutdoorConditions(
+      {
+        temperature: 10,
+        humidity: null,
+        temperatureTime: FRESH,
+        humidityTime: null,
+      },
+      THRESHOLD,
+    );
+
+    expect(result.offline).toBe(true);
+    expect(result.offlineReason).toBe('partner-missing');
+    expect(result.dewPoint).toBeNull();
+  });
+
+  it('reports no derived values and no offline flag for a stock without an outdoor sensor', () => {
+    const result = buildOutdoorConditions(
+      {
+        temperature: null,
+        humidity: null,
+        temperatureTime: null,
+        humidityTime: null,
+      },
+      THRESHOLD,
+    );
+
+    expect(result).toEqual({
+      temperature: null,
+      humidity: null,
+      dewPoint: null,
+      absoluteHumidity: null,
+      lastMeasurement: null,
+      offline: false,
+      offlineReason: null,
+    });
+  });
+});
 
 describe('summariseGrain', () => {
   it('averages the three layers of one fresh device', () => {

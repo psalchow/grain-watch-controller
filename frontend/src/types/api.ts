@@ -138,11 +138,6 @@ export interface OutdoorConditions {
    * 'partner-missing' when one of the two measurements is absent entirely.
    */
   offlineReason?: 'stale' | 'partner-missing' | null;
-  /**
-   * Why the derived values are absent when temperature and humidity are not.
-   * 'skew' means the two measurement times lie too far apart.
-   */
-  derivedUnavailableReason?: 'skew' | null;
 }
 
 export interface LatestReadingsResponse {

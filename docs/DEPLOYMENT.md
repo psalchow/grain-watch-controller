@@ -125,7 +125,6 @@ The full reference — including the outdoor-measurement and fan-timing variable
 | `INFLUXDB_MEASUREMENT` | No | `Temp` | Stock measurement name |
 | `INFLUXDB_LATEST_LOOKBACK` | No | `6h` in production | Look-back window for all latest values; older readings are dropped |
 | `INFLUXDB_OFFLINE_AFTER` | No | `1h` in production | Age at which a reading is shown as offline; must not exceed the look-back window |
-| `INFLUXDB_OUTDOOR_MAX_SKEW` | No | `30m` | Maximum gap between the outdoor temperature and humidity timestamps for the derived values |
 | `DATABASE_PATH` | No | `./data/grainwatch.db` | SQLite file; must sit on a mounted volume |
 | `MQTT_URL` | No | `mqtt://localhost:1883` | Broker URL for fan control |
 | `FAN_RECONCILE_INTERVAL_MS` | No | `60000` | How often revoked fan control is picked up from the database; at least 1000 ms |
@@ -621,6 +620,13 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 > the freshly refreshed one, so it shows the login screen once, until the
 > service worker swaps in the new bundle — the user is not locked out, logging
 > in works straight away.
+
+> **`INFLUXDB_OUTDOOR_MAX_SKEW` no longer exists.** Outdoor temperature and
+> humidity come from one sensor and are published separately, each only when it
+> changes, so their timestamps differ by design; the backend now treats the
+> newer of the two as the age of the pair and derives the dew point regardless
+> of the gap. A leftover line in `.env` is ignored — the container still starts
+> — but it has no effect and can be deleted.
 
 > **Breaking change — versions after the look-back rework:** `INFLUXDB_OUTDOOR_LOOKBACK`
 > no longer exists and the backend **refuses to start** while it is still set.

@@ -46,15 +46,6 @@ interface InfluxDBConfig {
    * reading is first flagged offline, then drops out of the look-back window.
    */
   offlineAfter: string;
-
-  /**
-   * How far the outdoor temperature and humidity timestamps may lie apart and
-   * still be combined into dew point and absolute humidity, as an InfluxQL
-   * duration. Both are published on change and at least every 15 minutes, so
-   * the default keeps twice that as headroom: a threshold sitting on the
-   * publish period would blank the derived values on ordinary jitter.
-   */
-  outdoorMaxSkew: string;
 }
 
 /**
@@ -360,9 +351,6 @@ function validateConfig(
     );
   }
 
-  // Validate the outdoor pairing tolerance
-  durationMs('INFLUXDB_OUTDOOR_MAX_SKEW', cfg.influxdb.outdoorMaxSkew, '30m');
-
   // Validate JWT expiry format (basic check)
   const expiryPattern = /^\d+[smhdw]$/;
   if (!expiryPattern.test(cfg.jwt.expiresIn)) {
@@ -440,7 +428,6 @@ export const config: Config = {
       'INFLUXDB_OFFLINE_AFTER',
       clampDuration(isProduction ? '1h' : '26w', latestLookback),
     ),
-    outdoorMaxSkew: getEnvVar('INFLUXDB_OUTDOOR_MAX_SKEW', '30m'),
   },
   database: {
     path: getEnvVar('DATABASE_PATH', './data/grainwatch.db'),

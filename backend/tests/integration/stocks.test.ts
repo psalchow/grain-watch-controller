@@ -60,7 +60,6 @@ jest.mock('../../src/config', () => ({
       outdoorHumidityMeasurement: 'outdoor-humidity',
       latestLookback: '1h',
       offlineAfter: '15m',
-      outdoorMaxSkew: '15m',
     },
   },
 }));
@@ -364,8 +363,8 @@ describe('Stock Endpoints', () => {
       expect(response.body.outdoor).toMatchObject({
         temperature: 12.4,
         humidity: 78,
-        // The older of the two timestamps, matching the offline decision
-        lastMeasurement: '2026-01-16T09:00:00.000Z',
+        // The newer of the two timestamps: the last sign of life from the sensor
+        lastMeasurement: '2026-01-16T09:00:30.000Z',
       });
       expect(typeof response.body.outdoor.dewPoint).toBe('number');
       expect(typeof response.body.outdoor.absoluteHumidity).toBe('number');
@@ -391,7 +390,10 @@ describe('Stock Endpoints', () => {
       expect(response.body.outdoor.temperature).toBe(12.4);
     });
 
-    it('flags outdoor conditions as offline when only one of the two values is stale', async () => {
+    it('keeps outdoor conditions current while only one of the two values is fresh', async () => {
+      // One sensor, two series: the sink publishes only what changed, so an
+      // unchanged humidity ages while the temperature keeps arriving. The fresh
+      // half is the proof that the sensor is alive.
       mockGetOutdoorReading.mockResolvedValue({
         temperature: 12.4,
         humidity: 78,
@@ -404,7 +406,9 @@ describe('Stock Endpoints', () => {
         .set('Authorization', `Bearer ${viewerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.outdoor.offline).toBe(true);
+      expect(response.body.outdoor.offline).toBe(false);
+      expect(response.body.outdoor.offlineReason).toBeNull();
+      expect(typeof response.body.outdoor.dewPoint).toBe('number');
     });
 
     it('flags outdoor conditions as offline when one of the two readings is missing', async () => {
@@ -427,27 +431,7 @@ describe('Stock Endpoints', () => {
       expect(response.body.outdoor.lastMeasurement).not.toBeNull();
     });
 
-    it('suppresses derived outdoor values when the two measurements drift apart', async () => {
-      mockGetOutdoorReading.mockResolvedValue({
-        temperature: 12.4,
-        humidity: 78,
-        temperatureTime: new Date(Date.now() - 60 * 1000).toISOString(),
-        humidityTime: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-      });
-
-      const response = await request(app)
-        .get('/api/v1/stocks/grain-watch-1/latest')
-        .set('Authorization', `Bearer ${viewerToken}`);
-
-      expect(response.status).toBe(200);
-      expect(response.body.outdoor.temperature).toBe(12.4);
-      expect(response.body.outdoor.humidity).toBe(78);
-      expect(response.body.outdoor.dewPoint).toBeNull();
-      expect(response.body.outdoor.absoluteHumidity).toBeNull();
-      expect(response.body.outdoor.derivedUnavailableReason).toBe('skew');
-    });
-
-    it('reports no skew reason when a derived value is simply not computable', async () => {
+    it('reports no dew point when a derived value is simply not computable', async () => {
       const now = new Date().toISOString();
       mockGetOutdoorReading.mockResolvedValue({
         temperature: 12.4,
@@ -462,7 +446,6 @@ describe('Stock Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.outdoor.dewPoint).toBeNull();
-      expect(response.body.outdoor.derivedUnavailableReason).toBeNull();
     });
 
     it('returns null outdoor values when no outdoor data exists', async () => {
@@ -481,7 +464,6 @@ describe('Stock Endpoints', () => {
       expect(response.body.outdoor).toEqual({
         offline: false,
         offlineReason: null,
-        derivedUnavailableReason: null,
         temperature: null,
         humidity: null,
         dewPoint: null,
@@ -490,14 +472,14 @@ describe('Stock Endpoints', () => {
       });
     });
 
-    it('reports the older of the two outdoor timestamps so age and flag agree', async () => {
+    it('reports the newer of the two outdoor timestamps so age and flag agree', async () => {
       const fresh = new Date(Date.now() - 60 * 1000).toISOString();
-      const stale = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+      const old = new Date(Date.now() - 45 * 60 * 1000).toISOString();
       mockGetOutdoorReading.mockResolvedValue({
         temperature: 12.4,
         humidity: 78,
         temperatureTime: fresh,
-        humidityTime: stale,
+        humidityTime: old,
       });
 
       const response = await request(app)
@@ -505,8 +487,8 @@ describe('Stock Endpoints', () => {
         .set('Authorization', `Bearer ${viewerToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.outdoor.lastMeasurement).toBe(stale);
-      expect(response.body.outdoor.offline).toBe(true);
+      expect(response.body.outdoor.lastMeasurement).toBe(fresh);
+      expect(response.body.outdoor.offline).toBe(false);
     });
 
     it('should return 403 for unauthorised stock', async () => {

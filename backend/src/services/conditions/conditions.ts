@@ -17,12 +17,6 @@ export interface OutdoorConditions {
    * `null` whenever `offline` is false — the client must not re-derive this.
    */
   offlineReason: 'stale' | 'partner-missing' | null;
-  /**
-   * Why `dewPoint` and `absoluteHumidity` are absent, when the inputs alone do
-   * not explain it. `'skew'` means the two measurement times lie further apart
-   * than `INFLUXDB_OUTDOOR_MAX_SKEW`; `null` means there is nothing to explain.
-   */
-  derivedUnavailableReason: 'skew' | null;
 }
 
 const round1 = (value: number): number => Math.round(value * 10) / 10;
@@ -55,53 +49,40 @@ export function isOffline(timestamp: string | null, threshold: number): boolean 
 }
 
 /**
- * How far outdoor temperature and humidity may drift apart and still be
- * combined, in milliseconds.
+ * Builds the outdoor conditions from the two series the sink writes.
  *
- * Configurable because the two measurements are published independently (on
- * change, plus a time-based refresh), so their cadences can diverge. Pairing
- * readings hours apart yields a plausible but wrong dew point.
+ * Both figures come from one sensor; the sink splits them because it publishes
+ * only the value that changed. An old humidity reading therefore means the
+ * humidity has not moved, not that the measurement is missing — so the two are
+ * combined whatever their ages, and the freshness of the pair follows the
+ * *newer* timestamp, which is what shows the sensor is still reporting.
+ *
+ * The bound on how old a partner may get is `INFLUXDB_LATEST_LOOKBACK`: outside
+ * that window the query finds nothing and the value is reported as missing.
  */
-export const outdoorMaxSkewMs = (): number =>
-  parseDurationMs(config.influxdb.outdoorMaxSkew) ?? Number.POSITIVE_INFINITY;
-
 export function buildOutdoorConditions(
   reading: OutdoorReading,
   offlineThreshold: number,
 ): OutdoorConditions {
   const { temperature, humidity } = reading;
 
-  // Dew point and absolute humidity only mean something when both inputs
-  // describe roughly the same instant; the two measurements are queried
-  // separately and can drift apart.
-  const skewMs =
-    reading.temperatureTime !== null && reading.humidityTime !== null
-      ? Math.abs(
-          new Date(reading.temperatureTime).getTime() -
-            new Date(reading.humidityTime).getTime(),
-        )
-      : Number.POSITIVE_INFINITY;
-
-  const inputsPresent = temperature !== null && humidity !== null;
-  const withinSkew = skewMs <= outdoorMaxSkewMs();
-  const canDerive = inputsPresent && withinSkew;
+  const canDerive = temperature !== null && humidity !== null;
 
   const times = [reading.temperatureTime, reading.humidityTime].filter(
     (t): t is string => t !== null,
   );
-  // A partner that dropped out of the look-back window entirely is worse than
-  // one that is merely old, so it flags too. Neither present means the stock
-  // has no outdoor sensor at all — nothing to mark as stale there.
+  // One half gone from the look-back window entirely: there is no evidence the
+  // sensor is alive, so the surviving half must not pass as current. Neither
+  // present means the stock has no outdoor sensor at all — nothing to mark as
+  // stale there.
   const onlyOnePresent = times.length === 1;
 
-  // Temperature and humidity are queried separately, so their ages differ.
-  // The reported age follows the older of the two, so a fresh value cannot mask
-  // a stale partner. With one partner gone entirely the surviving timestamp is
-  // reported — an age is more useful than none, and the null value itself tells
-  // the reader which half is missing.
+  // The newer of the two timestamps: it is the last time the sensor was heard
+  // from, and that — not the age of the value that happened to stay constant —
+  // is what decides whether the conditions are current.
   const lastMeasurement = times.reduce<string | null>(
-    (oldest, t) =>
-      oldest === null || new Date(t) < new Date(oldest) ? t : oldest,
+    (newest, t) =>
+      newest === null || new Date(t) > new Date(newest) ? t : newest,
     null,
   );
 
@@ -117,7 +98,6 @@ export function buildOutdoorConditions(
     lastMeasurement,
     offline: onlyOnePresent || stale,
     offlineReason: onlyOnePresent ? 'partner-missing' : stale ? 'stale' : null,
-    derivedUnavailableReason: inputsPresent && !withinSkew ? 'skew' : null,
   };
 }
 

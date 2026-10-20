@@ -187,15 +187,6 @@ describe('Configuration', () => {
       );
     });
 
-    it('rejects a malformed outdoor skew tolerance', async () => {
-      process.env['NODE_ENV'] = 'development';
-      process.env['INFLUXDB_OUTDOOR_MAX_SKEW'] = 'quarter';
-
-      await expect(import('../../src/config/index')).rejects.toThrow(
-        /INFLUXDB_OUTDOOR_MAX_SKEW must be a valid InfluxQL duration/
-      );
-    });
-
     it('fails fast when the pre-rename variable is still set', async () => {
       process.env['NODE_ENV'] = 'development';
       process.env['INFLUXDB_OUTDOOR_LOOKBACK'] = '1h';

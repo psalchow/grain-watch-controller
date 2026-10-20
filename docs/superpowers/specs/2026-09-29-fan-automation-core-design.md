@@ -23,7 +23,7 @@ who does not can skip the section.
 | §7: a manual command *suspends* automation; a `suspended` flag in `fan_state` | No suspend state. Automation is simply switched off and has to be switched back on | One flag instead of two. The user re-enables in both cases, so the second state carried no decision |
 | §8: `automation_suspended` / `automation_resumed` | `automation_disabled` with a cause; re-enabling is an ordinary `automation_configured` | Follows from the line above |
 | §5: rules 1 to **4** switch off without waiting for the minimum run time | Rules 1 to **3** | Reaching the target temperature is an ordinary end, not a safety case. A run that reaches its target two minutes before the minimum run time may finish those two minutes |
-| §5 rule 1: "readings missing or stale" | …**or the dew point underivable** | `buildOutdoorConditions` also reports `dewPoint: null` when both readings are present and fresh but more than `INFLUXDB_OUTDOOR_MAX_SKEW` apart. Rule 2 has nothing to compare against in that case, so it is rule 1's business, not rule 2's (§4) |
+| §5 rule 1: "readings missing or stale" | …**or the dew point underivable** | `buildOutdoorConditions` reports `dewPoint: null` whenever it cannot derive one — a missing input, or a figure that is not finite. Rule 2 has nothing to compare against in that case, so it is rule 1's business, not rule 2's (§4) |
 | §5: `DEWPOINT_MARGIN_K` is a constant, and no target hysteresis is named | `DEWPOINT_MARGIN_K = 2` stays a constant; the target hysteresis is a configurable parameter, default 1 K | The dew-point margin is a physical bound. The target hysteresis is a preference about switching frequency |
 | §7: the override is shown on the overview card | The *automation state* is shown on the overview card | Same purpose, adapted to the missing suspend state. The need grew: automation now switches itself off on four occasions, none of which requires anybody to have the fan page open |
 
@@ -203,12 +203,20 @@ null.
 four dead probes and one live one is not blind, it is sparsely measured, and the
 remaining reading is still the best available evidence.
 
-The outdoor side uses the same window plus the skew guard
-(`INFLUXDB_OUTDOOR_MAX_SKEW`), both already applied by `buildOutdoorConditions`.
-Note that its three outcomes differ: `offline` covers a stale or half-missing
-station, while `derivedUnavailableReason: 'skew'` marks two fresh readings too
-far apart to be paired. Rule 1 has to catch both, which is why it tests the dew
-point rather than only its inputs.
+The outdoor side uses the same window, applied by `buildOutdoorConditions`.
+Temperature and humidity come from one sensor and are published as two series,
+each only when its value changes, so their ages differ by design: the age of the
+pair is that of the *newer* timestamp, and the two are combined whatever the gap
+between them. `offline` therefore covers a station that has gone quiet
+altogether, or one whose halves cannot both be found in the look-back window.
+Rule 1 still tests the dew point rather than only its inputs — it can be `null`
+for a reason the inputs do not show, such as 0 % relative humidity.
+
+*(Amended 2026-10-21: the original design paired the two readings only within
+`INFLUXDB_OUTDOOR_MAX_SKEW` and aged the pair by its older half. The humidity
+series publishes so rarely that this put the automation into `no_data` during
+ordinary quiet periods — measured gaps of up to two hours with the sensor
+plainly alive. The variable is gone.)*
 
 ### 4.2 Minimum times
 
@@ -250,7 +258,7 @@ set would make a grown class grow further.
 
 ### 5.1 Extracting the reading preparation
 
-`isOffline`, `offlineAfterMs`, `outdoorMaxSkewMs` and `buildOutdoorConditions`
+`isOffline`, `offlineAfterMs` and `buildOutdoorConditions`
 are module functions inside `stocks.controller.ts` today. They move into a
 module of their own, which both the controller and the automation import. A
 function deriving the grain mean, the grain minimum and the count of valid

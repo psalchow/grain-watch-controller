@@ -111,9 +111,8 @@ assets and an SPA fallback are served from the same origin. Requests under
 | `INFLUXDB_OUTDOOR_HUMIDITY_MEASUREMENT` | `outdoor-humidity` | Outdoor humidity measurement |
 | `INFLUXDB_LATEST_LOOKBACK` | `6h` in production, `26w` otherwise | Look-back window for all latest values (sensor readings and outdoor conditions); older readings are dropped |
 | `INFLUXDB_OFFLINE_AFTER` | `1h` in production, `26w` otherwise, clamped to `INFLUXDB_LATEST_LOOKBACK` | Age at which a reading is flagged `offline`; an explicitly set value must not exceed the look-back window |
-| `INFLUXDB_OUTDOOR_MAX_SKEW` | `30m` | How far the outdoor temperature and humidity timestamps may lie apart and still be combined into dew point and absolute humidity |
 
-All three durations must be greater than zero; `0h` and friends are rejected at
+Both durations must be greater than zero; `0h` and friends are rejected at
 startup rather than silently emptying every query.
 
 `INFLUXDB_OUTDOOR_LOOKBACK` was replaced by `INFLUXDB_LATEST_LOOKBACK`; the
@@ -137,21 +136,22 @@ Stock probes measure every 15 minutes and publish every 5 minutes, so the
 production defaults leave room for several missed transmissions before a card
 greys out, and many more before it disappears.
 
-Outdoor temperature and humidity are queried separately and age independently:
-both `lastMeasurement` and `offline` follow the older of the two, so the
-reported age matches the flag. One value present and the other missing also
-counts as offline; `lastMeasurement` then reports the surviving value's age and
-the missing half shows as `null`. `offlineReason` names the cause
-(`'stale'` or `'partner-missing'`) so clients do not re-derive the rule. Neither present does not count as offline (the
-stock simply has no outdoor sensor). When the two timestamps lie further apart than
-`INFLUXDB_OUTDOOR_MAX_SKEW`, `dewPoint` and `absoluteHumidity` are reported as
-`null`, because a figure derived from two different instants would be
-misleading; `derivedUnavailableReason` is then `'skew'` and the PWA says so
-instead of showing bare dashes. A derived value that is simply not computable
-(0 % relative humidity drives the dew point to negative infinity) is reported as
-`null` with no reason. The default
-keeps twice the guaranteed publish interval as headroom so ordinary jitter does
-not blank the values.
+Outdoor temperature and humidity come from one sensor, but the sink writes them
+as two series and publishes only the value that changed. Their ages therefore
+differ by design: a humidity reading hours old means the humidity has not moved,
+not that the sensor has stopped. Both `lastMeasurement` and `offline` follow the
+**newer** of the two timestamps — the last sign of life from the sensor — and
+`dewPoint` and `absoluteHumidity` are derived whenever both values are present,
+whatever their ages. How old the older half may get is bounded by
+`INFLUXDB_LATEST_LOOKBACK`: beyond that window the query returns nothing for it.
+
+One value present and the other missing counts as offline: with one half gone
+there is no evidence the sensor is alive. `lastMeasurement` then reports the
+surviving value's age and the missing half shows as `null`. `offlineReason`
+names the cause (`'stale'` or `'partner-missing'`) so clients do not re-derive
+the rule. Neither present does not count as offline (the stock simply has no
+outdoor sensor). A derived value that is simply not computable (0 % relative
+humidity drives the dew point to negative infinity) is reported as `null`.
 
 The two response shapes time their `offline` flag differently:
 
