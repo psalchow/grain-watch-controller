@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Info, LogOut, Menu, UserCog, Users } from 'lucide-react';
+import { Info, LogOut, Menu, UserCog, Users, Warehouse } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { WheatMark } from '@/brand/WheatMark';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,7 +35,7 @@ export function Header() {
           <span className="font-semibold text-lg">Grainwatch</span>
         </Link>
 
-        {/* Wide screens: everything inline. The five items plus their labels
+        {/* Wide screens: everything inline. The items plus their labels
             overflow a phone in portrait, so below `sm` they move into a menu. */}
         <div className="hidden flex-1 items-center justify-end gap-4 sm:flex">
           {user && (
@@ -60,6 +60,15 @@ export function Header() {
             >
               <Users className="h-4 w-4 mr-2" />
               Users
+            </Link>
+          )}
+          {isAdmin && (
+            <Link
+              to="/admin/stocks"
+              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Warehouse className="h-4 w-4 mr-2" />
+              Hallen
             </Link>
           )}
           <Button
@@ -109,6 +118,13 @@ export function Header() {
               icon={<Users className="h-5 w-5" />}
               label="Users"
               onClick={() => runFromMenu(() => navigate('/admin/users'))}
+            />
+          )}
+          {isAdmin && (
+            <MenuItem
+              icon={<Warehouse className="h-5 w-5" />}
+              label="Hallen"
+              onClick={() => runFromMenu(() => navigate('/admin/stocks'))}
             />
           )}
           <MenuItem

@@ -6,6 +6,7 @@ import StockDetailPage from './pages/StockDetailPage';
 import FanControlPage from './pages/FanControlPage';
 import AccountPage from './pages/AccountPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminStocksPage from './pages/AdminStocksPage';
 import { shouldForcePasswordChange, isAdmin } from './lib/access';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -119,6 +120,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <AdminUsersPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/admin/stocks"
+        element={
+          <AdminRoute>
+            <AdminStocksPage />
           </AdminRoute>
         }
       />
