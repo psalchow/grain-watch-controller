@@ -57,6 +57,13 @@
       "when": 1793089041363,
       "tag": "0007_outdoor_device",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793129523024,
+      "tag": "0008_stock_admin",
+      "breakpoints": true
     }
   ]
 }

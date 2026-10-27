@@ -364,7 +364,12 @@ export class AutomationService {
   private async read(stock: Stock): Promise<AutomationReadings | null> {
     try {
       const [grain, outdoor] = await Promise.all([
-        this.deps.readings.getLatestReadings(stock.deviceGroup),
+        // No device group, no grain readings: rule 1 then decides on missing
+        // data and switches the fan off, the same as for thermometers that fell
+        // silent. Nothing to query, so nothing is queried.
+        stock.deviceGroup
+          ? this.deps.readings.getLatestReadings(stock.deviceGroup)
+          : Promise.resolve([]),
         // No outdoor device, no outdoor conditions: rule 1 then decides on
         // missing data and switches the fan off, the same as for a sensor that
         // fell silent. Nothing to query, so nothing is queried.

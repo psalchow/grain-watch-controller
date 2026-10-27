@@ -79,3 +79,47 @@ describe('0007_outdoor_device', () => {
     expect(row.outdoor_device).toBe('corn-watch-1');
   });
 });
+
+describe('0008_stock_admin', () => {
+  let sqlite: SqliteHandle;
+
+  afterEach(() => sqlite.close());
+
+  it('drops device_prefix, makes device_group nullable and keeps existing values', () => {
+    const created = createDb({ path: ':memory:' });
+    sqlite = created.sqlite;
+    runMigrations(created.db, migrationsUpTo('0007_outdoor_device'));
+
+    sqlite
+      .prepare(
+        `INSERT INTO stocks (
+           id, name, device_group, device_prefix, has_humidity,
+           has_grain_sensors, active, created_at, fan_control_enabled,
+           fan_switch_id, tenant_id
+         ) VALUES (?, ?, ?, ?, 1, 1, 1, ?, 1, 0, 'tnt_default')`,
+      )
+      .run(
+        'grain-watch-1',
+        'Halle 8',
+        'corn-watch-1',
+        '1',
+        '2026-06-02T00:00:00.000Z',
+      );
+
+    runMigrations(created.db);
+
+    const columns = sqlite.prepare('PRAGMA table_info(stocks)').all() as Array<{
+      name: string;
+      notnull: number;
+    }>;
+    expect(columns.find((c) => c.name === 'device_prefix')).toBeUndefined();
+    const deviceGroup = columns.find((c) => c.name === 'device_group');
+    expect(deviceGroup).toBeDefined();
+    expect(deviceGroup?.notnull).toBe(0);
+
+    const row = sqlite
+      .prepare('SELECT device_group FROM stocks WHERE id = ?')
+      .get('grain-watch-1') as { device_group: string | null };
+    expect(row.device_group).toBe('corn-watch-1');
+  });
+});

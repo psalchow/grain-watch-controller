@@ -80,7 +80,6 @@ function stock(overrides: Partial<Stock> = {}): Stock {
     name: 'Halle 1',
     deviceGroup: DEVICE_GROUP,
     outdoorDevice: OUTDOOR_DEVICE,
-    devicePrefix: '1.',
     hasHumidity: true,
     hasGrainSensors: true,
     active: true,

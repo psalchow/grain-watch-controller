@@ -29,7 +29,7 @@ async function setup() {
   const db = createTestDb();
   await new StockRepository(db.db).upsertMany([{
     id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
-    devicePrefix: '1', hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
+    hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
     fanControlEnabled: true, fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', fanSwitchId: 0,
     tenantId: DEFAULT_TENANT_ID,
   }]);
@@ -294,7 +294,7 @@ describe('FanControlManager', () => {
   });
 
   const base: Stock = {
-    id: 'x', name: 'X', deviceGroup: 'g', devicePrefix: '1',
+    id: 'x', name: 'X', deviceGroup: 'g',
     hasHumidity: false,
     hasGrainSensors: true, active: true, createdAt: 'x', fanControlEnabled: false, fanSwitchId: 0,
     tenantId: DEFAULT_TENANT_ID,

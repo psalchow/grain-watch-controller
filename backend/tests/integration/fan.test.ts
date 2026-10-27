@@ -53,7 +53,6 @@ beforeEach(async () => {
       id: 'fan-only',
       name: 'Halle ohne Thermometer',
       deviceGroup: 'corn-watch-9',
-      devicePrefix: '9',
       hasHumidity: false,
       hasGrainSensors: false,
       active: true,

@@ -82,7 +82,7 @@ export class StocksController {
       // Stocks without grain thermometers only report outdoor conditions;
       // stocks without an outdoor device report no outdoor conditions.
       const [readings, outdoorReading] = await Promise.all([
-        metadata.hasGrainSensors
+        metadata.hasGrainSensors && metadata.deviceGroup
           ? this.influxService.getLatestReadings(metadata.deviceGroup)
           : Promise.resolve([]),
         metadata.outdoorDevice
@@ -147,7 +147,7 @@ export class StocksController {
       const range = getRange(resolution, new Date());
 
       // Stocks without grain thermometers have no history to plot.
-      if (!metadata.hasGrainSensors) {
+      if (!metadata.hasGrainSensors || !metadata.deviceGroup) {
         res.status(200).json({
           stockId,
           stockName: metadata.name,

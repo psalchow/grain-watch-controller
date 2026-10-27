@@ -26,9 +26,8 @@ export class StockRepository {
           id: s.id,
           name: s.name,
           description: s.description ?? null,
-          deviceGroup: s.deviceGroup,
+          deviceGroup: s.deviceGroup ?? null,
           outdoorDevice: s.outdoorDevice ?? null,
-          devicePrefix: s.devicePrefix,
           hasHumidity: s.hasHumidity,
           hasGrainSensors: s.hasGrainSensors,
           active: s.active,
@@ -47,8 +46,6 @@ export class StockRepository {
     const stock: Stock = {
       id: row.id,
       name: row.name,
-      deviceGroup: row.deviceGroup,
-      devicePrefix: row.devicePrefix,
       hasHumidity: row.hasHumidity,
       hasGrainSensors: row.hasGrainSensors,
       active: row.active,
@@ -57,6 +54,7 @@ export class StockRepository {
       fanSwitchId: row.fanSwitchId,
       tenantId: row.tenantId,
     };
+    if (row.deviceGroup !== null) stock.deviceGroup = row.deviceGroup;
     if (row.description !== null) {
       stock.description = row.description;
     }

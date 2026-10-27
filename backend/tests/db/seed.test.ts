@@ -28,7 +28,6 @@ describe('seedStocks', () => {
       description: 'Lagerhalle 8',
       deviceGroup: 'corn-watch-1',
       outdoorDevice: 'corn-watch-1',
-      devicePrefix: '1',
       hasHumidity: true,
       active: true,
       tenantId: 'tnt_default',
@@ -40,7 +39,6 @@ describe('seedStocks', () => {
       description: 'Lagerhalle 7 - inaktiv',
       deviceGroup: 'corn-watch-2',
       outdoorDevice: 'corn-watch-2',
-      devicePrefix: '2',
       hasHumidity: false,
       active: false,
     });
