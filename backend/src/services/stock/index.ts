@@ -1,1 +1,2 @@
-export { StockService } from './stock.service';
+export { StockService, StockServiceError } from './stock.service';
+export type { CreateStockInput } from './stock.service';
