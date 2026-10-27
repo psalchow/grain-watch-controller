@@ -395,6 +395,41 @@ describe('FanControlManager', () => {
       consoleError.mockRestore();
       manager.shutdown();
     });
+
+    it('logs a wiring whose build fails and still builds the others on the same tick', async () => {
+      const { db, f } = await setup();
+      const stateRepo = new FanStateRepository(db.db);
+      const realGet = stateRepo.get.bind(stateRepo);
+      // A locked database or a full disk, reached through `recover()`.
+      jest.spyOn(stateRepo, 'get').mockImplementation((stockId) => {
+        if (stockId === 'broken') throw new Error('database is locked');
+        return realGet(stockId);
+      });
+      const manager = new FanControlManager({
+        stocks: [],
+        mqtt: f.mqtt,
+        stateRepo,
+        eventsRepo: new FanEventsRepository(db.db),
+        timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
+        fanWiring: async () => [
+          { stockId: 'broken', topicPrefix: '/broken', switchId: 0 },
+          { stockId: 'healthy', topicPrefix: '/healthy', switchId: 0 },
+        ],
+      });
+      manager.init();
+      const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+      await expect(manager.reconcile()).resolves.toBeUndefined();
+
+      expect(consoleError).toHaveBeenCalledWith(
+        "Fan control: building broken's wiring failed",
+        expect.any(Error),
+      );
+      expect(manager.getController('healthy')).not.toBeNull();
+      expect(f.subscribed).toContain('/healthy/online');
+      consoleError.mockRestore();
+      manager.shutdown();
+    });
   });
 
   describe('automation wiring', () => {

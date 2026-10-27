@@ -16,6 +16,19 @@ export class StockServiceError extends Error {
 /** What a caller supplies to create a stock. Id, creation time and tenant are the service's. */
 export type CreateStockInput = Omit<Stock, 'id' | 'createdAt' | 'tenantId'>;
 
+/**
+ * Fire-and-forget: the HTTP answer does not wait for the fan wiring. A failure
+ * is logged here because nothing awaits the promise and the process installs
+ * no `unhandledRejection` handler.
+ */
+function reconcileFanControl(): void {
+  void getFanManager()
+    ?.reconcile()
+    .catch((error: unknown) => {
+      console.error('Fan control: reconciliation after a stock change failed', error);
+    });
+}
+
 const isBlank = (value: string | undefined): boolean => value === undefined || value.trim() === '';
 
 export class StockService {
@@ -48,7 +61,7 @@ export class StockService {
       }
       throw error;
     }
-    void getFanManager()?.reconcile();
+    reconcileFanControl();
     return stock;
   }
 
@@ -62,7 +75,7 @@ export class StockService {
     if (!(await this.repo.update(id, patch))) {
       throw new StockServiceError(`Stock ${id} not found`, 'not_found');
     }
-    void getFanManager()?.reconcile();
+    reconcileFanControl();
     return merged;
   }
 

@@ -575,9 +575,17 @@ export class AdminController {
   private respondToStockError(error: unknown, res: Response): boolean {
     if (!(error instanceof StockServiceError)) return false;
 
-    const status = { invalid: 400, not_found: 404, conflict: 409 }[error.code];
-    res.status(status).json({
-      error: { code: error.code, message: error.message, details: error.message },
+    const answer = {
+      invalid: { status: 400, code: 'INVALID_INPUT', details: 'The provided stock data is invalid' },
+      not_found: { status: 404, code: 'STOCK_NOT_FOUND', details: 'The specified stock does not exist' },
+      conflict: {
+        status: 409,
+        code: 'STOCK_CONFLICT',
+        details: 'The request conflicts with the current state of the stock',
+      },
+    }[error.code];
+    res.status(answer.status).json({
+      error: { code: answer.code, message: error.message, details: answer.details },
     });
     return true;
   }

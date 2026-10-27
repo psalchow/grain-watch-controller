@@ -265,7 +265,11 @@ export class FanControlManager {
    * subscriptions may only go out once a message listener is registered.
    */
   private buildWiring(config: FanWiringConfig): void {
-    this.activateWiring(this.createWiring(config));
+    try {
+      this.activateWiring(this.createWiring(config));
+    } catch (error) {
+      console.error(`Fan control: building ${config.stockId}'s wiring failed`, error);
+    }
   }
 
   /** The map entry and its controller. No MQTT traffic. */

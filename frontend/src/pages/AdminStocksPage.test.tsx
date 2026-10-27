@@ -136,6 +136,14 @@ describe('AdminStocksPage', () => {
     await waitFor(() => expect(adminApi.listStocks).toHaveBeenCalledTimes(2));
   });
 
+  it('invites the administrator to create the first stock on a fresh installation', async () => {
+    vi.mocked(adminApi.listStocks).mockResolvedValue([]);
+    renderPage();
+
+    expect(await screen.findByText(/No stocks yet/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New stock' })).toBeInTheDocument();
+  });
+
   it('shows the error band when the list cannot be loaded', async () => {
     vi.mocked(adminApi.listStocks).mockRejectedValue(new Error('boom'));
     renderPage();

@@ -112,6 +112,16 @@ export default function AdminStocksPage() {
                 </tr>
               </thead>
               <tbody>
+                {stocks.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="p-6 text-center text-muted-foreground"
+                    >
+                      No stocks yet. Use “New stock” to create the first one.
+                    </td>
+                  </tr>
+                )}
                 {stocks.map((stock) => (
                   <tr key={stock.id} className="border-b last:border-0">
                     <td className="p-3">

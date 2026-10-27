@@ -79,7 +79,8 @@ delete or deactivation.
 - Deleting an active stock answers 409; deactivate it first. Unknown id: 404.
 - Schema violations answer the validation envelope (`error: 'VALIDATION_ERROR'`);
   service-level refusals answer `{ error: { code, message, details } }` with
-  `code` one of `invalid`, `not_found`, `conflict`.
+  `code` one of `INVALID_INPUT` (400), `STOCK_NOT_FOUND` (404), `STOCK_CONFLICT`
+  (409); `details` is a fixed sentence, `message` carries the specific reason.
 
 ### Operational
 

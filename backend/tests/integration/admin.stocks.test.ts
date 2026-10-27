@@ -218,7 +218,8 @@ describe('Admin Stock Endpoints', () => {
       const response = await asAdmin(request(app).delete('/api/v1/admin/stocks/stk_001'));
 
       expect(response.status).toBe(409);
-      expect(response.body.error).toHaveProperty('message');
+      expect(response.body.error).toMatchObject({ code: 'STOCK_CONFLICT' });
+      expect(response.body.error.details).not.toBe(response.body.error.message);
     });
 
     it('answers 404 when patching an unknown id', async () => {
@@ -227,6 +228,7 @@ describe('Admin Stock Endpoints', () => {
       });
 
       expect(response.status).toBe(404);
+      expect(response.body.error).toMatchObject({ code: 'STOCK_NOT_FOUND' });
     });
 
     it('answers 404 when deleting an unknown id', async () => {
@@ -239,7 +241,8 @@ describe('Admin Stock Endpoints', () => {
       const response = await createStock({ fanControlEnabled: true });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toHaveProperty('message');
+      expect(response.body.error).toMatchObject({ code: 'INVALID_INPUT' });
+      expect(response.body.error.details).not.toBe(response.body.error.message);
     });
 
     it('answers 400 for grain sensors without a device group', async () => {
