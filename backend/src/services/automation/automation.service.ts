@@ -7,7 +7,12 @@ import type { Stock } from '../../db/types';
 import type { DeviceReading, OutdoorReading } from '../influx';
 import type { FanController } from '../fan';
 import { automationAvailable } from '../fan';
-import { offlineAfterMs, buildOutdoorConditions, summariseGrain } from '../conditions';
+import {
+  offlineAfterMs,
+  buildOutdoorConditions,
+  summariseGrain,
+  NO_OUTDOOR_READING,
+} from '../conditions';
 import { evaluate } from './evaluate';
 import type { AutomationReadings, AutomationReason, FanTimingState } from './types';
 
@@ -360,7 +365,12 @@ export class AutomationService {
     try {
       const [grain, outdoor] = await Promise.all([
         this.deps.readings.getLatestReadings(stock.deviceGroup),
-        this.deps.readings.getOutdoorReading(stock.deviceGroup),
+        // No outdoor device, no outdoor conditions: rule 1 then decides on
+        // missing data and switches the fan off, the same as for a sensor that
+        // fell silent. Nothing to query, so nothing is queried.
+        stock.outdoorDevice
+          ? this.deps.readings.getOutdoorReading(stock.outdoorDevice)
+          : Promise.resolve(NO_OUTDOOR_READING),
       ]);
       this.readFailures.delete(stock.id);
 

@@ -27,6 +27,7 @@ export class StockRepository {
           name: s.name,
           description: s.description ?? null,
           deviceGroup: s.deviceGroup,
+          outdoorDevice: s.outdoorDevice ?? null,
           devicePrefix: s.devicePrefix,
           hasHumidity: s.hasHumidity,
           hasGrainSensors: s.hasGrainSensors,
@@ -58,6 +59,9 @@ export class StockRepository {
     };
     if (row.description !== null) {
       stock.description = row.description;
+    }
+    if (row.outdoorDevice !== null) {
+      stock.outdoorDevice = row.outdoorDevice;
     }
     if (row.fanTopicPrefix !== null) {
       stock.fanTopicPrefix = row.fanTopicPrefix;

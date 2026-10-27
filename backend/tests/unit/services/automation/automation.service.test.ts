@@ -15,6 +15,11 @@ const INTERVAL_MS = 300_000;
 
 const STOCK_ID = 'grain-watch-1';
 const DEVICE_GROUP = 'corn-watch-1';
+/**
+ * Deliberately different from the device group: the thermometers may move
+ * between stocks, the fan controller carrying the outdoor sensor does not.
+ */
+const OUTDOOR_DEVICE = 'corn-watch-5';
 
 /** A clock the tests move by hand, so `evaluatedAt` and the minimum times are deterministic. */
 let now = new Date(NOW);
@@ -74,6 +79,7 @@ function stock(overrides: Partial<Stock> = {}): Stock {
     id: STOCK_ID,
     name: 'Halle 1',
     deviceGroup: DEVICE_GROUP,
+    outdoorDevice: OUTDOOR_DEVICE,
     devicePrefix: '1.',
     hasHumidity: true,
     hasGrainSensors: true,
@@ -433,7 +439,23 @@ describe('AutomationService — selection', () => {
 
     const groupsRead = h.getLatestReadings.mock.calls.map(([group]) => group);
     expect(groupsRead).toEqual([DEVICE_GROUP]);
-    expect(h.getOutdoorReading.mock.calls.map(([group]) => group)).toEqual([DEVICE_GROUP]);
+    expect(h.getOutdoorReading.mock.calls.map(([device]) => device)).toEqual([OUTDOOR_DEVICE]);
+  });
+
+  it('switches off a stock with no outdoor device, without querying outdoor conditions', async () => {
+    // Warm grain against cold outdoor air would ask for the fan; without an
+    // outdoor sensor there is nothing to compare, so rule 1 decides.
+    const withoutOutdoorDevice: Stock = { ...stock() };
+    delete withoutOutdoorDevice.outdoorDevice;
+    const h = setup({ stocks: [withoutOutdoorDevice] });
+
+    h.service.start();
+    await flush();
+    h.service.stop();
+
+    expect(h.getOutdoorReading).not.toHaveBeenCalled();
+    expect(h.service.getState(STOCK_ID).reason).toBe('no_data');
+    expect(h.controller.commands).toEqual([]);
   });
 
   it('honours a stock row edited since the last tick on the next one', async () => {

@@ -40,7 +40,30 @@ two run separately (Vite on 5173, Express on 3000).
   events. A keep-alive republishes the desired state because the Shelly relays
   have a one-hour Auto-OFF safeguard.
 - **Outdoor conditions**: separate InfluxDB measurements for outdoor temperature
-  and humidity, queried with a configurable look-back window.
+  and humidity, queried with a configurable look-back window. The sensor sits on
+  the fan controller, not on the grain probes, so a stock selects them with its
+  own identifier — see "Two device selectors per stock" below.
+
+### Two device selectors per stock
+
+A stock reads from two independent sets of hardware, and the `stocks` row names
+them separately:
+
+| Column | Selects | Influx tag |
+|--------|---------|------------|
+| `device_group` | the grain thermometers | `device-group` on the sensor measurement |
+| `outdoor_device` | the outdoor temperature and humidity | `device` on the outdoor measurements |
+
+The fan controller is installed once and stays with its stock; a thermometer set
+is movable and may be carried to another stock between seasons. Moving it
+therefore changes `device_group` alone — fan control, its MQTT topic and the
+outdoor conditions are untouched. The two identifiers coincide for the stocks
+fitted so far (`corn-watch-1`), which is naming history, not a rule: nothing in
+the backend derives one from the other.
+
+A stock without an outdoor sensor leaves `outdoor_device` empty and reports its
+outdoor values as absent. Automation then decides on missing data and keeps the
+fan off, the same as for a sensor that fell silent.
 
 ## Technology Stack
 

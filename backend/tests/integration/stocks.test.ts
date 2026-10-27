@@ -659,6 +659,71 @@ describe('Stock Endpoints', () => {
     });
   });
 
+  describe('outdoor device selection', () => {
+    beforeAll(async () => {
+      await new StockRepository(getDb()).upsertMany([
+        {
+          // The thermometers currently in this stock were installed with
+          // another device group; the fan controller that carries the outdoor
+          // sensor is the stock's own.
+          id: 'mobile-probes',
+          name: 'Halle mit wanderndem Fühler-Set',
+          deviceGroup: 'corn-watch-1',
+          outdoorDevice: 'corn-watch-5',
+          devicePrefix: '1',
+          hasHumidity: false,
+          hasGrainSensors: true,
+          active: true,
+          createdAt: '2026-06-02T00:00:00.000Z',
+          fanControlEnabled: false,
+          fanSwitchId: 0,
+          tenantId: DEFAULT_TENANT_ID,
+        },
+        {
+          id: 'no-outdoor-sensor',
+          name: 'Halle ohne Aussensensor',
+          deviceGroup: 'corn-watch-6',
+          devicePrefix: '6',
+          hasHumidity: false,
+          hasGrainSensors: true,
+          active: true,
+          createdAt: '2026-06-02T00:00:00.000Z',
+          fanControlEnabled: false,
+          fanSwitchId: 0,
+          tenantId: DEFAULT_TENANT_ID,
+        },
+      ]);
+    });
+
+    it('queries the outdoor conditions by the outdoor device, not by the device group', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/mobile-probes/latest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(mockGetLatestReadings).toHaveBeenCalledWith('corn-watch-1');
+      expect(mockGetOutdoorReading).toHaveBeenCalledWith('corn-watch-5');
+    });
+
+    it('reports no outdoor conditions for a stock without an outdoor device', async () => {
+      const response = await request(app)
+        .get('/api/v1/stocks/no-outdoor-sensor/latest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(mockGetOutdoorReading).not.toHaveBeenCalled();
+      expect(response.body.outdoor).toEqual({
+        offline: false,
+        offlineReason: null,
+        temperature: null,
+        humidity: null,
+        dewPoint: null,
+        absoluteHumidity: null,
+        lastMeasurement: null,
+      });
+    });
+  });
+
   describe('stocks without grain thermometers', () => {
     beforeAll(async () => {
       await new StockRepository(getDb()).upsertMany([
@@ -666,6 +731,7 @@ describe('Stock Endpoints', () => {
           id: 'fan-only',
           name: 'Halle ohne Thermometer',
           deviceGroup: 'corn-watch-9',
+          outdoorDevice: 'corn-watch-9',
           devicePrefix: '9',
           hasHumidity: false,
           hasGrainSensors: false,

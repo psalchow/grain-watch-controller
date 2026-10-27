@@ -19,6 +19,7 @@ Backend-specific guidance for the Grainwatch BFF service. See root `CLAUDE.md` f
 - **InfluxDB Queries**: Use InfluxQL (SQL-like syntax), NOT Flux
 - **Configuration**: All InfluxDB settings (org, bucket, measurement) must come from environment variables — NEVER hardcode
 - **Security**: Use parameterised queries or proper escaping to prevent injection attacks
+- **Device selectors**: a stock selects its grain thermometers with `stocks.device_group` (tag `device-group`) and its outdoor sensor with `stocks.outdoor_device` (tag `device`). Never derive one from the other — the thermometer set is movable, the fan controller carrying the outdoor sensor is not
 
 ## Project Structure
 

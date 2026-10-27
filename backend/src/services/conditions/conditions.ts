@@ -19,6 +19,19 @@ export interface OutdoorConditions {
   offlineReason: 'stale' | 'partner-missing' | null;
 }
 
+/**
+ * What a stock without an outdoor sensor reports: nothing measured, nothing
+ * stale. Stands in for the query that is not run when no outdoor device is
+ * configured, so both readers take the same path as for a sensor that has gone
+ * silent.
+ */
+export const NO_OUTDOOR_READING: OutdoorReading = {
+  temperature: null,
+  humidity: null,
+  temperatureTime: null,
+  humidityTime: null,
+};
+
 const round1 = (value: number): number => Math.round(value * 10) / 10;
 
 /**

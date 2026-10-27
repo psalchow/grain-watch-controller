@@ -50,6 +50,13 @@
       "when": 1790747465498,
       "tag": "0006_stock_automation",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793089041363,
+      "tag": "0007_outdoor_device",
+      "breakpoints": true
     }
   ]
 }

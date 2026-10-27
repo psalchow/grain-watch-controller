@@ -5,6 +5,7 @@ import {
   offlineAfterMs,
   isOffline,
   buildOutdoorConditions,
+  NO_OUTDOOR_READING,
 } from '../services/conditions';
 import { NotFoundError } from '../middleware';
 import { getDb } from '../db';
@@ -76,12 +77,17 @@ export class StocksController {
         throw new NotFoundError(`Stock not found: ${stockId}`);
       }
 
-      // Stocks without grain thermometers only report outdoor conditions.
+      // Two independent selectors: the thermometers may be moved to another
+      // stock, the outdoor sensor on the fan controller stays with this one.
+      // Stocks without grain thermometers only report outdoor conditions;
+      // stocks without an outdoor device report no outdoor conditions.
       const [readings, outdoorReading] = await Promise.all([
         metadata.hasGrainSensors
           ? this.influxService.getLatestReadings(metadata.deviceGroup)
           : Promise.resolve([]),
-        this.influxService.getOutdoorReading(metadata.deviceGroup),
+        metadata.outdoorDevice
+          ? this.influxService.getOutdoorReading(metadata.outdoorDevice)
+          : Promise.resolve(NO_OUTDOOR_READING),
       ]);
 
       const offlineThreshold = Date.now() - offlineAfterMs();

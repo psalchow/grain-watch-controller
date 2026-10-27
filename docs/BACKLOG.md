@@ -17,11 +17,14 @@ is done; keep the list short enough to be read before every feature.
 Stocks are seeded (`backend/src/db/seed.ts`) and `StockRepository.upsertMany`
 uses `onConflictDoNothing`, so an existing row never changes. There are no admin
 endpoints for stocks, only for users. Setting `has_grain_sensors`,
-`fan_control_enabled` or `fan_topic_prefix` therefore means editing the SQLite
-file on the NAS by hand, as documented in `docs/specs/API.md`.
+`device_group`, `outdoor_device`, `fan_control_enabled` or `fan_topic_prefix`
+therefore means editing the SQLite file on the NAS by hand, as documented in
+`docs/DEPLOYMENT.md` ("Configuring a Stock").
 
 Worth doing when stock configuration changes more than once a season: an admin
-API plus a screen, or at minimum a seed that upserts declared fields.
+API plus a screen, or at minimum a seed that upserts declared fields. Mobile
+thermometer sets move this closer: carrying a set to another stock is two
+`UPDATE`s plus a decision about which stock keeps `has_grain_sensors`.
 
 ## `device_prefix` has no reader
 
@@ -70,7 +73,10 @@ the case is not reachable.
 publishes temperature would therefore be greyed out permanently.
 
 If such a station appears, add a flag mirroring `hasGrainSensors` and only treat
-a missing partner as offline when it was expected.
+a missing partner as offline when it was expected. A stock with no outdoor
+sensor at all is expressible since 2026-10-27: `stocks.outdoor_device` is left
+empty and no outdoor query runs. The gap is the half-equipped station, not the
+bare one.
 
 ## Changing a user's tenancy does not close an open SSE stream
 

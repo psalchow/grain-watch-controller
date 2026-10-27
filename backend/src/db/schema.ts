@@ -54,6 +54,16 @@ export const stocks = sqliteTable('stocks', {
    * rosters come from the measurements themselves.
    */
   devicePrefix: text('device_prefix').notNull(),
+  /**
+   * Selects this stock's outdoor conditions: the `device` tag of the
+   * `outdoor-temperature` and `outdoor-humidity` measurements. That sensor sits
+   * on the fan controller, which stays with the stock, while the grain
+   * thermometers of `device_group` may be moved to another one — so the two are
+   * configured separately even where they happen to share a name today. Null
+   * for a stock with no outdoor sensor; its outdoor values are then reported as
+   * absent.
+   */
+  outdoorDevice: text('outdoor_device'),
   hasHumidity: integer('has_humidity', { mode: 'boolean' }).notNull(),
   /** False for stocks that only have fan control and no grain thermometers. */
   hasGrainSensors: integer('has_grain_sensors', { mode: 'boolean' })

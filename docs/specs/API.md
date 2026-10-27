@@ -76,6 +76,21 @@ assets and an SPA fallback are served from the same origin. Requests under
 - Separate measurements for stock sensors and outdoor temperature/humidity
 - Health check query for connectivity verification
 
+### Which device a query selects
+
+Measurements are environment-wide; which rows belong to a stock comes from its
+`stocks` row, and the two kinds of hardware are selected separately:
+
+| Query | Filter | Configured in |
+|-------|--------|---------------|
+| Latest readings, history | `"device-group" = <device_group>` | `stocks.device_group` |
+| Outdoor temperature and humidity | `"device" = <outdoor_device>` | `stocks.outdoor_device` |
+
+The outdoor sensor belongs to the fan controller, which stays with the stock,
+while a thermometer set can be moved to another stock. With `outdoor_device`
+empty, no outdoor query is run and all outdoor values are reported as `null`
+with `offline: false` — there is no sensor to be stale.
+
 ## Configuration
 
 ### Server
@@ -208,6 +223,12 @@ currently set by hand against the SQLite file:
 ```sql
 UPDATE stocks SET has_grain_sensors = 0 WHERE id = '<stock-id>';
 ```
+
+This is also how a thermometer set moving to another stock is recorded; the
+column reference and the other hand-edits live in
+[DEPLOYMENT.md](../DEPLOYMENT.md#configuring-a-stock). Fan control and the
+outdoor sensor are untouched by such a move — they are selected by
+`fan_topic_prefix` and `outdoor_device`, not by the device group.
 
 Fan controllers are built once at startup from the stock rows, so the two
 directions of a hand-edit differ:

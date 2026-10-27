@@ -17,6 +17,7 @@ same-origin setup.
 - [Local Development](#local-development)
 - [Synology NAS Deployment](#synology-nas-deployment)
 - [First Start](#first-start)
+- [Configuring a Stock](#configuring-a-stock)
 - [Health Monitoring](#health-monitoring)
 - [Troubleshooting](#troubleshooting)
 - [Security Considerations](#security-considerations)
@@ -360,6 +361,77 @@ Then open the application at `http://<nas>:3000`, log in as `admin` /
 Further users are created through the UI at **Users** in the header (admin only),
 or via `POST /api/v1/admin/users`. Admin-created users likewise start with a
 forced password change.
+
+---
+
+## Configuring a Stock
+
+Stocks have no admin UI: the `stocks` table is edited with SQL against the
+database file at `DATABASE_PATH` (`./backend/data/grainwatch.db` on the host
+with the production compose file). Seeding only inserts rows that are missing,
+so an existing row is never overwritten by a restart.
+
+### Columns
+
+| Column | Meaning |
+|--------|---------|
+| `id` | Internal stock id, used in URLs (`grain-watch-1`) |
+| `name`, `description` | What the PWA shows |
+| `device_group` | Selects the **grain thermometers** (Influx tag `device-group`) |
+| `outdoor_device` | Selects the **outdoor sensor on the fan controller** (Influx tag `device`); empty means the stock reports no outdoor values |
+| `device_prefix` | Documents the device-id convention (`1` for `1.1`…`1.5`); nothing reads it |
+| `has_humidity` | Grain humidity probe present in the middle layer |
+| `has_grain_sensors` | Grain thermometers currently installed in this stock |
+| `active` | Inactive stocks are listed but cannot be opened |
+| `fan_control_enabled` | Stock has fan control |
+| `fan_topic_prefix` | MQTT prefix of its Shelly; **fan control needs both this and the flag** |
+| `fan_switch_id` | Switch channel on the Shelly (`0` for a single-channel device) |
+| `tenant_id` | Owning tenant; viewers see a stock only through membership |
+
+The two device selectors are independent on purpose. The fan controller is
+installed once and stays with the stock; a thermometer set is movable and may be
+carried to another stock. That the two carry the same name today
+(`corn-watch-1`) is naming history — nothing derives one from the other.
+
+### Commissioning a stock
+
+```sql
+UPDATE stocks SET
+  active = 1,
+  description = 'Lagerhalle 7',
+  device_group = 'corn-watch-2',
+  outdoor_device = 'corn-watch-2',
+  has_humidity = 1,
+  has_grain_sensors = 1,
+  fan_control_enabled = 1,
+  fan_topic_prefix = '/corn-watch/actors/corn-watch-2/fan-control',
+  fan_switch_id = 0
+WHERE id = 'grain-watch-2';
+```
+
+**Restart the container afterwards.** The fan manager builds its controllers
+once at startup; the reconciliation tick only retires stocks whose fan control
+was revoked, it never picks up newly enabled ones. Readings, outdoor conditions
+and the `active` flag do take effect without a restart.
+
+Outside the application, the sink service has to publish this stock's data:
+sensor points tagged `device-group = 'corn-watch-2'` in `INFLUXDB_MEASUREMENT`,
+outdoor points tagged `device = 'corn-watch-2'` in the two outdoor measurements.
+
+### Moving a thermometer set to another stock
+
+Only the thermometer columns move; the fan controller, its topic and the
+outdoor sensor stay where they are.
+
+```sql
+UPDATE stocks SET has_grain_sensors = 0 WHERE id = 'grain-watch-1';
+UPDATE stocks SET device_group = 'corn-watch-1', has_grain_sensors = 1
+  WHERE id = 'grain-watch-2';
+```
+
+A stock without grain thermometers keeps fan control and still shows outdoor
+conditions, but cannot be automated: the control rule compares grain against
+outdoor air and has nothing to compare.
 
 ---
 

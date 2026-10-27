@@ -60,6 +60,21 @@ describe('StockRepository', () => {
     expect(found?.name).toBe('Halle 8');
   });
 
+  describe('outdoor device', () => {
+    it('round-trips an outdoor device that differs from the device group', async () => {
+      await repo.upsertMany([{ ...sample, outdoorDevice: 'corn-watch-7' }]);
+      const stock = await repo.findById('grain-watch-1');
+      expect(stock?.deviceGroup).toBe('corn-watch-1');
+      expect(stock?.outdoorDevice).toBe('corn-watch-7');
+    });
+
+    it('leaves the outdoor device undefined when none is configured', async () => {
+      await repo.upsertMany([sample]);
+      const stock = await repo.findById('grain-watch-1');
+      expect(stock?.outdoorDevice).toBeUndefined();
+    });
+  });
+
   describe('fan configuration', () => {
     it('round-trips fan config fields', async () => {
       const testDb = createTestDb();

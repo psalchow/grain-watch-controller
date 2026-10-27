@@ -291,16 +291,20 @@ export class InfluxDBService {
    * its `time` column, which is used to report the reading age. The same
    * look-back window as for sensor readings applies.
    *
-   * @param deviceGroup - Device group identifier (e.g., 'corn-watch-1')
+   * The outdoor sensor sits on the stock's fan controller, which is a different
+   * device from the grain thermometers — hence an identifier of its own rather
+   * than the device group, even where the two share a name.
+   *
+   * @param outdoorDevice - Outdoor sensor identifier (e.g., 'corn-watch-1')
    * @returns Latest outdoor reading; individual values are null when absent
    */
-  async getOutdoorReading(deviceGroup: string): Promise<OutdoorReading> {
-    const escapedGroup = this.escapeString(deviceGroup);
+  async getOutdoorReading(outdoorDevice: string): Promise<OutdoorReading> {
+    const escapedDevice = this.escapeString(outdoorDevice);
 
     const buildQuery = (measurement: string, field: string): string => `
       SELECT LAST(${this.escapeMeasurement(field)}) AS "value"
       FROM ${this.escapeMeasurement(measurement)}
-      WHERE "device" = '${escapedGroup}'
+      WHERE "device" = '${escapedDevice}'
         AND time > now() - ${this.latestLookback}
     `;
 
