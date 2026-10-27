@@ -34,8 +34,8 @@ const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
 /**
  * A second tenant owning `grain-watch-2`.
  *
- * Without it both stocks created below sit in `tnt_default`, and the denied-access and
- * list-filter cases below would pass while covering nothing.
+ * Without it both stocks created below sit in `tnt_default`, and the
+ * denied-access and list-filter cases below would pass while covering nothing.
  */
 const SECOND_TENANT_ID = 'tnt_second';
 const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };

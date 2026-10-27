@@ -163,6 +163,7 @@ describe('StockService administration', () => {
     await service.deleteStock('stk_001');
     expect(order).toEqual(['retire', 'delete']);
     expect(retire).toHaveBeenCalledWith('stk_001');
+    expect(rowDuringRetire).toBeDefined();
     expect(await rowDuringRetire).not.toBeNull();
     expect(await repo.findById('stk_001')).toBeNull();
   });

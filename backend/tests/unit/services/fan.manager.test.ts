@@ -261,7 +261,7 @@ describe('FanControlManager', () => {
       ]);
     });
 
-    it('unsubscribes nothing while another stock still uses the same prefix', async () => {
+    it('unsubscribes only once the last stock on the prefix is retired', async () => {
       // Two stocks on one prefix is a misconfiguration, but the survivor's feed
       // must not go dark because its neighbour was retired.
       const { db, f } = await setup();
