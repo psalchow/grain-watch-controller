@@ -1,6 +1,7 @@
 export interface MqttClientLike {
   publish(topic: string, message: string, options?: { qos?: 0 | 1 | 2 }): void;
   subscribe(topic: string): void;
+  unsubscribe(topic: string): void;
   on(event: 'message', cb: (topic: string, payload: Buffer) => void): void;
   end(): void;
 }
@@ -29,6 +30,10 @@ export class MqttService {
 
   subscribe(topic: string): void {
     this.client.subscribe(topic);
+  }
+
+  unsubscribe(topic: string): void {
+    this.client.unsubscribe(topic);
   }
 
   onMessage(listener: MessageListener): void {

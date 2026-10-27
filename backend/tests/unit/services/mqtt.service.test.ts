@@ -6,16 +6,18 @@ function fakeClient() {
   };
   const published: Array<{ topic: string; message: string }> = [];
   const subscribed: string[] = [];
+  const unsubscribed: string[] = [];
   const client: MqttClientLike = {
     publish: (topic: string, message: string) => { published.push({ topic, message }); },
     subscribe: (topic: string) => { subscribed.push(topic); },
+    unsubscribe: (topic: string) => { unsubscribed.push(topic); },
     on: ((event: string, cb: (...args: unknown[]) => void) => {
       if (event === 'message') handlers.message.push(cb as (t: string, p: Buffer) => void);
       if (event === 'connect') handlers.connect.push(cb as () => void);
     }) as MqttClientLike['on'],
     end: () => {},
   };
-  return { client, handlers, published, subscribed };
+  return { client, handlers, published, subscribed, unsubscribed };
 }
 
 describe('MqttService', () => {
@@ -37,5 +39,12 @@ describe('MqttService', () => {
     svc.subscribe('/p/monitor/#');
     expect(published).toEqual([{ topic: '/p/command/switch:0', message: 'on' }]);
     expect(subscribed).toEqual(['/p/monitor/#']);
+  });
+
+  it('unsubscribes through the client', () => {
+    const { client, unsubscribed } = fakeClient();
+    const svc = new MqttService(client);
+    svc.unsubscribe('/p/monitor/#');
+    expect(unsubscribed).toEqual(['/p/monitor/#']);
   });
 });

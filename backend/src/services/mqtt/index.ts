@@ -21,6 +21,7 @@ export function createMqttService(cfg: {
   const adapter: MqttClientLike = {
     publish: (topic, message, options) => client.publish(topic, message, options ?? {}),
     subscribe: (topic) => client.subscribe(topic),
+    unsubscribe: (topic) => client.unsubscribe(topic),
     on: ((event: string, cb: (...args: unknown[]) => void) =>
       client.on(event as 'message', cb as never)) as MqttClientLike['on'],
     end: () => client.end(),
