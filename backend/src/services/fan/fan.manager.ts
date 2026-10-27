@@ -4,13 +4,6 @@ import { FanController } from './fan.controller';
 import { parseShellyMonitorMessage } from './shelly-message';
 import type { InterferenceCause } from './types';
 
-/**
- * Selects the MQTT wiring config for every fan-enabled stock. Pure.
- *
- * A usable topic prefix is as necessary as the flag: without one there is
- * nothing to publish to, so no controller is built and the stock reports no fan
- * control.
- */
 /** Everything the manager needs to drive one stock's fan over MQTT. */
 export interface FanWiringConfig {
   stockId: string;
@@ -18,6 +11,13 @@ export interface FanWiringConfig {
   switchId: number;
 }
 
+/**
+ * Selects the MQTT wiring config for every fan-enabled stock. Pure.
+ *
+ * A usable topic prefix is as necessary as the flag: without one there is
+ * nothing to publish to, so no controller is built and the stock reports no fan
+ * control.
+ */
 export function selectFanStocks(stocks: Stock[]): FanWiringConfig[] {
   return stocks
     .filter((s) => s.fanControlEnabled && s.fanTopicPrefix)

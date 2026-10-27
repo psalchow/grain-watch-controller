@@ -16,8 +16,8 @@ import type { AutomationService } from './automation.service';
  * The same module-level accessor pair `services/fan` uses for its manager, and
  * for the same reason: `bootstrap.ts` builds the service, and the HTTP layer
  * reaches it without every route carrying it down. Null is an ordinary case —
- * `initFanControl` returns early when no stock has fan control, and then no
- * service is ever constructed.
+ * the service is null only when the MQTT/fan configuration is missing (unit
+ * tests, partial config).
  *
  * Nothing inside this module reads the pair, so it can live in the barrel
  * without the import cycle `services/fan` had to break.

@@ -13,7 +13,7 @@ import {
 } from '../types/api';
 
 /**
- * Admin user-management API. All endpoints require an admin token.
+ * Admin API: user management and stock administration. All endpoints require an admin token.
  */
 export const adminApi = {
   async listUsers(): Promise<AdminUser[]> {

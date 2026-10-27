@@ -10,7 +10,7 @@ import { extractError } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 import type { AdminStock, CreateStockRequest } from '@/types/api';
 
-/** Which dialog is open: the form (create or edit) or the delete confirmation. */
+/** The stock form: create when `stock` is absent, edit when present; null when closed. */
 type Form = { stock?: AdminStock } | null;
 
 export default function AdminStocksPage() {

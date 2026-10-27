@@ -55,8 +55,9 @@ one, answers 400. `GET /admin/users`, `POST /admin/users` and
 `PUT /admin/users/:userId/permissions` all answer `tenants: [{ id, name }]` per
 user, so the three agree on one shape.
 
-Tenants are created with SQL on the NAS — the API only lists them, so an administrator can choose one when
-creating a user. There is no create, rename, delete or deactivation.
+Tenants are created with SQL on the NAS — the API only lists them, so an
+administrator can choose one when creating a user. There is no create, rename,
+delete or deactivation.
 
 #### Stock administration
 
