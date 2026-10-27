@@ -172,8 +172,8 @@ endpoint, which a single proxy in front of one backend rarely produces.
 `useFanStream` treats any 404 on the stream URL as fan control having been
 withdrawn: it latches `disabled` and stops reconnecting. A proxy with no
 matching upstream, or a changed API base path after a deploy, reads the same.
-Re-enabling fan control also leaves a
-latched client showing the notice until the page is reloaded.
+Re-enabling fan control also leaves a latched client showing the notice until
+the page is reloaded.
 
 Closing it: read the error envelope in `onopen` and latch only on the backend's
 own shape, treating a bare 404 as transient.
@@ -302,7 +302,7 @@ disabled through `onControlWithdrawn`) and rebuilds it within the same tick; no
 restart is needed. What remains is the needless `off`
 (`FanControlManager.reconcile`, `backend/src/services/fan/fan.manager.ts`).
 
-Closing it: retire only on `!enabled.has(stockId)`, and clear the mark when the
+Closing it: retire only on `!wanted.has(stockId)`, and clear the mark when the
 fresh read still contains the stock.
 
 ## Startup clears a stale desired state without an audit entry
@@ -485,6 +485,14 @@ other can delay or bring forward the three-strike switch-off of §5.3.
 armed exactly the same way, so whatever guard is chosen (a boolean in flight,
 or a self-rescheduling timeout) should be applied to both.
 
+A `reconcile` in flight across `StockService.deleteStock` shares the gap
+(2026-10-27): `fan.manager.ts` (~:161-163) rebuilds any wanted stock missing
+from the map, so a tick that read its wiring before the delete rebuilds a
+controller for a row that no longer exists. The next tick retires it; its
+`fan_events` writes fail the foreign key (logged, not thrown). The window is one
+microtask, as better-sqlite3 reads are synchronous, so it is not reachable in a
+real deployment.
+
 ## `AUTOMATION_DEFAULTS` is handed out by reference
 
 **Deferred:** 2026-09-30, found in the final review of the fan automation core;
@@ -592,3 +600,26 @@ pass a full literal to `create` instead. An `omit` option would close it.
 - `AdminStocksPage`'s Equipment cell is empty for a stock with no thermometers,
   no humidity and no fan control, where `StockCard` shows explanatory text in the
   same situation.
+
+## `route()` dispatches a shared prefix to one stock only
+
+**Deferred:** 2026-10-27 — pre-existing, but the stock form now makes it
+reachable without a hand-edited row.
+
+`FanControlManager.route` (`backend/src/services/fan/fan.manager.ts`, ~:296-298)
+returns after the first wiring whose prefix matches. When two stocks share a
+`fan_topic_prefix`, the second receives no monitor, no status and no `online`,
+while the backend keeps publishing its commands. The design spec
+(`docs/superpowers/specs/2026-10-27-stock-administration-design.md` §4.3) accepts
+the shared prefix deliberately — the unsubscribe guard in `unsubscribeWiring`
+exists for it — so this records the half that was not closed: dispatch to every
+matching wiring, or refuse the duplicate in `StockService.assertInvariants`.
+
+## The form's topic-prefix rules apply while fan control is off
+
+**Deferred:** 2026-10-27 — only reachable on rows written by SQL before 1.6.0.
+
+`frontend/src/components/StockFormDialog.tsx` (~:83-97) validates
+`fanTopicPrefix` unconditionally, so a legacy row whose prefix ends in `/`
+(nothing validated these before 1.6.0) cannot be renamed until the prefix is
+corrected. Validating only while fan control is enabled would close it.
