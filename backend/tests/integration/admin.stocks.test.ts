@@ -148,6 +148,29 @@ describe('Admin Stock Endpoints', () => {
       expect(response.body.deviceGroup).toBe('corn-watch-3');
     });
 
+    it('stores an empty description in a patch as absent', async () => {
+      await createStock({ description: 'Lagerhalle 3' });
+
+      const response = await asAdmin(request(app).patch('/api/v1/admin/stocks/stk_001')).send({
+        description: '',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).not.toHaveProperty('description');
+      const list = await asAdmin(request(app).get('/api/v1/admin/stocks'));
+      expect(list.body.stocks[0]).not.toHaveProperty('description');
+    });
+
+    it('answers 400 for a patch with a switch id above 9', async () => {
+      await createStock();
+
+      const response = await asAdmin(request(app).patch('/api/v1/admin/stocks/stk_001')).send({
+        fanSwitchId: 10,
+      });
+
+      expect(response.status).toBe(400);
+    });
+
     it('leaves fields absent from the patch untouched, not reset to create defaults', async () => {
       await createStock({ active: false, hasHumidity: true, fanSwitchId: 3 });
 

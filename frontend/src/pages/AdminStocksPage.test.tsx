@@ -95,6 +95,8 @@ describe('AdminStocksPage', () => {
     );
 
     expect(await screen.findByText(/„Halle Süd“ wird/)).toBeInTheDocument();
+    // Opening the confirmation must not delete anything by itself.
+    expect(adminApi.deleteStock).not.toHaveBeenCalled();
     expect(screen.getByText(/Schalthistorie/)).toBeInTheDocument();
     expect(screen.getByText(/Automatikeinstellungen/)).toBeInTheDocument();
   });

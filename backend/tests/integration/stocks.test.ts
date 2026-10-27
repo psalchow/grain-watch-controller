@@ -34,7 +34,7 @@ const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
 /**
  * A second tenant owning `grain-watch-2`.
  *
- * Without it both seeded stocks sit in `tnt_default`, and the denied-access and
+ * Without it both stocks created below sit in `tnt_default`, and the denied-access and
  * list-filter cases below would pass while covering nothing.
  */
 const SECOND_TENANT_ID = 'tnt_second';
@@ -676,33 +676,33 @@ describe('Stock Endpoints', () => {
   describe('outdoor device selection', () => {
     beforeAll(async () => {
       await new StockRepository(getDb()).create({
-          // The thermometers currently in this stock were installed with
-          // another device group; the fan controller that carries the outdoor
-          // sensor is the stock's own.
-          id: 'mobile-probes',
-          name: 'Halle mit wanderndem Fühler-Set',
-          deviceGroup: 'corn-watch-1',
-          outdoorDevice: 'corn-watch-5',
-          hasHumidity: false,
-          hasGrainSensors: true,
-          active: true,
-          createdAt: '2026-06-02T00:00:00.000Z',
-          fanControlEnabled: false,
-          fanSwitchId: 0,
-          tenantId: DEFAULT_TENANT_ID,
-        });
+        // The thermometers currently in this stock were installed with
+        // another device group; the fan controller that carries the outdoor
+        // sensor is the stock's own.
+        id: 'mobile-probes',
+        name: 'Halle mit wanderndem Fühler-Set',
+        deviceGroup: 'corn-watch-1',
+        outdoorDevice: 'corn-watch-5',
+        hasHumidity: false,
+        hasGrainSensors: true,
+        active: true,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        fanControlEnabled: false,
+        fanSwitchId: 0,
+        tenantId: DEFAULT_TENANT_ID,
+      });
       await new StockRepository(getDb()).create({
-          id: 'no-outdoor-sensor',
-          name: 'Halle ohne Aussensensor',
-          deviceGroup: 'corn-watch-6',
-          hasHumidity: false,
-          hasGrainSensors: true,
-          active: true,
-          createdAt: '2026-06-02T00:00:00.000Z',
-          fanControlEnabled: false,
-          fanSwitchId: 0,
-          tenantId: DEFAULT_TENANT_ID,
-        });
+        id: 'no-outdoor-sensor',
+        name: 'Halle ohne Aussensensor',
+        deviceGroup: 'corn-watch-6',
+        hasHumidity: false,
+        hasGrainSensors: true,
+        active: true,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        fanControlEnabled: false,
+        fanSwitchId: 0,
+        tenantId: DEFAULT_TENANT_ID,
+      });
     });
 
     it('queries the outdoor conditions by the outdoor device, not by the device group', async () => {
@@ -737,17 +737,17 @@ describe('Stock Endpoints', () => {
   describe('stocks without a device group', () => {
     beforeAll(async () => {
       await new StockRepository(getDb()).create({
-          id: 'no-device-group',
-          name: 'Halle ohne Fühlergruppe',
-          outdoorDevice: 'corn-watch-8',
-          hasHumidity: false,
-          hasGrainSensors: true,
-          active: true,
-          createdAt: '2026-06-02T00:00:00.000Z',
-          fanControlEnabled: false,
-          fanSwitchId: 0,
-          tenantId: DEFAULT_TENANT_ID,
-        });
+        id: 'no-device-group',
+        name: 'Halle ohne Fühlergruppe',
+        outdoorDevice: 'corn-watch-8',
+        hasHumidity: false,
+        hasGrainSensors: true,
+        active: true,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        fanControlEnabled: false,
+        fanSwitchId: 0,
+        tenantId: DEFAULT_TENANT_ID,
+      });
     });
 
     it('returns no readings without querying InfluxDB for the thermometers', async () => {
@@ -779,19 +779,19 @@ describe('Stock Endpoints', () => {
   describe('stocks without grain thermometers', () => {
     beforeAll(async () => {
       await new StockRepository(getDb()).create({
-          id: 'fan-only',
-          name: 'Halle ohne Thermometer',
-          deviceGroup: 'corn-watch-9',
-          outdoorDevice: 'corn-watch-9',
-          hasHumidity: false,
-          hasGrainSensors: false,
-          active: true,
-          createdAt: '2026-06-02T00:00:00.000Z',
-          fanControlEnabled: true,
-          fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
-          fanSwitchId: 0,
-          tenantId: DEFAULT_TENANT_ID,
-        });
+        id: 'fan-only',
+        name: 'Halle ohne Thermometer',
+        deviceGroup: 'corn-watch-9',
+        outdoorDevice: 'corn-watch-9',
+        hasHumidity: false,
+        hasGrainSensors: false,
+        active: true,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        fanControlEnabled: true,
+        fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
+        fanSwitchId: 0,
+        tenantId: DEFAULT_TENANT_ID,
+      });
     });
 
     it('reports outdoor conditions without querying stock sensors', async () => {

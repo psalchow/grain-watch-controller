@@ -21,7 +21,7 @@ import { StockRepository } from '../../../src/db/repositories';
 import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 import { resetServiceSingletonsForTests } from '../../../src/services';
 
-/** The tenant the seeded stock belongs to, as it rides in a token. */
+/** The tenant the stock created below belongs to, as it rides in a token. */
 const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };
 const OTHER_TENANT_ID = 'tnt_other';
 

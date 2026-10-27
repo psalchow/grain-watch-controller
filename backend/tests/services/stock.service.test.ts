@@ -1,6 +1,6 @@
 import { createTestDb, TestDb } from '../setup/db';
 import { StockRepository } from '../../src/db/repositories';
-import { insertStock } from '../setup/stocks';
+import { insertStock, makeStock } from '../setup/stocks';
 import { StockService, StockServiceError } from '../../src/services/stock';
 import type { CreateStockInput } from '../../src/services/stock/stock.service';
 import { setFanManager } from '../../src/services/fan';
@@ -59,8 +59,13 @@ describe('StockService administration', () => {
     service = new StockService(repo);
     retire = jest.fn();
     reconcile = jest.fn().mockResolvedValue(undefined);
-    // Only the two methods the service calls exist on the stub, hence the cast.
-    setFanManager({ retireController: retire, reconcile } as unknown as FanControlManager);
+    // Only the two methods the service calls exist on the stub; Pick keeps
+    // their signatures checked against the real class.
+    const stub: Pick<FanControlManager, 'retireController' | 'reconcile'> = {
+      retireController: retire,
+      reconcile,
+    };
+    setFanManager(stub as FanControlManager);
   });
 
   afterEach(() => {
@@ -114,7 +119,9 @@ describe('StockService administration', () => {
   it('rejects an update whose merged result breaks an invariant, even via the untouched field', async () => {
     const a = await insertStock(testDb.db, { id: 'stk_001', fanControlEnabled: true, fanTopicPrefix: 'shellies/x' });
     expect(await code(service.updateStock(a.id, { fanTopicPrefix: null }))).toBe('invalid');
-    const b = await insertStock(testDb.db, { id: 'stk_002', hasGrainSensors: false, deviceGroup: undefined as never });
+    const { deviceGroup: _omit, ...withoutGroup } = makeStock({ id: 'stk_002', hasGrainSensors: false });
+    await repo.create(withoutGroup);
+    const b = withoutGroup;
     expect(await code(service.updateStock(b.id, { hasGrainSensors: true }))).toBe('invalid');
     expect(await code(service.updateStock(a.id, { deviceGroup: null }))).toBe('invalid');
   });
@@ -142,7 +149,12 @@ describe('StockService administration', () => {
   it('retires the controller before the row disappears', async () => {
     const order: string[] = [];
     await insertStock(testDb.db, { id: 'stk_001', active: false });
-    retire.mockImplementation(() => order.push('retire'));
+    let rowDuringRetire: Promise<unknown> | undefined;
+    retire.mockImplementation(() => {
+      order.push('retire');
+      // The query runs at call time, so this sees the row as retirement does.
+      rowDuringRetire = repo.findById('stk_001');
+    });
     const realDelete = repo.delete.bind(repo);
     jest.spyOn(repo, 'delete').mockImplementation(async (id) => {
       order.push('delete');
@@ -151,6 +163,7 @@ describe('StockService administration', () => {
     await service.deleteStock('stk_001');
     expect(order).toEqual(['retire', 'delete']);
     expect(retire).toHaveBeenCalledWith('stk_001');
+    expect(await rowDuringRetire).not.toBeNull();
     expect(await repo.findById('stk_001')).toBeNull();
   });
 
@@ -159,6 +172,27 @@ describe('StockService administration', () => {
     expect(reconcile).toHaveBeenCalledTimes(1);
     await service.updateStock(s.id, { name: 'Neu' });
     expect(reconcile).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not wait for the reconciliation it triggers', async () => {
+    // A promise that never settles: an added `await` would hang this test.
+    reconcile.mockReturnValue(new Promise(() => {}));
+    const s = await service.createStock(input());
+    await service.updateStock(s.id, { name: 'Neu' });
+  });
+
+  it('does not reconcile when an invariant fails on create or update', async () => {
+    expect(await code(service.createStock(input({ fanControlEnabled: true })))).toBe('invalid');
+    expect(reconcile).not.toHaveBeenCalled();
+    const a = await insertStock(testDb.db, { id: 'stk_001', fanControlEnabled: true, fanTopicPrefix: 'shellies/x' });
+    expect(await code(service.updateStock(a.id, { fanTopicPrefix: null }))).toBe('invalid');
+    expect(reconcile).not.toHaveBeenCalled();
+  });
+
+  it('leaves the stored row unchanged after an invalid update', async () => {
+    const a = await insertStock(testDb.db, { id: 'stk_001', fanControlEnabled: true, fanTopicPrefix: 'shellies/x' });
+    expect(await code(service.updateStock(a.id, { name: 'Neu', fanTopicPrefix: null }))).toBe('invalid');
+    expect(await repo.findById(a.id)).toEqual(a);
   });
 
   it('works without a fan manager', async () => {

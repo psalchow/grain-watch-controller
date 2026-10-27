@@ -33,7 +33,7 @@ function token(): string {
   return jwt.sign({ userId: 'u1', username: 'admin', role: 'admin', tenants: [{ id: 'tnt_default', name: 'Standard' }] }, JWT_SECRET, { expiresIn: '1h' });
 }
 
-/** A viewer belonging to a tenant that owns none of the seeded stocks. */
+/** A viewer belonging to a tenant that owns none of the stocks created below. */
 function foreignToken(): string {
   return jwt.sign({ userId: 'u2', username: 'viewer', role: 'viewer', tenants: [{ id: 'tnt_foreign', name: 'Fremder Betrieb' }] }, JWT_SECRET, { expiresIn: '1h' });
 }
@@ -46,37 +46,37 @@ beforeEach(async () => {
   initDb({ path: ':memory:' });
   runMigrations(getDb());
   await insertStock(getDb(), {
-  id: 'grain-watch-1',
-  description: 'Lagerhalle 8',
-  fanControlEnabled: true,
-  // Matches the wiring the manager below is built with: a reconciliation tick
-  // compares the two and would otherwise re-wire the stock mid-test.
-  fanTopicPrefix: '/p',
-});
-await insertStock(getDb(), {
-  id: 'grain-watch-2',
-  name: 'Halle 7',
-  description: 'Lagerhalle 7 - inaktiv',
-  deviceGroup: 'corn-watch-2',
-  outdoorDevice: 'corn-watch-2',
-  hasHumidity: false,
-  active: false,
-});
+    id: 'grain-watch-1',
+    description: 'Lagerhalle 8',
+    fanControlEnabled: true,
+    // Matches the wiring the manager below is built with: a reconciliation tick
+    // compares the two and would otherwise re-wire the stock mid-test.
+    fanTopicPrefix: '/p',
+  });
+  await insertStock(getDb(), {
+    id: 'grain-watch-2',
+    name: 'Halle 7',
+    description: 'Lagerhalle 7 - inaktiv',
+    deviceGroup: 'corn-watch-2',
+    outdoorDevice: 'corn-watch-2',
+    hasHumidity: false,
+    active: false,
+  });
   // A stock with fan control but no grain thermometers: automation is
   // unavailable for it although the fan endpoints serve it (design spec §3.2).
   await new StockRepository(getDb()).create({
-      id: 'fan-only',
-      name: 'Halle ohne Thermometer',
-      deviceGroup: 'corn-watch-9',
-      hasHumidity: false,
-      hasGrainSensors: false,
-      active: true,
-      createdAt: '2026-06-02T00:00:00.000Z',
-      fanControlEnabled: true,
-      fanTopicPrefix: '/q',
-      fanSwitchId: 0,
-      tenantId: DEFAULT_TENANT_ID,
-    });
+    id: 'fan-only',
+    name: 'Halle ohne Thermometer',
+    deviceGroup: 'corn-watch-9',
+    hasHumidity: false,
+    hasGrainSensors: false,
+    active: true,
+    createdAt: '2026-06-02T00:00:00.000Z',
+    fanControlEnabled: true,
+    fanTopicPrefix: '/q',
+    fanSwitchId: 0,
+    tenantId: DEFAULT_TENANT_ID,
+  });
   resetServiceSingletonsForTests();
   published.length = 0;
   manager = new FanControlManager({

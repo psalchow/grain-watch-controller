@@ -74,18 +74,18 @@ describe('StockRepository', () => {
       const testDb = createTestDb();
       const repo = new StockRepository(testDb.db);
       await repo.create({
-          id: 'grain-watch-9',
-          name: 'Halle 9',
-          deviceGroup: 'corn-watch-9',
-          hasHumidity: false,
-          hasGrainSensors: true,
-          active: true,
-          createdAt: '2026-06-02T00:00:00.000Z',
-          fanControlEnabled: true,
-          fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
-          fanSwitchId: 0,
-          tenantId: DEFAULT_TENANT_ID,
-        });
+        id: 'grain-watch-9',
+        name: 'Halle 9',
+        deviceGroup: 'corn-watch-9',
+        hasHumidity: false,
+        hasGrainSensors: true,
+        active: true,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        fanControlEnabled: true,
+        fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
+        fanSwitchId: 0,
+        tenantId: DEFAULT_TENANT_ID,
+      });
       const stock = await repo.findById('grain-watch-9');
       expect(stock?.fanControlEnabled).toBe(true);
       expect(stock?.fanTopicPrefix).toBe('/corn-watch/actors/corn-watch-9/fan-control');
@@ -96,17 +96,17 @@ describe('StockRepository', () => {
       const testDb = createTestDb();
       const repo = new StockRepository(testDb.db);
       await repo.create({
-          id: 'grain-watch-10',
-          name: 'Halle 10',
-          deviceGroup: 'corn-watch-10',
-          hasHumidity: false,
-          hasGrainSensors: true,
-          active: true,
-          createdAt: '2026-06-02T00:00:00.000Z',
-          fanControlEnabled: false,
-          fanSwitchId: 0,
-          tenantId: DEFAULT_TENANT_ID,
-        });
+        id: 'grain-watch-10',
+        name: 'Halle 10',
+        deviceGroup: 'corn-watch-10',
+        hasHumidity: false,
+        hasGrainSensors: true,
+        active: true,
+        createdAt: '2026-06-02T00:00:00.000Z',
+        fanControlEnabled: false,
+        fanSwitchId: 0,
+        tenantId: DEFAULT_TENANT_ID,
+      });
       const stock = await repo.findById('grain-watch-10');
       expect(stock?.fanControlEnabled).toBe(false);
       expect(stock?.fanTopicPrefix).toBeUndefined();
@@ -151,6 +151,16 @@ describe('StockRepository', () => {
       expect(found?.active).toBe(false);
     });
 
+    it('answers true for an empty patch on a known id', async () => {
+      await repo.create(full);
+      expect(await repo.update(full.id, {})).toBe(true);
+      expect(await repo.findById(full.id)).toEqual(full);
+    });
+
+    it('answers false for an empty patch on an unknown id', async () => {
+      expect(await repo.update('nope', {})).toBe(false);
+    });
+
     it('answers false when updating an unknown id', async () => {
       expect(await repo.update('nope', { name: 'x' })).toBe(false);
     });
@@ -179,6 +189,10 @@ describe('StockRepository', () => {
         source: 'user',
       });
       new AutomationRepository(testDb.db).upsert(sample.id, { ...AUTOMATION_DEFAULTS, enabled: true });
+
+      expect(testDb.db.select().from(fanState).all()).toHaveLength(1);
+      expect(testDb.db.select().from(fanEvents).all()).toHaveLength(1);
+      expect(testDb.db.select().from(stockAutomation).all()).toHaveLength(1);
 
       await repo.delete(sample.id);
 

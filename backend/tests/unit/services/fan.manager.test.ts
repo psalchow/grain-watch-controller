@@ -285,6 +285,18 @@ describe('FanControlManager', () => {
 
       expect(manager.getController('grain-watch-2')).toBeNull();
       expect(f.unsubscribed).toEqual([]);
+
+      // Once the survivor goes too, nobody shares the prefix any more: the
+      // topics are taken down now, which an implementation that never
+      // unsubscribes would not do.
+      wiring.length = 0;
+      await manager.reconcile();
+
+      expect(f.unsubscribed).toEqual([
+        `${PREFIX}/monitor/#`,
+        `${PREFIX}/status/switch:0`,
+        `${PREFIX}/online`,
+      ]);
       manager.shutdown();
     });
   });
