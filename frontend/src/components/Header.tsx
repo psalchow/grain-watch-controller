@@ -68,7 +68,7 @@ export function Header() {
               className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
             >
               <Warehouse className="h-4 w-4 mr-2" />
-              Hallen
+              Stocks
             </Link>
           )}
           <Button
@@ -123,7 +123,7 @@ export function Header() {
           {isAdmin && (
             <MenuItem
               icon={<Warehouse className="h-5 w-5" />}
-              label="Hallen"
+              label="Stocks"
               onClick={() => runFromMenu(() => navigate('/admin/stocks'))}
             />
           )}

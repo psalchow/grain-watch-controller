@@ -30,7 +30,7 @@ function renderDialog(stock?: AdminStock) {
 
 const field = (label: string) => screen.getByLabelText(label);
 const submit = () =>
-  fireEvent.click(screen.getByRole('button', { name: /Anlegen|Speichern/ }));
+  fireEvent.click(screen.getByRole('button', { name: /Create stock|Save changes/ }));
 
 describe('StockFormDialog field dependencies', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -38,45 +38,45 @@ describe('StockFormDialog field dependencies', () => {
   it('locks the device group and the humidity checkbox until grain thermometers are ticked', () => {
     renderDialog({ ...fullyEquipped, hasGrainSensors: false });
 
-    expect(field('Gerätegruppe')).toBeDisabled();
-    expect(field('Feuchte vorhanden')).toBeDisabled();
+    expect(field('Device group')).toBeDisabled();
+    expect(field('Humidity present')).toBeDisabled();
 
-    fireEvent.click(field('Korn-Thermometer vorhanden'));
+    fireEvent.click(field('Grain thermometers present'));
 
-    expect(field('Gerätegruppe')).toBeEnabled();
-    expect(field('Feuchte vorhanden')).toBeEnabled();
+    expect(field('Device group')).toBeEnabled();
+    expect(field('Humidity present')).toBeEnabled();
   });
 
   it('locks the topic prefix and the switch id until fan control is ticked', () => {
     renderDialog();
 
-    expect(field('Topic-Präfix')).toBeDisabled();
-    expect(field('Schaltkanal')).toBeDisabled();
+    expect(field('Topic prefix')).toBeDisabled();
+    expect(field('Switch id')).toBeDisabled();
 
-    fireEvent.click(field('Lüftersteuerung aktiviert'));
+    fireEvent.click(field('Fan control enabled'));
 
-    expect(field('Topic-Präfix')).toBeEnabled();
-    expect(field('Schaltkanal')).toBeEnabled();
+    expect(field('Topic prefix')).toBeEnabled();
+    expect(field('Switch id')).toBeEnabled();
   });
 
   it('keeps a locked field’s value through a tick-untick-tick cycle', () => {
     renderDialog(fullyEquipped);
 
-    expect(field('Gerätegruppe')).toHaveValue('grain-watch-1');
+    expect(field('Device group')).toHaveValue('grain-watch-1');
 
-    fireEvent.click(field('Korn-Thermometer vorhanden'));
-    expect(field('Gerätegruppe')).toBeDisabled();
-    expect(field('Gerätegruppe')).toHaveValue('grain-watch-1');
+    fireEvent.click(field('Grain thermometers present'));
+    expect(field('Device group')).toBeDisabled();
+    expect(field('Device group')).toHaveValue('grain-watch-1');
 
-    fireEvent.click(field('Korn-Thermometer vorhanden'));
-    expect(field('Gerätegruppe')).toBeEnabled();
-    expect(field('Gerätegruppe')).toHaveValue('grain-watch-1');
+    fireEvent.click(field('Grain thermometers present'));
+    expect(field('Device group')).toBeEnabled();
+    expect(field('Device group')).toHaveValue('grain-watch-1');
   });
 
   it('still submits a locked field’s value', async () => {
     renderDialog(fullyEquipped);
 
-    fireEvent.click(field('Korn-Thermometer vorhanden'));
+    fireEvent.click(field('Grain thermometers present'));
     submit();
 
     await waitFor(() =>
@@ -99,7 +99,7 @@ describe('StockFormDialog withdrawal warning', () => {
 
     expect(screen.queryByText(/vor Ort/)).not.toBeInTheDocument();
 
-    fireEvent.click(field('Lüftersteuerung aktiviert'));
+    fireEvent.click(field('Fan control enabled'));
 
     expect(screen.getByText(/vor Ort/)).toBeInTheDocument();
   });
@@ -111,8 +111,8 @@ describe('StockFormDialog withdrawal warning', () => {
       fanTopicPrefix: undefined,
     });
 
-    fireEvent.click(field('Lüftersteuerung aktiviert'));
-    fireEvent.click(field('Lüftersteuerung aktiviert'));
+    fireEvent.click(field('Fan control enabled'));
+    fireEvent.click(field('Fan control enabled'));
 
     expect(screen.queryByText(/vor Ort/)).not.toBeInTheDocument();
   });
@@ -137,10 +137,10 @@ describe('StockFormDialog validation', () => {
     renderDialog();
 
     fireEvent.change(field('Name'), { target: { value: 'Halle Süd' } });
-    fireEvent.change(field('Gerätegruppe'), {
+    fireEvent.change(field('Device group'), {
       target: { value: 'grain-watch-2' },
     });
-    fireEvent.click(field('Lüftersteuerung aktiviert'));
+    fireEvent.click(field('Fan control enabled'));
     submit();
 
     expect(
@@ -165,11 +165,11 @@ describe('StockFormDialog validation', () => {
     renderDialog();
 
     fireEvent.change(field('Name'), { target: { value: 'Halle Süd' } });
-    fireEvent.change(field('Gerätegruppe'), {
+    fireEvent.change(field('Device group'), {
       target: { value: 'grain-watch-2' },
     });
-    fireEvent.click(field('Lüftersteuerung aktiviert'));
-    fireEvent.change(field('Topic-Präfix'), {
+    fireEvent.click(field('Fan control enabled'));
+    fireEvent.change(field('Topic prefix'), {
       target: { value: 'shellies/#' },
     });
     submit();
@@ -186,7 +186,7 @@ describe('StockFormDialog submit', () => {
     renderDialog();
 
     fireEvent.change(field('Name'), { target: { value: 'Halle Süd' } });
-    fireEvent.change(field('Gerätegruppe'), {
+    fireEvent.change(field('Device group'), {
       target: { value: 'grain-watch-2' },
     });
     submit();
@@ -210,7 +210,7 @@ describe('StockFormDialog submit', () => {
   it('shows the generated id read-only when editing', () => {
     renderDialog(fullyEquipped);
 
-    const id = field('Kennung');
+    const id = field('Id');
     expect(id).toHaveValue('stk_001');
     expect(id).toHaveAttribute('readonly');
   });
@@ -218,7 +218,7 @@ describe('StockFormDialog submit', () => {
   it('clears an emptied nullable field with null rather than an empty string', async () => {
     renderDialog(fullyEquipped);
 
-    fireEvent.change(field('Beschreibung'), { target: { value: '  ' } });
+    fireEvent.change(field('Description'), { target: { value: '  ' } });
     submit();
 
     await waitFor(() =>

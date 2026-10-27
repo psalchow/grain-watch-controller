@@ -168,7 +168,7 @@ export function StockFormDialog({
     <Dialog
       open={open}
       onClose={onCancel}
-      title={stock ? 'Halle bearbeiten' : 'Neue Halle'}
+      title={stock ? 'Edit stock' : 'New stock'}
     >
       <form onSubmit={submit} className="space-y-4">
         {error && (
@@ -177,9 +177,9 @@ export function StockFormDialog({
           </div>
         )}
 
-        <Group title="Stammdaten">
+        <Group title="Basics">
           {stock && (
-            <Field htmlFor="stock-id" label="Kennung">
+            <Field htmlFor="stock-id" label="Id">
               <Input id="stock-id" value={stock.id} readOnly />
             </Field>
           )}
@@ -190,7 +190,7 @@ export function StockFormDialog({
               onChange={(e) => set('name', e.target.value)}
             />
           </Field>
-          <Field htmlFor="stock-description" label="Beschreibung">
+          <Field htmlFor="stock-description" label="Description">
             <Input
               id="stock-description"
               value={draft.description}
@@ -199,20 +199,20 @@ export function StockFormDialog({
           </Field>
           <Checkbox
             id="stock-active"
-            label="Aktiv"
+            label="Active"
             checked={draft.active}
             onChange={(checked) => set('active', checked)}
           />
         </Group>
 
-        <Group title="Sensorik">
+        <Group title="Sensors">
           <Checkbox
             id="stock-has-grain-sensors"
-            label="Korn-Thermometer vorhanden"
+            label="Grain thermometers present"
             checked={draft.hasGrainSensors}
             onChange={(checked) => set('hasGrainSensors', checked)}
           />
-          <Field htmlFor="stock-device-group" label="Gerätegruppe">
+          <Field htmlFor="stock-device-group" label="Device group">
             <Input
               id="stock-device-group"
               value={draft.deviceGroup}
@@ -222,12 +222,12 @@ export function StockFormDialog({
           </Field>
           <Checkbox
             id="stock-has-humidity"
-            label="Feuchte vorhanden"
+            label="Humidity present"
             checked={draft.hasHumidity}
             disabled={!draft.hasGrainSensors}
             onChange={(checked) => set('hasHumidity', checked)}
           />
-          <Field htmlFor="stock-outdoor-device" label="Außensensor">
+          <Field htmlFor="stock-outdoor-device" label="Outdoor device">
             <Input
               id="stock-outdoor-device"
               value={draft.outdoorDevice}
@@ -236,10 +236,10 @@ export function StockFormDialog({
           </Field>
         </Group>
 
-        <Group title="Lüftersteuerung">
+        <Group title="Fan control">
           <Checkbox
             id="stock-fan-control-enabled"
-            label="Lüftersteuerung aktiviert"
+            label="Fan control enabled"
             checked={draft.fanControlEnabled}
             onChange={(checked) => set('fanControlEnabled', checked)}
           />
@@ -251,7 +251,7 @@ export function StockFormDialog({
               ausschalten.
             </div>
           )}
-          <Field htmlFor="stock-fan-topic-prefix" label="Topic-Präfix">
+          <Field htmlFor="stock-fan-topic-prefix" label="Topic prefix">
             <Input
               id="stock-fan-topic-prefix"
               value={draft.fanTopicPrefix}
@@ -259,7 +259,7 @@ export function StockFormDialog({
               onChange={(e) => set('fanTopicPrefix', e.target.value)}
             />
           </Field>
-          <Field htmlFor="stock-fan-switch-id" label="Schaltkanal">
+          <Field htmlFor="stock-fan-switch-id" label="Switch id">
             <Input
               id="stock-fan-switch-id"
               type="number"
@@ -280,10 +280,10 @@ export function StockFormDialog({
             className="flex-1"
             onClick={onCancel}
           >
-            Abbrechen
+            Cancel
           </Button>
           <Button type="submit" className="flex-1" disabled={saving}>
-            {saving ? 'Speichern…' : stock ? 'Speichern' : 'Anlegen'}
+            {saving ? 'Saving...' : stock ? 'Save changes' : 'Create stock'}
           </Button>
         </div>
       </form>

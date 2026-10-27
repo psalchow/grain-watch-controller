@@ -82,11 +82,11 @@ export default function AdminStocksPage() {
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
               <ArrowLeft className="h-4 w-4" />
-              <span className="ml-1">Zurück</span>
+              <span className="ml-1">Back</span>
             </Button>
-            <h1 className="text-2xl font-semibold">Hallenverwaltung</h1>
+            <h1 className="text-2xl font-semibold">Stock Management</h1>
           </div>
-          <Button onClick={() => setForm({})}>Neue Halle</Button>
+          <Button onClick={() => setForm({})}>New stock</Button>
         </div>
 
         {error && (
@@ -104,11 +104,11 @@ export default function AdminStocksPage() {
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/50">
                 <tr>
-                  <th className="p-3 text-left">Halle</th>
-                  <th className="p-3 text-left">Gerätegruppe</th>
-                  <th className="p-3 text-left">Ausstattung</th>
-                  <th className="p-3 text-left">Status</th>
-                  <th className="p-3 text-right">Aktionen</th>
+                  <th className="p-3 text-left">Stock</th>
+                  <th className="p-3 text-left">Device group</th>
+                  <th className="p-3 text-left">Equipment</th>
+                  <th className="p-3 text-left">Active</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -133,7 +133,7 @@ export default function AdminStocksPage() {
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
                         )}
                       >
-                        {stock.active ? 'Aktiv' : 'Inaktiv'}
+                        {stock.active ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td className="p-3 text-right space-x-2 whitespace-nowrap">
@@ -142,14 +142,14 @@ export default function AdminStocksPage() {
                         size="sm"
                         onClick={() => setForm({ stock })}
                       >
-                        Bearbeiten
+                        Edit
                       </Button>
                       <Button
                         variant={stock.active ? 'destructive' : 'secondary'}
                         size="sm"
                         onClick={() => toggleActive(stock)}
                       >
-                        {stock.active ? 'Deaktivieren' : 'Aktivieren'}
+                        {stock.active ? 'Deactivate' : 'Activate'}
                       </Button>
                       {/* Only while inactive: the backend answers 409 for an
                           active stock, so the button's absence and the server
@@ -160,7 +160,7 @@ export default function AdminStocksPage() {
                           size="sm"
                           onClick={() => setDeleting(stock)}
                         >
-                          Löschen
+                          Delete
                         </Button>
                       )}
                     </td>
@@ -186,13 +186,12 @@ export default function AdminStocksPage() {
         <Dialog
           open
           onClose={() => setDeleting(null)}
-          title="Halle löschen"
+          title="Delete stock"
         >
           <div className="space-y-4">
             <p className="text-sm">
               „{deleting.name}“ wird endgültig gelöscht. Die Schalthistorie und
-              die Automatikeinstellungen der Halle werden mit entfernt; die
-              Messwerte in der Zeitreihendatenbank bleiben bestehen.
+              die Automatikeinstellungen der Halle werden mit entfernt.
             </p>
             <div className="flex gap-2">
               <Button
@@ -200,14 +199,14 @@ export default function AdminStocksPage() {
                 className="flex-1"
                 onClick={() => setDeleting(null)}
               >
-                Abbrechen
+                Cancel
               </Button>
               <Button
                 variant="destructive"
                 className="flex-1"
                 onClick={() => confirmDelete(deleting)}
               >
-                Endgültig löschen
+                Delete permanently
               </Button>
             </div>
           </div>
@@ -227,25 +226,25 @@ function Equipment({ stock }: { stock: AdminStock }) {
       {stock.hasGrainSensors && (
         <span className="inline-flex items-center">
           <Thermometer className="h-4 w-4" aria-hidden="true">
-            <title>Korn-Thermometer</title>
+            <title>Grain thermometers</title>
           </Thermometer>
-          <span className="sr-only">Korn-Thermometer</span>
+          <span className="sr-only">Grain thermometers</span>
         </span>
       )}
       {stock.hasHumidity && (
         <span className="inline-flex items-center">
           <Droplets className="h-4 w-4" aria-hidden="true">
-            <title>Feuchte</title>
+            <title>Humidity</title>
           </Droplets>
-          <span className="sr-only">Feuchte</span>
+          <span className="sr-only">Humidity</span>
         </span>
       )}
       {stock.fanControlEnabled && (
         <span className="inline-flex items-center">
           <Fan className="h-4 w-4" aria-hidden="true">
-            <title>Lüftersteuerung</title>
+            <title>Fan control</title>
           </Fan>
-          <span className="sr-only">Lüftersteuerung</span>
+          <span className="sr-only">Fan control</span>
         </span>
       )}
     </div>

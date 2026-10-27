@@ -79,10 +79,10 @@ describe('AdminStocksPage', () => {
     await screen.findByText('Halle Nord');
 
     expect(
-      within(rowOf('Halle Nord')).queryByRole('button', { name: 'Löschen' })
+      within(rowOf('Halle Nord')).queryByRole('button', { name: 'Delete' })
     ).not.toBeInTheDocument();
     expect(
-      within(rowOf('Halle Süd')).getByRole('button', { name: 'Löschen' })
+      within(rowOf('Halle Süd')).getByRole('button', { name: 'Delete' })
     ).toBeInTheDocument();
   });
 
@@ -91,7 +91,7 @@ describe('AdminStocksPage', () => {
     await screen.findByText('Halle Süd');
 
     fireEvent.click(
-      within(rowOf('Halle Süd')).getByRole('button', { name: 'Löschen' })
+      within(rowOf('Halle Süd')).getByRole('button', { name: 'Delete' })
     );
 
     expect(await screen.findByText(/„Halle Süd“ wird/)).toBeInTheDocument();
@@ -105,10 +105,10 @@ describe('AdminStocksPage', () => {
     await screen.findByText('Halle Süd');
 
     fireEvent.click(
-      within(rowOf('Halle Süd')).getByRole('button', { name: 'Löschen' })
+      within(rowOf('Halle Süd')).getByRole('button', { name: 'Delete' })
     );
     fireEvent.click(
-      await screen.findByRole('button', { name: 'Endgültig löschen' })
+      await screen.findByRole('button', { name: 'Delete permanently' })
     );
 
     await waitFor(() =>
@@ -123,7 +123,7 @@ describe('AdminStocksPage', () => {
     await screen.findByText('Halle Nord');
 
     fireEvent.click(
-      within(rowOf('Halle Nord')).getByRole('button', { name: 'Deaktivieren' })
+      within(rowOf('Halle Nord')).getByRole('button', { name: 'Deactivate' })
     );
 
     await waitFor(() =>
@@ -147,14 +147,14 @@ describe('AdminStocksPage', () => {
     vi.mocked(adminApi.createStock).mockResolvedValue(inactive);
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Neue Halle' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New stock' }));
     fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Halle West' },
     });
-    fireEvent.change(screen.getByLabelText('Gerätegruppe'), {
+    fireEvent.change(screen.getByLabelText('Device group'), {
       target: { value: 'grain-watch-3' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create stock' }));
 
     await waitFor(() =>
       expect(adminApi.createStock).toHaveBeenCalledWith(
@@ -173,12 +173,12 @@ describe('AdminStocksPage', () => {
     await screen.findByText('Halle Nord');
 
     fireEvent.click(
-      within(rowOf('Halle Nord')).getByRole('button', { name: 'Bearbeiten' })
+      within(rowOf('Halle Nord')).getByRole('button', { name: 'Edit' })
     );
     fireEvent.change(await screen.findByLabelText('Name'), {
       target: { value: 'Halle Nordwest' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() =>
       expect(adminApi.updateStock).toHaveBeenCalledWith(
