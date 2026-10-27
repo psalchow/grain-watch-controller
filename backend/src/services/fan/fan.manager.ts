@@ -117,7 +117,10 @@ export class FanControlManager {
     for (const wiring of this.fanStocks.values()) this.activateWiring(wiring);
     this.retentionTimer = setInterval(() => this.sweepRetention(), this.deps.timings.retentionSweepMs);
     this.reconcileTimer = setInterval(
-      () => void this.reconcile(),
+      () =>
+        void this.reconcile().catch((error: unknown) => {
+          console.error('Fan control: reconciliation tick failed', error);
+        }),
       this.deps.timings.reconcileIntervalMs,
     );
   }
@@ -233,7 +236,11 @@ export class FanControlManager {
       console.error(`Fan control: logging the retirement of ${stockId} failed`, error);
     }
 
-    wiring.controller.stop();
+    try {
+      wiring.controller.stop();
+    } catch (error) {
+      console.error(`Fan control: stopping ${stockId}'s controller failed`, error);
+    }
     this.fanStocks.delete(stockId);
     // After the delete, so the guard inside sees only the wirings that remain.
     this.unsubscribeWiring(wiring);

@@ -112,7 +112,7 @@ export default function AdminStocksPage() {
                 </tr>
               </thead>
               <tbody>
-                {stocks.length === 0 && (
+                {!error && stocks.length === 0 && (
                   <tr>
                     <td
                       colSpan={5}

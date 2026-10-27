@@ -623,3 +623,16 @@ matching wiring, or refuse the duplicate in `StockService.assertInvariants`.
 `fanTopicPrefix` unconditionally, so a legacy row whose prefix ends in `/`
 (nothing validated these before 1.6.0) cannot be renamed until the prefix is
 corrected. Validating only while fan control is enabled would close it.
+
+## A wiring whose recovery fails stays in the map half-activated
+
+**Deferred:** 2026-10-27 — consequence of guarding `buildWiring`; acceptable
+under the operating reality (the Shelly's own auto-off, recovery on restart).
+
+`FanControlManager.createWiring` (`backend/src/services/fan/fan.manager.ts`)
+inserts the map entry before `activateWiring` runs, so when `recover()` throws,
+`buildWiring` logs it and the wiring stays: subscribed, but its desired state
+not resumed. The next tick finds a matching prefix and never retries it.
+
+Closing it: retry the activation on the next tick, or insert the map entry only
+once activation has succeeded.

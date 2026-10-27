@@ -151,6 +151,7 @@ describe('AdminStocksPage', () => {
     expect(
       await screen.findByText('Hallen konnten nicht geladen werden')
     ).toBeInTheDocument();
+    expect(screen.queryByText(/No stocks yet/)).not.toBeInTheDocument();
   });
 
   it('creates a stock from the form dialog', async () => {
