@@ -9,10 +9,11 @@ import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 function fakeMqtt() {
   const published: Array<{ topic: string; message: string; qos?: 0 | 1 | 2 }> = [];
   const subscribed: string[] = [];
+  const unsubscribed: string[] = [];
   let handler: ((t: string, p: string) => void) | null = null;
   let ended = false;
   return {
-    published, subscribed,
+    published, subscribed, unsubscribed,
     emit: (t: string, p: string) => handler?.(t, p),
     isEnded: () => ended,
     mqtt: {
@@ -20,27 +21,34 @@ function fakeMqtt() {
         published.push({ topic, message, ...(options?.qos !== undefined ? { qos: options.qos } : {}) });
       },
       subscribe: (topic: string) => { subscribed.push(topic); },
+      unsubscribe: (topic: string) => { unsubscribed.push(topic); },
       onMessage: (l: (t: string, p: string) => void) => { handler = l; },
       end: () => { ended = true; },
     },
   };
 }
 
+const PREFIX = '/corn-watch/actors/corn-watch-1/fan-control';
+
 async function setup() {
   const db = createTestDb();
-  await insertStock(db.db, { id: 'grain-watch-1', fanControlEnabled: true, fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control' });
+  await insertStock(db.db, { id: 'grain-watch-1', fanControlEnabled: true, fanTopicPrefix: PREFIX });
   const f = fakeMqtt();
-  const enabledStockIds = new Set(['grain-watch-1']);
+  // Mutable: a test edits this array to express a configuration change and
+  // then runs a reconciliation tick against it.
+  const wiring: Array<{ stockId: string; topicPrefix: string; switchId: number }> = [
+    { stockId: 'grain-watch-1', topicPrefix: PREFIX, switchId: 0 },
+  ];
   const manager = new FanControlManager({
-    stocks: [{ stockId: 'grain-watch-1', topicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', switchId: 0 }],
+    stocks: [{ stockId: 'grain-watch-1', topicPrefix: PREFIX, switchId: 0 }],
     mqtt: f.mqtt,
     stateRepo: new FanStateRepository(db.db),
     eventsRepo: new FanEventsRepository(db.db),
     timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
-    fanEnabledStockIds: async () => enabledStockIds,
+    fanWiring: async () => wiring,
     now: () => new Date('2026-07-09T10:00:00.000Z'),
   });
-  return { db, manager, f, enabledStockIds };
+  return { db, manager, f, wiring };
 }
 
 describe('FanControlManager', () => {
@@ -111,14 +119,16 @@ describe('FanControlManager', () => {
 
   it('releases the MQTT connection and the reconciliation timer on shutdown', async () => {
     const { db, f } = await setup();
-    const fanEnabledStockIds = jest.fn().mockResolvedValue(new Set(['grain-watch-1']));
+    const fanWiring = jest
+      .fn()
+      .mockResolvedValue([{ stockId: 'grain-watch-1', topicPrefix: PREFIX, switchId: 0 }]);
     const manager = new FanControlManager({
-      stocks: [{ stockId: 'grain-watch-1', topicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', switchId: 0 }],
+      stocks: [{ stockId: 'grain-watch-1', topicPrefix: PREFIX, switchId: 0 }],
       mqtt: f.mqtt,
       stateRepo: new FanStateRepository(db.db),
       eventsRepo: new FanEventsRepository(db.db),
       timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
-      fanEnabledStockIds,
+      fanWiring,
     });
     manager.init();
 
@@ -127,19 +137,19 @@ describe('FanControlManager', () => {
     expect(f.isEnded()).toBe(true);
     // A surviving timer would keep reading a database that is already closed.
     jest.advanceTimersByTime(60000 * 3);
-    expect(fanEnabledStockIds).not.toHaveBeenCalled();
+    expect(fanWiring).not.toHaveBeenCalled();
   });
 
   describe('retirement', () => {
     const commandTopic = '/corn-watch/actors/corn-watch-1/fan-control/command/switch:0';
 
     it('stops driving the fan, sends one last off and forgets the stock', async () => {
-      const { db, manager, f, enabledStockIds } = await setup();
+      const { db, manager, f, wiring } = await setup();
       manager.init();
       manager.getController('grain-watch-1')!.command('on');
       f.published.length = 0;
 
-      enabledStockIds.delete('grain-watch-1');
+      wiring.length = 0;
       await manager.reconcile();
 
       expect(f.published).toEqual([{ topic: commandTopic, message: 'off', qos: 1 }]);
@@ -154,11 +164,11 @@ describe('FanControlManager', () => {
     });
 
     it('records the withdrawal in the audit log', async () => {
-      const { db, manager, enabledStockIds } = await setup();
+      const { db, manager, wiring } = await setup();
       manager.init();
       manager.getController('grain-watch-1')!.command('on');
 
-      enabledStockIds.delete('grain-watch-1');
+      wiring.length = 0;
       await manager.reconcile();
 
       const kinds = new FanEventsRepository(db.db)
@@ -168,12 +178,12 @@ describe('FanControlManager', () => {
     });
 
     it('records the switch-off as a backend action', async () => {
-      const { db, manager, f, enabledStockIds } = await setup();
+      const { db, manager, f, wiring } = await setup();
       manager.init();
       manager.getController('grain-watch-1')!.command('on');
       f.published.length = 0;
 
-      enabledStockIds.delete('grain-watch-1');
+      wiring.length = 0;
       await manager.reconcile();
 
       const events = new FanEventsRepository(db.db).listRecent('grain-watch-1', 10);
@@ -184,10 +194,10 @@ describe('FanControlManager', () => {
     });
 
     it('does not command anything from the request path', async () => {
-      const { manager, f, enabledStockIds } = await setup();
+      const { manager, f, wiring } = await setup();
       manager.init();
       manager.getController('grain-watch-1')!.command('on');
-      enabledStockIds.delete('grain-watch-1');
+      wiring.length = 0;
       f.published.length = 0;
 
       // What a request does: refuse the stock, leave the switching to the tick.
@@ -200,7 +210,7 @@ describe('FanControlManager', () => {
     });
 
     it('forgets the stock even when the switch-off throws', async () => {
-      const { manager, enabledStockIds } = await setup();
+      const { manager, wiring } = await setup();
       manager.init();
       const controller = manager.getController('grain-watch-1')!;
       const consoleError = jest.spyOn(console, 'error').mockImplementation();
@@ -208,7 +218,7 @@ describe('FanControlManager', () => {
         throw new Error('broker gone');
       });
 
-      enabledStockIds.delete('grain-watch-1');
+      wiring.length = 0;
       await manager.reconcile();
 
       expect(manager.getController('grain-watch-1')).toBeNull();
@@ -224,7 +234,7 @@ describe('FanControlManager', () => {
         stateRepo: new FanStateRepository(db.db),
         eventsRepo: new FanEventsRepository(db.db),
         timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
-        fanEnabledStockIds: () => Promise.reject(new Error('database busy')),
+        fanWiring: () => Promise.reject(new Error('database busy')),
       });
       manager.init();
       const consoleError = jest.spyOn(console, 'error').mockImplementation();
@@ -233,6 +243,143 @@ describe('FanControlManager', () => {
 
       expect(manager.getController('grain-watch-1')).not.toBeNull();
       expect(f.published).toEqual([]);
+      consoleError.mockRestore();
+      manager.shutdown();
+    });
+
+    it("unsubscribes the retired stock's topics", async () => {
+      const { manager, f, wiring } = await setup();
+      manager.init();
+
+      wiring.length = 0;
+      await manager.reconcile();
+
+      expect(f.unsubscribed).toEqual([
+        `${PREFIX}/monitor/#`,
+        `${PREFIX}/status/switch:0`,
+        `${PREFIX}/online`,
+      ]);
+    });
+
+    it('unsubscribes nothing while another stock still uses the same prefix', async () => {
+      // Two stocks on one prefix is a misconfiguration, but the survivor's feed
+      // must not go dark because its neighbour was retired.
+      const { db, f } = await setup();
+      await insertStock(db.db, { id: 'grain-watch-2', fanControlEnabled: true, fanTopicPrefix: PREFIX });
+      const wiring = [
+        { stockId: 'grain-watch-1', topicPrefix: PREFIX, switchId: 0 },
+        { stockId: 'grain-watch-2', topicPrefix: PREFIX, switchId: 1 },
+      ];
+      const manager = new FanControlManager({
+        stocks: [...wiring],
+        mqtt: f.mqtt,
+        stateRepo: new FanStateRepository(db.db),
+        eventsRepo: new FanEventsRepository(db.db),
+        timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
+        fanWiring: async () => wiring,
+      });
+      manager.init();
+
+      wiring.splice(1, 1);
+      await manager.reconcile();
+
+      expect(manager.getController('grain-watch-2')).toBeNull();
+      expect(f.unsubscribed).toEqual([]);
+      manager.shutdown();
+    });
+  });
+
+  describe('building on the reconciliation tick', () => {
+    it('builds, subscribes and recovers a stock that appears in the wiring', async () => {
+      const { db, manager, f, wiring } = await setup();
+      manager.init();
+      await insertStock(db.db, { id: 'grain-watch-2', fanControlEnabled: true, fanTopicPrefix: '/p2' });
+      // A desired state left behind by an earlier run: `recover()` resumes it,
+      // which is how the build path proves it ran the full wiring.
+      new FanStateRepository(db.db).upsert({
+        stockId: 'grain-watch-2',
+        desiredOn: true,
+        since: '2026-07-09T09:00:00.000Z',
+        lastCommandAt: '2026-07-09T09:00:00.000Z',
+        updatedAt: '2026-07-09T09:00:00.000Z',
+      });
+
+      wiring.push({ stockId: 'grain-watch-2', topicPrefix: '/p2', switchId: 1 });
+      await manager.reconcile();
+
+      expect(manager.getController('grain-watch-2')).not.toBeNull();
+      expect(f.subscribed).toContain('/p2/monitor/#');
+      expect(f.subscribed).toContain('/p2/status/switch:1');
+      expect(f.subscribed).toContain('/p2/online');
+      expect(f.published).toContainEqual({ topic: '/p2/command/switch:1', message: 'on', qos: 1 });
+    });
+
+    it('re-wires a changed topic prefix, switching the old device off', async () => {
+      const { manager, f, wiring } = await setup();
+      manager.init();
+      manager.getController('grain-watch-1')!.command('on');
+      f.published.length = 0;
+
+      wiring[0]!.topicPrefix = '/relocated';
+      await manager.reconcile();
+
+      // On the *old* command topic: the device being disconnected must not be
+      // left running.
+      expect(f.published).toEqual([{ topic: `${PREFIX}/command/switch:0`, message: 'off', qos: 1 }]);
+      expect(f.unsubscribed).toEqual([
+        `${PREFIX}/monitor/#`,
+        `${PREFIX}/status/switch:0`,
+        `${PREFIX}/online`,
+      ]);
+      expect(f.subscribed).toContain('/relocated/monitor/#');
+      expect(f.subscribed).toContain('/relocated/status/switch:0');
+      expect(f.subscribed).toContain('/relocated/online');
+
+      const rebuilt = manager.getController('grain-watch-1');
+      expect(rebuilt).not.toBeNull();
+      rebuilt!.command('on');
+      expect(f.published).toContainEqual({ topic: '/relocated/command/switch:0', message: 'on', qos: 1 });
+    });
+
+    it('re-wires a changed switch id, switching the old switch off', async () => {
+      const { manager, f, wiring } = await setup();
+      manager.init();
+      manager.getController('grain-watch-1')!.command('on');
+      f.published.length = 0;
+      f.subscribed.length = 0;
+
+      wiring[0]!.switchId = 1;
+      await manager.reconcile();
+
+      expect(f.published).toEqual([{ topic: `${PREFIX}/command/switch:0`, message: 'off', qos: 1 }]);
+      // The prefix survives the re-wire, so its shared topics are taken down
+      // and put back up; the switch's own status topic moves.
+      expect(f.unsubscribed).toContain(`${PREFIX}/status/switch:0`);
+      expect(f.subscribed).toContain(`${PREFIX}/status/switch:1`);
+      expect(f.subscribed).toContain(`${PREFIX}/monitor/#`);
+      expect(f.subscribed).toContain(`${PREFIX}/online`);
+
+      manager.getController('grain-watch-1')!.command('on');
+      expect(f.published).toContainEqual({ topic: `${PREFIX}/command/switch:1`, message: 'on', qos: 1 });
+    });
+
+    it('builds nothing when the wiring cannot be read', async () => {
+      const { db, f } = await setup();
+      const manager = new FanControlManager({
+        stocks: [],
+        mqtt: f.mqtt,
+        stateRepo: new FanStateRepository(db.db),
+        eventsRepo: new FanEventsRepository(db.db),
+        timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
+        fanWiring: () => Promise.reject(new Error('database busy')),
+      });
+      manager.init();
+      const consoleError = jest.spyOn(console, 'error').mockImplementation();
+
+      await manager.reconcile();
+
+      expect(manager.getController('grain-watch-1')).toBeNull();
+      expect(f.subscribed).toEqual([]);
       consoleError.mockRestore();
       manager.shutdown();
     });
@@ -249,7 +396,7 @@ describe('FanControlManager', () => {
         stateRepo: new FanStateRepository(db.db),
         eventsRepo: new FanEventsRepository(db.db),
         timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
-        fanEnabledStockIds: async () => new Set(['grain-watch-1']),
+        fanWiring: async () => [{ stockId: 'grain-watch-1', topicPrefix: PREFIX, switchId: 0 }],
         onInterference: (stockId, cause) => interference.push({ stockId, cause }),
       });
       manager.init();
@@ -263,7 +410,7 @@ describe('FanControlManager', () => {
     });
 
     it('calls onControlWithdrawn with fan_control_withdrawn before switching the fan off', async () => {
-      const { db, enabledStockIds } = await setup();
+      const { db, wiring } = await setup();
       const f = fakeMqtt();
       const order: string[] = [];
       const manager = new FanControlManager({
@@ -272,7 +419,7 @@ describe('FanControlManager', () => {
         stateRepo: new FanStateRepository(db.db),
         eventsRepo: new FanEventsRepository(db.db),
         timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
-        fanEnabledStockIds: async () => enabledStockIds,
+        fanWiring: async () => wiring,
         onControlWithdrawn: (stockId) => order.push(`withdrawn:${stockId}`),
       });
       manager.init();
@@ -281,7 +428,7 @@ describe('FanControlManager', () => {
         order.push(`command:${action}`);
       });
 
-      enabledStockIds.delete('grain-watch-1');
+      wiring.length = 0;
       await manager.reconcile();
 
       expect(order).toEqual(['withdrawn:grain-watch-1', 'command:off']);

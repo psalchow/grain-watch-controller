@@ -139,10 +139,7 @@ export async function initFanControl(): Promise<void> {
       retentionSweepMs: config.fan.retentionSweepMs,
       reconcileIntervalMs: config.fan.reconcileIntervalMs,
     },
-    fanEnabledStockIds: async () => {
-      const current = await new StockRepository(getDb()).findAll();
-      return new Set(selectFanStocks(current).map((s) => s.stockId));
-    },
+    fanWiring: async () => selectFanStocks(await new StockRepository(getDb()).findAll()),
     onInterference: (stockId, cause) => automationService.disable(stockId, cause),
     onControlWithdrawn: (stockId) => automationService.disable(stockId, 'fan_control_withdrawn'),
   });

@@ -15,7 +15,7 @@ import {
   AutomationRepository,
 } from '../../src/db/repositories';
 import { insertStock } from '../setup/stocks';
-import { FanControlManager } from '../../src/services/fan/fan.manager';
+import { FanControlManager, selectFanStocks } from '../../src/services/fan/fan.manager';
 import { setFanManager } from '../../src/services/fan';
 import { AutomationService, setAutomationService } from '../../src/services/automation';
 
@@ -49,7 +49,9 @@ beforeEach(async () => {
   id: 'grain-watch-1',
   description: 'Lagerhalle 8',
   fanControlEnabled: true,
-  fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control',
+  // Matches the wiring the manager below is built with: a reconciliation tick
+  // compares the two and would otherwise re-wire the stock mid-test.
+  fanTopicPrefix: '/p',
 });
 await insertStock(getDb(), {
   id: 'grain-watch-2',
@@ -82,14 +84,11 @@ await insertStock(getDb(), {
       { stockId: 'grain-watch-1', topicPrefix: '/p', switchId: 0 },
       { stockId: 'fan-only', topicPrefix: '/q', switchId: 0 },
     ],
-    mqtt: { publish: (topic, message) => published.push({ topic, message }), subscribe: () => {}, onMessage: () => {}, end: () => {} },
+    mqtt: { publish: (topic, message) => { published.push({ topic, message }); }, subscribe: () => {}, unsubscribe: () => {}, onMessage: () => {}, end: () => {} },
     stateRepo: new FanStateRepository(getDb()),
     eventsRepo: new FanEventsRepository(getDb()),
     timings: { keepAliveMs: 900000, watchdogMs: 10000, retentionDays: 90, retentionSweepMs: 21600000, reconcileIntervalMs: 60000 },
-    fanEnabledStockIds: async () => {
-      const current = await new StockRepository(getDb()).findAll();
-      return new Set(current.filter((s) => s.fanControlEnabled && s.fanTopicPrefix).map((s) => s.id));
-    },
+    fanWiring: async () => selectFanStocks(await new StockRepository(getDb()).findAll()),
   });
   manager.init();
   setFanManager(manager);

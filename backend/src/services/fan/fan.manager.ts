@@ -11,19 +11,25 @@ import type { InterferenceCause } from './types';
  * nothing to publish to, so no controller is built and the stock reports no fan
  * control.
  */
-export function selectFanStocks(
-  stocks: Stock[],
-): Array<{ stockId: string; topicPrefix: string; switchId: number }> {
+/** Everything the manager needs to drive one stock's fan over MQTT. */
+export interface FanWiringConfig {
+  stockId: string;
+  topicPrefix: string;
+  switchId: number;
+}
+
+export function selectFanStocks(stocks: Stock[]): FanWiringConfig[] {
   return stocks
     .filter((s) => s.fanControlEnabled && s.fanTopicPrefix)
     .map((s) => ({ stockId: s.id, topicPrefix: s.fanTopicPrefix as string, switchId: s.fanSwitchId }));
 }
 
 export interface FanManagerDeps {
-  stocks: Array<{ stockId: string; topicPrefix: string; switchId: number }>;
+  stocks: FanWiringConfig[];
   mqtt: {
     publish(topic: string, message: string, options?: { qos?: 0 | 1 | 2 }): void;
     subscribe(topic: string): void;
+    unsubscribe(topic: string): void;
     onMessage(listener: (topic: string, payload: string) => void): void;
     end(): void;
   };
@@ -38,11 +44,12 @@ export interface FanManagerDeps {
     reconcileIntervalMs: number;
   };
   /**
-   * Ids of the stocks that currently ask for fan control. Re-read on every
-   * reconciliation tick so a row edited underneath the process takes effect
-   * without HTTP traffic and without a restart.
+   * The wiring every stock that asks for fan control currently wants. Re-read
+   * on every reconciliation tick so a row edited underneath the process takes
+   * effect without HTTP traffic and without a restart — the full wiring rather
+   * than a set of ids, so a changed topic prefix or switch id is noticed too.
    */
-  fanEnabledStockIds: () => Promise<Set<string>>;
+  fanWiring: () => Promise<FanWiringConfig[]>;
   /**
    * Notified when a controller reports an interference with its own desired
    * state — a local switch or a fault — with the stock id attached. Set by
@@ -64,6 +71,7 @@ export interface FanManagerDeps {
 interface StockFanWiring {
   stockId: string;
   topicPrefix: string;
+  switchId: number;
   commandTopic: string;
   /** The switch's own generic status update — the only status topic that concerns the fan. */
   statusTopic: string;
@@ -77,6 +85,18 @@ interface StockFanWiring {
   retiring: boolean;
 }
 
+/**
+ * The three topics one stock's fan listens on. One definition, so a
+ * subscription and the unsubscription that undoes it cannot drift apart.
+ *
+ * Not `status/#`: that also carries the device's peripheral components
+ * (temperature, system, wifi), which report every few seconds and say nothing
+ * about the fan. The design spec names this one status topic (§2).
+ */
+function topicsOf(wiring: StockFanWiring): string[] {
+  return [`${wiring.topicPrefix}/monitor/#`, wiring.statusTopic, `${wiring.topicPrefix}/online`];
+}
+
 export class FanControlManager {
   private readonly fanStocks = new Map<string, StockFanWiring>();
   private retentionTimer: ReturnType<typeof setInterval> | null = null;
@@ -85,49 +105,16 @@ export class FanControlManager {
 
   constructor(private readonly deps: FanManagerDeps) {
     this.now = deps.now ?? (() => new Date());
-    for (const s of deps.stocks) {
-      const commandTopic = `${s.topicPrefix}/command/switch:${s.switchId}`;
-      const statusTopic = `${s.topicPrefix}/status/switch:${s.switchId}`;
-      const controller = new FanController({
-        stockId: s.stockId,
-        // QoS 1: a switching command must survive a brief broker hiccup. Both
-        // payloads are idempotent, so a duplicate delivery is harmless.
-        publish: (payload) => this.deps.mqtt.publish(commandTopic, payload, { qos: 1 }),
-        stateRepo: deps.stateRepo,
-        eventsRepo: deps.eventsRepo,
-        timings: { keepAliveMs: deps.timings.keepAliveMs, watchdogMs: deps.timings.watchdogMs },
-        now: this.now,
-        // Always wired, even with no dependency configured: the wrapper itself
-        // checks for one, so there is nothing conditional to express in the
-        // property's type under `exactOptionalPropertyTypes`.
-        onInterference: (cause: InterferenceCause): void => {
-          deps.onInterference?.(s.stockId, cause);
-        },
-      });
-      this.fanStocks.set(s.stockId, {
-        stockId: s.stockId,
-        topicPrefix: s.topicPrefix,
-        commandTopic,
-        statusTopic,
-        controller,
-        retiring: false,
-      });
-    }
+    // Only the map entries here; the subscriptions and `recover()` belong to
+    // `init`, which is also what arms the timers.
+    for (const s of deps.stocks) this.createWiring(s);
   }
 
   init(): void {
     this.deps.mqtt.onMessage((topic, payload) => this.route(topic, payload));
     // Subscribe once: the mqtt client queues these until it connects and
     // re-subscribes automatically on reconnect (resubscribe default).
-    for (const wiring of this.fanStocks.values()) {
-      this.deps.mqtt.subscribe(`${wiring.topicPrefix}/monitor/#`);
-      // Not `status/#`: that also carries the device's peripheral components
-      // (temperature, system, wifi), which report every few seconds and say
-      // nothing about the fan. The design spec names this one topic (§2).
-      this.deps.mqtt.subscribe(wiring.statusTopic);
-      this.deps.mqtt.subscribe(`${wiring.topicPrefix}/online`);
-      wiring.controller.recover();
-    }
+    for (const wiring of this.fanStocks.values()) this.activateWiring(wiring);
     this.retentionTimer = setInterval(() => this.sweepRetention(), this.deps.timings.retentionSweepMs);
     this.reconcileTimer = setInterval(
       () => void this.reconcile(),
@@ -136,24 +123,43 @@ export class FanControlManager {
   }
 
   /**
-   * Re-reads which stocks still ask for fan control and retires the rest.
+   * Re-reads the wiring every stock asks for and brings the live controllers
+   * into line with it: retire what is gone, re-wire what moved, build what is
+   * new.
    *
    * The safety property must not depend on someone using the app: a fan whose
    * row was cleared has to stop even if nobody opens the page again. A failed
    * read is skipped — the next tick retries — rather than treated as a revocation.
    */
   async reconcile(): Promise<void> {
-    let enabled: Set<string>;
+    let desired: FanWiringConfig[];
     try {
-      enabled = await this.deps.fanEnabledStockIds();
+      desired = await this.deps.fanWiring();
     } catch (error) {
       console.error('Fan control: reconciliation failed, keeping current wiring', error);
       return;
     }
+    const wanted = new Map(desired.map((w) => [w.stockId, w]));
+
     for (const [stockId, wiring] of [...this.fanStocks]) {
+      const want = wanted.get(stockId);
       // Marked by a request counts too: that path only refuses the stock, the
       // switching happens here.
-      if (!enabled.has(stockId) || wiring.retiring) this.retireController(stockId);
+      if (!want || wiring.retiring) {
+        this.retire(stockId, 'fan control withdrawn');
+        continue;
+      }
+      if (want.topicPrefix === wiring.topicPrefix && want.switchId === wiring.switchId) continue;
+      // The stock keeps its fan control but points at a different device or a
+      // different switch. Retire first, so the final `off` goes out on the
+      // *old* command topic: the device being disconnected must not keep
+      // running. Only then build the new wiring.
+      this.retire(stockId, 'fan wiring changed');
+      this.buildWiring(want);
+    }
+
+    for (const want of wanted.values()) {
+      if (!this.fanStocks.has(want.stockId)) this.buildWiring(want);
     }
   }
 
@@ -175,6 +181,17 @@ export class FanControlManager {
    * does not need to chase an acknowledgement to stay safe.
    */
   retireController(stockId: string): void {
+    this.retire(stockId, 'fan control withdrawn');
+  }
+
+  /**
+   * The retirement itself. `reason` lands in the `stand_down` row, so the fan
+   * history distinguishes a withdrawal from a re-wire; everything else is
+   * identical, deliberately: a re-wire disconnects the device automation was
+   * acting on just as a withdrawal does, and the replacement has never been
+   * observed, so automation must stand down for it too.
+   */
+  private retire(stockId: string, reason: string): void {
     const wiring = this.fanStocks.get(stockId);
     if (!wiring) return;
 
@@ -209,7 +226,7 @@ export class FanControlManager {
         stockId,
         ts: this.now().toISOString(),
         kind: 'stand_down',
-        payload: { reason: 'fan control withdrawn' },
+        payload: { reason },
         source: 'backend',
       });
     } catch (error) {
@@ -218,6 +235,8 @@ export class FanControlManager {
 
     wiring.controller.stop();
     this.fanStocks.delete(stockId);
+    // After the delete, so the guard inside sees only the wirings that remain.
+    this.unsubscribeWiring(wiring);
   }
 
   /**
@@ -237,6 +256,72 @@ export class FanControlManager {
     if (this.reconcileTimer) { clearInterval(this.reconcileTimer); this.reconcileTimer = null; }
     for (const wiring of this.fanStocks.values()) wiring.controller.stop();
     this.deps.mqtt.end();
+  }
+
+  /**
+   * A stock's complete wiring: the map entry, its subscriptions and the
+   * resumption of whatever state survived. Used by the reconciliation tick;
+   * the constructor and `init` run the two halves separately, because the
+   * subscriptions may only go out once a message listener is registered.
+   */
+  private buildWiring(config: FanWiringConfig): void {
+    this.activateWiring(this.createWiring(config));
+  }
+
+  /** The map entry and its controller. No MQTT traffic. */
+  private createWiring(config: FanWiringConfig): StockFanWiring {
+    const commandTopic = `${config.topicPrefix}/command/switch:${config.switchId}`;
+    const wiring: StockFanWiring = {
+      stockId: config.stockId,
+      topicPrefix: config.topicPrefix,
+      switchId: config.switchId,
+      commandTopic,
+      statusTopic: `${config.topicPrefix}/status/switch:${config.switchId}`,
+      controller: new FanController({
+        stockId: config.stockId,
+        // QoS 1: a switching command must survive a brief broker hiccup. Both
+        // payloads are idempotent, so a duplicate delivery is harmless.
+        publish: (payload) => this.deps.mqtt.publish(commandTopic, payload, { qos: 1 }),
+        stateRepo: this.deps.stateRepo,
+        eventsRepo: this.deps.eventsRepo,
+        timings: {
+          keepAliveMs: this.deps.timings.keepAliveMs,
+          watchdogMs: this.deps.timings.watchdogMs,
+        },
+        now: this.now,
+        // Always wired, even with no dependency configured: the wrapper itself
+        // checks for one, so there is nothing conditional to express in the
+        // property's type under `exactOptionalPropertyTypes`.
+        onInterference: (cause: InterferenceCause): void => {
+          this.deps.onInterference?.(config.stockId, cause);
+        },
+      }),
+      retiring: false,
+    };
+    this.fanStocks.set(config.stockId, wiring);
+    return wiring;
+  }
+
+  /** Subscribes a wiring's topics and resumes its persisted desired state. */
+  private activateWiring(wiring: StockFanWiring): void {
+    for (const topic of topicsOf(wiring)) this.deps.mqtt.subscribe(topic);
+    wiring.controller.recover();
+  }
+
+  /**
+   * Stops the broker delivering a retired wiring's topics — unless another
+   * stock still sits on the same prefix. Two stocks can share one through
+   * misconfiguration, and the survivor must keep its feed.
+   */
+  private unsubscribeWiring(wiring: StockFanWiring): void {
+    for (const remaining of this.fanStocks.values()) {
+      if (remaining.topicPrefix === wiring.topicPrefix) return;
+    }
+    try {
+      for (const topic of topicsOf(wiring)) this.deps.mqtt.unsubscribe(topic);
+    } catch (error) {
+      console.error(`Fan control: unsubscribing ${wiring.stockId}'s topics failed`, error);
+    }
   }
 
   private route(topic: string, payload: string): void {
