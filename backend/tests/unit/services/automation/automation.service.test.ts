@@ -457,6 +457,22 @@ describe('AutomationService — selection', () => {
     expect(h.controller.commands).toEqual([]);
   });
 
+  it('switches off a stock with no device group, without querying grain readings', async () => {
+    const withoutDeviceGroup: Stock = { ...stock() };
+    delete withoutDeviceGroup.deviceGroup;
+    const h = setup({ stocks: [withoutDeviceGroup] });
+    h.controller.desiredOn = true;
+    h.setState(fanState({ desiredOn: true, since: minutesAgo(60) }));
+
+    h.service.start();
+    await flush();
+    h.service.stop();
+
+    expect(h.getLatestReadings).not.toHaveBeenCalled();
+    expect(h.service.getState(STOCK_ID).reason).toBe('no_data');
+    expect(h.controller.commands).toEqual([{ action: 'off', source: 'auto' }]);
+  });
+
   it('honours a stock row edited since the last tick on the next one', async () => {
     const h = setup({ stocks: [stock({ fanControlEnabled: false })] });
 

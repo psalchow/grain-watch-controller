@@ -722,6 +722,50 @@ describe('Stock Endpoints', () => {
     });
   });
 
+  describe('stocks without a device group', () => {
+    beforeAll(async () => {
+      await new StockRepository(getDb()).upsertMany([
+        {
+          id: 'no-device-group',
+          name: 'Halle ohne Fühlergruppe',
+          outdoorDevice: 'corn-watch-8',
+          hasHumidity: false,
+          hasGrainSensors: true,
+          active: true,
+          createdAt: '2026-06-02T00:00:00.000Z',
+          fanControlEnabled: false,
+          fanSwitchId: 0,
+          tenantId: DEFAULT_TENANT_ID,
+        },
+      ]);
+    });
+
+    it('returns no readings without querying InfluxDB for the thermometers', async () => {
+      mockGetLatestReadings.mockClear();
+
+      const response = await request(app)
+        .get('/api/v1/stocks/no-device-group/latest')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.devices).toEqual([]);
+      expect(mockGetLatestReadings).not.toHaveBeenCalled();
+    });
+
+    it('returns the empty-series history without querying InfluxDB', async () => {
+      mockGetHistory.mockClear();
+
+      const response = await request(app)
+        .get('/api/v1/stocks/no-device-group/history?resolution=day')
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.devices).toEqual([]);
+      expect(response.body.series.temperature).toEqual({ top: [], mid: [], bottom: [] });
+      expect(mockGetHistory).not.toHaveBeenCalled();
+    });
+  });
+
   describe('stocks without grain thermometers', () => {
     beforeAll(async () => {
       await new StockRepository(getDb()).upsertMany([

@@ -146,7 +146,8 @@ export class StocksController {
 
       const range = getRange(resolution, new Date());
 
-      // Stocks without grain thermometers have no history to plot.
+      // Stocks without grain thermometers, or without a device group to select
+      // them by, have no history to plot.
       if (!metadata.hasGrainSensors || !metadata.deviceGroup) {
         res.status(200).json({
           stockId,
