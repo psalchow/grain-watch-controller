@@ -14,13 +14,10 @@ When the application starts (`backend/src/index.ts` → `bootstrapApplication()`
 
 1. **Database**: open the SQLite file at `DATABASE_PATH`, creating it if absent
 2. **Migrations**: run the Drizzle migrations from `backend/drizzle/`
-3. **Stock seeding**: insert the stock configuration if not already present —
-   rows that exist are left untouched, so a stock configured in the app survives
-   every restart (see [DEPLOYMENT.md](DEPLOYMENT.md#configuring-a-stock))
-4. **User check**: count existing users
-5. **Default user creation**: if no users exist, create the default admin
-6. **Fan control**: start the MQTT fan manager for every fan-enabled stock
-7. **Application start**: the Express server begins accepting requests
+3. **User check**: count existing users
+4. **Default user creation**: if no users exist, create the default admin
+5. **Fan control**: start the MQTT fan manager for every fan-enabled stock
+6. **Application start**: the Express server begins accepting requests
 
 ### Default Admin User
 
@@ -48,7 +45,7 @@ client-side gate rather than a server-side block — see
 The bootstrap process is idempotent:
 
 - Calling `bootstrapApplication()` multiple times is safe
-- Migrations and stock seeding skip work that is already applied
+- Migrations skip work that is already applied
 - If users already exist, no user is created
 - The function returns information about what was initialised
 

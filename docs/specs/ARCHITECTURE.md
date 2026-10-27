@@ -111,7 +111,7 @@ backing up from this service — see [DEPLOYMENT.md](../DEPLOYMENT.md).
 | `services/stock/` | Stock configuration and metadata |
 | `services/fan/` | Fan state machine, Shelly message handling, keep-alive |
 | `services/mqtt/` | Broker connection and topic plumbing |
-| `db/` | Drizzle schema, repositories, migrations, seeding |
+| `db/` | Drizzle schema, repositories, migrations |
 
 ## Deployment Architecture
 

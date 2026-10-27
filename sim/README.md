@@ -7,13 +7,26 @@ and a seeded InfluxDB. No hardware or production InfluxDB needed.
 
     docker compose -f docker-compose.sim.yml up --build
 
-Wait until `influx-seed` exits 0 and the backend logs `Fan control: initialised`.
+Wait until `influx-seed` exits 0 and the backend logs
+`Fan control: manager up, waiting for a stock with fan control`.
+
+## Create the stock
+
+A fresh sim database has no stocks. Log in at http://localhost:5173 as
+`admin` / `changeme123`, open the stock administration and choose "New stock"
+with these values:
+
+- Device group: `corn-watch-1`
+- Outdoor device: `corn-watch-1`
+- Fan control enabled, topic prefix `/corn-watch/actors/corn-watch-1/fan-control`,
+  switch id `0`
+
+The first stock gets the id `stk_001`.
 
 ## Open
 
-- Frontend: http://localhost:5173 — log in as `admin` / `changeme123`.
-  Open Halle 8 → "Lüfter steuern" (sub-screen), or go directly to
-  http://localhost:5173/stocks/grain-watch-1/fan
+- Frontend: http://localhost:5173 — open the new stock → "Lüfter steuern"
+  (sub-screen), or go directly to http://localhost:5173/stocks/stk_001/fan
 - Shelly emulator UI: http://localhost:8080
 
 ## Try it

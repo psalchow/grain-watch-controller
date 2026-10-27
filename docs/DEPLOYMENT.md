@@ -332,9 +332,8 @@ No manual user setup is required. On startup the application:
 
 1. Opens the SQLite database at `DATABASE_PATH`, creating the file if absent
 2. Runs the Drizzle migrations in `backend/drizzle/`
-3. Seeds the stock configuration
-4. Creates a default admin **only if the user table is empty**
-5. Initialises fan control over MQTT for every fan-enabled stock (skipped with a
+3. Creates a default admin **only if the user table is empty**
+4. Initialises fan control over MQTT for every fan-enabled stock (skipped with a
    warning when no broker is configured, rather than failing the boot)
 
 The seeded admin is:
@@ -688,6 +687,15 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 > migrated database fails before the server listens. Roll back with **Full
 > Recovery** above — restore `data.backup.YYYYMMDD`, then start the previous
 > image — rather than by swapping the image alone.
+
+> **Rollback past 1.6.0 needs the database backup from step 1.** Migration 0008
+> drops the `device_prefix` column from `stocks`. The previous image still names
+> that column when it seeds stocks on startup, so pulling it back over the
+> migrated database fails with "table stocks has no column named device_prefix"
+> and the container crash-loops. Roll back with **Full Recovery** above, not by
+> swapping the image alone. Also from 1.6.0 the stock seed is gone: a fresh
+> installation starts with no stocks, and an administrator creates the first
+> one in the app.
 
 > **Browsers on the old bundle briefly show "undefined devices".** The same
 > release removes `deviceCount` from `GET /stocks`, which the previous PWA
