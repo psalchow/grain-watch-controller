@@ -1,6 +1,6 @@
 import { createTestDb, TestDb } from '../setup/db';
 import { StockRepository } from '../../src/db/repositories';
-import { seedStocks } from '../../src/db/seed';
+import { insertStock } from '../setup/stocks';
 import { StockService } from '../../src/services/stock';
 
 describe('StockService', () => {
@@ -10,13 +10,14 @@ describe('StockService', () => {
   beforeEach(async () => {
     testDb = createTestDb();
     const repo = new StockRepository(testDb.db);
-    await seedStocks(repo);
+    await insertStock(testDb.db, { id: 'grain-watch-1' });
+    await insertStock(testDb.db, { id: 'grain-watch-2', name: 'Halle 7', deviceGroup: 'corn-watch-2', outdoorDevice: 'corn-watch-2' });
     service = new StockService(repo);
   });
 
   afterEach(() => testDb.close());
 
-  it('lists seeded stocks', async () => {
+  it('lists stocks', async () => {
     const list = await service.listStocks();
     expect(list.map((s) => s.id).sort()).toEqual(['grain-watch-1', 'grain-watch-2']);
   });

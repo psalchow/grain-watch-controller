@@ -33,4 +33,22 @@ export interface Stock {
   tenantId: string;
 }
 
+/**
+ * A partial update of a stock. `null` clears a nullable column; an absent key
+ * leaves the column alone. `undefined` therefore means "not in this patch" and
+ * is not a value.
+ */
+export interface StockPatch {
+  name?: string;
+  description?: string | null;
+  deviceGroup?: string | null;
+  outdoorDevice?: string | null;
+  hasHumidity?: boolean;
+  hasGrainSensors?: boolean;
+  active?: boolean;
+  fanControlEnabled?: boolean;
+  fanTopicPrefix?: string | null;
+  fanSwitchId?: number;
+}
+
 export { drizzle, schema };

@@ -1,7 +1,8 @@
 import { selectFanStocks } from '../../../src/services/fan/fan.manager';
 import type { Stock } from '../../../src/db/types';
 import { createTestDb } from '../../setup/db';
-import { StockRepository, FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
+import { FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
+import { insertStock } from '../../setup/stocks';
 import { FanControlManager } from '../../../src/services/fan/fan.manager';
 import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
@@ -27,12 +28,7 @@ function fakeMqtt() {
 
 async function setup() {
   const db = createTestDb();
-  await new StockRepository(db.db).upsertMany([{
-    id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
-    hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
-    fanControlEnabled: true, fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control', fanSwitchId: 0,
-    tenantId: DEFAULT_TENANT_ID,
-  }]);
+  await insertStock(db.db, { id: 'grain-watch-1', fanControlEnabled: true, fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control' });
   const f = fakeMqtt();
   const enabledStockIds = new Set(['grain-watch-1']);
   const manager = new FanControlManager({

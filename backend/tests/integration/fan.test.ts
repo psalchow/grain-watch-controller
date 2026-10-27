@@ -14,7 +14,7 @@ import {
   FanEventsRepository,
   AutomationRepository,
 } from '../../src/db/repositories';
-import { seedStocks } from '../../src/db/seed';
+import { insertStock } from '../setup/stocks';
 import { FanControlManager } from '../../src/services/fan/fan.manager';
 import { setFanManager } from '../../src/services/fan';
 import { AutomationService, setAutomationService } from '../../src/services/automation';
@@ -45,11 +45,24 @@ let manager: FanControlManager;
 beforeEach(async () => {
   initDb({ path: ':memory:' });
   runMigrations(getDb());
-  await seedStocks(new StockRepository(getDb()));
+  await insertStock(getDb(), {
+  id: 'grain-watch-1',
+  description: 'Lagerhalle 8',
+  fanControlEnabled: true,
+  fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control',
+});
+await insertStock(getDb(), {
+  id: 'grain-watch-2',
+  name: 'Halle 7',
+  description: 'Lagerhalle 7 - inaktiv',
+  deviceGroup: 'corn-watch-2',
+  outdoorDevice: 'corn-watch-2',
+  hasHumidity: false,
+  active: false,
+});
   // A stock with fan control but no grain thermometers: automation is
   // unavailable for it although the fan endpoints serve it (design spec §3.2).
-  await new StockRepository(getDb()).upsertMany([
-    {
+  await new StockRepository(getDb()).create({
       id: 'fan-only',
       name: 'Halle ohne Thermometer',
       deviceGroup: 'corn-watch-9',
@@ -61,8 +74,7 @@ beforeEach(async () => {
       fanTopicPrefix: '/q',
       fanSwitchId: 0,
       tenantId: DEFAULT_TENANT_ID,
-    },
-  ]);
+    });
   resetServiceSingletonsForTests();
   published.length = 0;
   manager = new FanControlManager({

@@ -1,8 +1,8 @@
 import { createTestDb } from '../../setup/db';
-import { StockRepository, FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
+import { FanStateRepository, FanEventsRepository } from '../../../src/db/repositories';
+import { insertStock } from '../../setup/stocks';
 import { FanController, type FanControllerDeps } from '../../../src/services/fan/fan.controller';
 import type { FanState, InterferenceCause, ShellyMonitorMessage } from '../../../src/services/fan/types';
-import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 
 function successMsg(switchState: boolean): ShellyMonitorMessage {
   return { type: 'success', message: 'ok', switchState, inputState: switchState, timestamp: 1 };
@@ -10,12 +10,7 @@ function successMsg(switchState: boolean): ShellyMonitorMessage {
 
 async function makeController(overrides: Partial<FanControllerDeps> = {}) {
   const db = createTestDb();
-  await new StockRepository(db.db).upsertMany([{
-    id: 'grain-watch-1', name: 'Halle 8', deviceGroup: 'corn-watch-1',
-    hasHumidity: true, hasGrainSensors: true, active: true, createdAt: '2026-06-02T00:00:00.000Z',
-    fanControlEnabled: true, fanTopicPrefix: '/p', fanSwitchId: 0,
-    tenantId: DEFAULT_TENANT_ID,
-  }]);
+  await insertStock(db.db, { id: 'grain-watch-1', fanControlEnabled: true, fanTopicPrefix: '/p' });
   const published: Array<'on' | 'off'> = [];
   const controller = new FanController({
     stockId: 'grain-watch-1',

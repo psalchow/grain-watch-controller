@@ -7,9 +7,8 @@ process.env['DATABASE_PATH'] = ':memory:';
 
 import { closeDb, initDb } from '../../src/db';
 import { runMigrations } from '../../src/db/migrate';
-import { seedStocks } from '../../src/db/seed';
+import { insertStock } from '../setup/stocks';
 import {
-  StockRepository,
   FanStateRepository,
   FanEventsRepository,
   AutomationRepository,
@@ -74,7 +73,7 @@ jest.mock('../../src/config', () => ({
 }));
 
 describe('Application Bootstrap', () => {
-  // bootstrapApplication itself does initDb + runMigrations + seedStocks now.
+  // bootstrapApplication itself does initDb + runMigrations now.
   beforeEach(() => {});
 
   afterEach(() => {
@@ -267,7 +266,21 @@ describe('Application Bootstrap', () => {
     async function primeDb() {
       const db = initDb({ path: ':memory:' });
       runMigrations(db);
-      await seedStocks(new StockRepository(db));
+      await insertStock(db, {
+        id: 'grain-watch-1',
+        description: 'Lagerhalle 8',
+        fanControlEnabled: true,
+        fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control',
+      });
+      await insertStock(db, {
+        id: 'grain-watch-2',
+        name: 'Halle 7',
+        description: 'Lagerhalle 7 - inaktiv',
+        deviceGroup: 'corn-watch-2',
+        outdoorDevice: 'corn-watch-2',
+        hasHumidity: false,
+        active: false,
+      });
       return db;
     }
 

@@ -69,8 +69,7 @@ describe('Authentication Middleware', () => {
     getSqliteHandle()
       .prepare('INSERT INTO tenants (id, name, created_at) VALUES (?, ?, ?)')
       .run(OTHER_TENANT_ID, 'Zweiter Betrieb', '2026-06-02T00:00:00.000Z');
-    await new StockRepository(getDb()).upsertMany([
-      {
+    await new StockRepository(getDb()).create({
         id: 'stock-default',
         name: 'Halle 8',
         deviceGroup: 'corn-watch-1',
@@ -81,8 +80,8 @@ describe('Authentication Middleware', () => {
         fanControlEnabled: false,
         fanSwitchId: 0,
         tenantId: DEFAULT_TENANT_ID,
-      },
-      {
+      });
+    await new StockRepository(getDb()).create({
         id: 'stock-other',
         name: 'Halle 7',
         deviceGroup: 'corn-watch-2',
@@ -93,8 +92,7 @@ describe('Authentication Middleware', () => {
         fanControlEnabled: false,
         fanSwitchId: 0,
         tenantId: OTHER_TENANT_ID,
-      },
-    ]);
+      });
   });
 
   afterAll(() => {

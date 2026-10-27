@@ -1,7 +1,6 @@
 import { config } from './config';
 import { initDb, closeDb, getDb } from './db';
 import { runMigrations } from './db/migrate';
-import { seedStocks } from './db/seed';
 import {
   StockRepository,
   FanStateRepository,
@@ -23,7 +22,6 @@ export async function bootstrapApplication(): Promise<BootstrapResult> {
 
   const db = initDb({ path: config.database.path });
   runMigrations(db);
-  await seedStocks(new StockRepository(db));
 
   try {
     const adminProfile = await getUserService().initializeDefaultUsers();

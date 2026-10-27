@@ -15,7 +15,7 @@ import { resetServiceSingletonsForTests } from '../../src/services';
 import { setAuthService } from '../../src/middleware';
 import { StockRepository, AutomationRepository } from '../../src/db/repositories';
 import { DEFAULT_TENANT_ID, AUTOMATION_DEFAULTS } from '../../src/db/schema';
-import { seedStocks } from '../../src/db/seed';
+import { insertStock } from '../setup/stocks';
 import { setFanManager } from '../../src/services/fan';
 import type { FanControlManager } from '../../src/services/fan';
 
@@ -109,7 +109,21 @@ describe('Stock Endpoints', () => {
   beforeAll(async () => {
     initDb({ path: ':memory:' });
     runMigrations(getDb());
-    await seedStocks(new StockRepository(getDb()));
+    await insertStock(getDb(), {
+      id: 'grain-watch-1',
+      description: 'Lagerhalle 8',
+      fanControlEnabled: true,
+      fanTopicPrefix: '/corn-watch/actors/corn-watch-1/fan-control',
+    });
+    await insertStock(getDb(), {
+      id: 'grain-watch-2',
+      name: 'Halle 7',
+      description: 'Lagerhalle 7 - inaktiv',
+      deviceGroup: 'corn-watch-2',
+      outdoorDevice: 'corn-watch-2',
+      hasHumidity: false,
+      active: false,
+    });
 
     // Move the second stock into its own tenant, so "denied" and "filtered"
     // remain reachable states. Tenants are SQL-managed, hence the raw handle.
@@ -661,8 +675,7 @@ describe('Stock Endpoints', () => {
 
   describe('outdoor device selection', () => {
     beforeAll(async () => {
-      await new StockRepository(getDb()).upsertMany([
-        {
+      await new StockRepository(getDb()).create({
           // The thermometers currently in this stock were installed with
           // another device group; the fan controller that carries the outdoor
           // sensor is the stock's own.
@@ -677,8 +690,8 @@ describe('Stock Endpoints', () => {
           fanControlEnabled: false,
           fanSwitchId: 0,
           tenantId: DEFAULT_TENANT_ID,
-        },
-        {
+        });
+      await new StockRepository(getDb()).create({
           id: 'no-outdoor-sensor',
           name: 'Halle ohne Aussensensor',
           deviceGroup: 'corn-watch-6',
@@ -689,8 +702,7 @@ describe('Stock Endpoints', () => {
           fanControlEnabled: false,
           fanSwitchId: 0,
           tenantId: DEFAULT_TENANT_ID,
-        },
-      ]);
+        });
     });
 
     it('queries the outdoor conditions by the outdoor device, not by the device group', async () => {
@@ -724,8 +736,7 @@ describe('Stock Endpoints', () => {
 
   describe('stocks without a device group', () => {
     beforeAll(async () => {
-      await new StockRepository(getDb()).upsertMany([
-        {
+      await new StockRepository(getDb()).create({
           id: 'no-device-group',
           name: 'Halle ohne Fühlergruppe',
           outdoorDevice: 'corn-watch-8',
@@ -736,8 +747,7 @@ describe('Stock Endpoints', () => {
           fanControlEnabled: false,
           fanSwitchId: 0,
           tenantId: DEFAULT_TENANT_ID,
-        },
-      ]);
+        });
     });
 
     it('returns no readings without querying InfluxDB for the thermometers', async () => {
@@ -768,8 +778,7 @@ describe('Stock Endpoints', () => {
 
   describe('stocks without grain thermometers', () => {
     beforeAll(async () => {
-      await new StockRepository(getDb()).upsertMany([
-        {
+      await new StockRepository(getDb()).create({
           id: 'fan-only',
           name: 'Halle ohne Thermometer',
           deviceGroup: 'corn-watch-9',
@@ -782,8 +791,7 @@ describe('Stock Endpoints', () => {
           fanTopicPrefix: '/corn-watch/actors/corn-watch-9/fan-control',
           fanSwitchId: 0,
           tenantId: DEFAULT_TENANT_ID,
-        },
-      ]);
+        });
     });
 
     it('reports outdoor conditions without querying stock sensors', async () => {
