@@ -148,6 +148,37 @@ describe('Admin Stock Endpoints', () => {
       expect(response.body.deviceGroup).toBe('corn-watch-3');
     });
 
+    it('leaves fields absent from the patch untouched, not reset to create defaults', async () => {
+      await createStock({ active: false, hasHumidity: true, fanSwitchId: 3 });
+
+      const response = await asAdmin(request(app).patch('/api/v1/admin/stocks/stk_001')).send({
+        name: 'Renamed',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ active: false, hasHumidity: true, fanSwitchId: 3 });
+      const list = await asAdmin(request(app).get('/api/v1/admin/stocks'));
+      expect(list.body.stocks[0]).toMatchObject({
+        name: 'Renamed',
+        active: false,
+        hasHumidity: true,
+        fanSwitchId: 3,
+      });
+    });
+
+    it('clears an optional field when the patch sets it to null', async () => {
+      await createStock({ outdoorDevice: 'outdoor-1' });
+
+      const response = await asAdmin(request(app).patch('/api/v1/admin/stocks/stk_001')).send({
+        outdoorDevice: null,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).not.toHaveProperty('outdoorDevice');
+      const list = await asAdmin(request(app).get('/api/v1/admin/stocks'));
+      expect(list.body.stocks[0]).not.toHaveProperty('outdoorDevice');
+    });
+
     it('deletes an inactive stock', async () => {
       await createStock({ active: false });
 
