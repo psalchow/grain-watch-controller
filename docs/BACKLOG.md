@@ -172,7 +172,7 @@ endpoint, which a single proxy in front of one backend rarely produces.
 `useFanStream` treats any 404 on the stream URL as fan control having been
 withdrawn: it latches `disabled` and stops reconnecting. A proxy with no
 matching upstream, or a changed API base path after a deploy, reads the same.
-Re-enabling fan control (which needs a backend restart anyway) also leaves a
+Re-enabling fan control also leaves a
 latched client showing the notice until the page is reloaded.
 
 Closing it: read the error envelope in `onopen` and latch only on the backend's
@@ -291,16 +291,16 @@ observed. Code: `FanControlManager.reconcile`
 (`backend/src/services/fan/fan.controller.ts`). Settling the ordering question
 above decides this too.
 
-## Clear-then-re-enable inside one tick cycles the fan needlessly
+## Clear-then-re-enable inside one tick switches the fan off needlessly
 
 **Deferred:** 2026-09-19 — needs a mistaken edit corrected within 60 s, which
 the operating reality makes unlikely.
 
 If a request marked the stock while its fan control was briefly cleared, the
-next tick retires the controller (one `off`, a `stand_down` row) and a later tick
-rebuilds it, so no restart is needed any more. What remains is the needless
-off/on cycle in between (`FanControlManager.reconcile`,
-`backend/src/services/fan/fan.manager.ts`).
+next tick retires the controller (one `off`, a `stand_down` row, automation
+disabled through `onControlWithdrawn`) and rebuilds it within the same tick; no
+restart is needed. What remains is the needless `off`
+(`FanControlManager.reconcile`, `backend/src/services/fan/fan.manager.ts`).
 
 Closing it: retire only on `!enabled.has(stockId)`, and clear the mark when the
 fresh read still contains the stock.
@@ -542,6 +542,7 @@ next monitor message or the watchdog corrects it. Repairing it means deciding
 what a divergence should do (correct the state, raise a fault, re-assert the
 command), which is a behaviour change, not a defect in the code this task
 touched.
+
 ## `StockService.applyPatch` duplicates `StockRepository.update`
 
 **Deferred:** 2026-10-27 — found in review of stock administration.
@@ -579,25 +580,15 @@ Under `exactOptionalPropertyTypes`, `makeStock` (`backend/tests/setup/stocks.ts`
 cannot leave a field out, so tests needing a stock without an `outdoorDevice`
 pass a full literal to `create` instead. An `omit` option would close it.
 
-## Row actions on the admin pages do not guard against a double click
+## Leftovers of the stock administration screen
 
-**Deferred:** 2026-10-27 — found in review of stock administration.
+**Deferred:** 2026-10-27 — three trivial gaps, found in review.
 
-Neither `AdminStocksPage` nor `AdminUsersPage` (`frontend/src/pages/`) disables
-a row action while its request is in flight; the second request 404s into the
-error band.
-
-## `Header.test.tsx` has no case for the `Stocks` links
-
-**Deferred:** 2026-10-27.
-
-`frontend/src/components/Header.test.tsx` does not cover the two new `Stocks`
-links (bar and menu); its existing counts key on `Users` and `Account`.
-
-## `AdminStocksPage` shows an empty Equipment cell for a bare stock
-
-**Deferred:** 2026-10-27.
-
-For a stock with no thermometers, no humidity and no fan control the Equipment
-cell is empty, where `StockCard` shows explanatory text in the same situation.
-
+- Neither `AdminStocksPage` nor `AdminUsersPage` (`frontend/src/pages/`)
+  guards against a double click on its row actions; the second request 404s into
+  the error band.
+- `frontend/src/components/Header.test.tsx` has no case for the two new `Stocks`
+  links; its existing counts key on `Users` and `Account`.
+- `AdminStocksPage`'s Equipment cell is empty for a stock with no thermometers,
+  no humidity and no fan control, where `StockCard` shows explanatory text in the
+  same situation.

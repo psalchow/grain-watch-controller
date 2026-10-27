@@ -15,7 +15,7 @@ When the application starts (`backend/src/index.ts` → `bootstrapApplication()`
 1. **Database**: open the SQLite file at `DATABASE_PATH`, creating it if absent
 2. **Migrations**: run the Drizzle migrations from `backend/drizzle/`
 3. **Stock seeding**: insert the stock configuration if not already present —
-   rows that exist are left untouched, so a stock configured by hand survives
+   rows that exist are left untouched, so a stock configured in the app survives
    every restart (see [DEPLOYMENT.md](DEPLOYMENT.md#configuring-a-stock))
 4. **User check**: count existing users
 5. **Default user creation**: if no users exist, create the default admin
