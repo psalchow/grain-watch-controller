@@ -1,11 +1,15 @@
 import axios from './client';
 import {
+  AdminStock,
+  AdminStocksResponse,
   AdminUser,
   AdminUsersResponse,
+  CreateStockRequest,
   CreateUserRequest,
   Tenant,
   TenantsResponse,
   UpdatePermissionsRequest,
+  UpdateStockRequest,
 } from '../types/api';
 
 /**
@@ -44,5 +48,30 @@ export const adminApi = {
 
   async setActive(userId: string, active: boolean): Promise<void> {
     await axios.patch(`/admin/users/${userId}`, { active });
+  },
+
+  async listStocks(): Promise<AdminStock[]> {
+    const response = await axios.get<AdminStocksResponse>('/admin/stocks');
+    return response.data.stocks;
+  },
+
+  async createStock(data: CreateStockRequest): Promise<AdminStock> {
+    const response = await axios.post<AdminStock>('/admin/stocks', data);
+    return response.data;
+  },
+
+  async updateStock(
+    stockId: string,
+    data: UpdateStockRequest
+  ): Promise<AdminStock> {
+    const response = await axios.patch<AdminStock>(
+      `/admin/stocks/${stockId}`,
+      data
+    );
+    return response.data;
+  },
+
+  async deleteStock(stockId: string): Promise<void> {
+    await axios.delete(`/admin/stocks/${stockId}`);
   },
 };

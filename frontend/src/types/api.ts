@@ -104,6 +104,60 @@ export interface StocksResponse {
   total: number;
 }
 
+/**
+ * A stock as the admin endpoints return it: configuration, not readings.
+ * Distinct from `GrainStock`, which is what `/stocks` serves to ordinary users.
+ * Unset optional fields are absent from the JSON, never null.
+ */
+export interface AdminStock {
+  id: string;
+  name: string;
+  description?: string;
+  /** `device-group` tag selecting the grain thermometers. */
+  deviceGroup?: string;
+  /** `device` tag selecting the outdoor sensor. */
+  outdoorDevice?: string;
+  hasHumidity: boolean;
+  hasGrainSensors: boolean;
+  active: boolean;
+  /** ISO 8601 */
+  createdAt: string;
+  fanControlEnabled: boolean;
+  /** MQTT topic prefix of the fan controller. */
+  fanTopicPrefix?: string;
+  /** Switch channel on the fan controller (0-9). */
+  fanSwitchId: number;
+  tenantId: string;
+}
+
+export interface AdminStocksResponse {
+  stocks: AdminStock[];
+}
+
+/**
+ * Body for creating a stock. Only `name` is required; the backend defaults the
+ * flags and `fanSwitchId` when they are omitted.
+ */
+export interface CreateStockRequest {
+  name: string;
+  description?: string | null;
+  deviceGroup?: string | null;
+  outdoorDevice?: string | null;
+  hasHumidity?: boolean;
+  hasGrainSensors?: boolean;
+  active?: boolean;
+  fanControlEnabled?: boolean;
+  fanTopicPrefix?: string | null;
+  fanSwitchId?: number;
+}
+
+/**
+ * Body for updating a stock. An absent key leaves the field alone; `null`
+ * clears a nullable field (`description`, `deviceGroup`, `outdoorDevice`,
+ * `fanTopicPrefix`). At least one key must be present.
+ */
+export type UpdateStockRequest = Partial<CreateStockRequest>;
+
 // Latest Readings
 export interface DeviceReading {
   device: string;
