@@ -1,8 +1,8 @@
 /**
  * Admin routes for the grainwatch-controller BFF.
  *
- * Provides endpoints for user management including listing,
- * creation, permission updates, and status changes.
+ * Provides endpoints for user management (listing, creation, permission
+ * updates, status changes) and stock administration.
  *
  * All endpoints require authentication with admin role.
  */
@@ -15,12 +15,15 @@ import {
   validateBody,
   validateParams,
   createUserSchema,
+  createStockSchema,
+  updateStockSchema,
+  stockIdParamsSchema,
   resetPasswordSchema,
   tenantIdsSchema,
   userIdParamsSchema,
   getAuthService,
 } from '../middleware';
-import { getTenantRepository } from '../services';
+import { getTenantRepository, getStockService } from '../services';
 import { z } from 'zod';
 
 /**
@@ -56,7 +59,11 @@ export function createAdminRouter(): Router {
   const router = Router();
   const authService = getAuthService();
   const userService = authService.getUserService();
-  const controller = new AdminController(userService, getTenantRepository());
+  const controller = new AdminController(
+    userService,
+    getTenantRepository(),
+    getStockService()
+  );
 
   // Apply authentication and admin role check to all routes
   router.use(authenticate);
@@ -191,6 +198,85 @@ export function createAdminRouter(): Router {
     validateParams(userIdParamsSchema),
     validateBody(resetPasswordSchema),
     (req, res, next) => controller.resetPassword(req, res, next)
+  );
+
+  /**
+   * GET /stocks
+   *
+   * List all stocks, active or not.
+   *
+   * Response (200):
+   * - stocks: Array of stock objects
+   *
+   * Errors:
+   * - 401: Authentication required
+   * - 403: Admin role required
+   */
+  router.get(
+    '/stocks',
+    (req, res, next) => controller.listStocks(req, res, next)
+  );
+
+  /**
+   * POST /stocks
+   *
+   * Create a stock; the id is generated.
+   *
+   * Request body:
+   * - name: string (1-100 characters)
+   * - description, deviceGroup, outdoorDevice, fanTopicPrefix: string or null
+   * - hasHumidity, hasGrainSensors, active, fanControlEnabled: boolean
+   * - fanSwitchId: integer 0-9
+   *
+   * Response (201):
+   * - Created stock
+   *
+   * Errors:
+   * - 400: Validation error, fan control without a prefix, or grain sensors
+   *   without a device group
+   * - 401: Authentication required
+   * - 403: Admin role required
+   */
+  router.post(
+    '/stocks',
+    validateBody(createStockSchema),
+    (req, res, next) => controller.createStock(req, res, next)
+  );
+
+  /**
+   * PATCH /stocks/:stockId
+   *
+   * Update the fields present in the body; null clears an optional field.
+   *
+   * Response (200):
+   * - Updated stock
+   *
+   * Errors:
+   * - 400: Validation error, empty body, or an invariant broken by the result
+   * - 401: Authentication required
+   * - 403: Admin role required
+   * - 404: Stock not found
+   */
+  router.patch(
+    '/stocks/:stockId',
+    validateParams(stockIdParamsSchema),
+    validateBody(updateStockSchema),
+    (req, res, next) => controller.updateStock(req, res, next)
+  );
+
+  /**
+   * DELETE /stocks/:stockId
+   *
+   * Delete an inactive stock.
+   *
+   * Response: 204 No Content
+   * Errors: 401 unauthenticated, 403 admin required, 404 not found,
+   * 409 stock is active
+   */
+  router.delete(
+    '/stocks/:stockId',
+    validateParams(stockIdParamsSchema),
+    (req, res, next) => controller.deleteStock(req, res, next)
   );
 
   return router;

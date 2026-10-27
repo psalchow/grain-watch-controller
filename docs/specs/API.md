@@ -35,7 +35,7 @@ current password returns 401, a new password outside 8–100 characters returns 
 | `GET` | `/stocks/:stockId/fan/automation` | Authenticated + stock access | Automation switch and parameters |
 | `PUT` | `/stocks/:stockId/fan/automation` | Authenticated + stock access | Set the switch and the parameters in one call |
 
-### Admin user management — `/api/v1/admin`
+### Admin user and stock management — `/api/v1/admin`
 
 All admin endpoints require an authenticated user with the `admin` role
 (401 unauthenticated, 403 otherwise).
@@ -55,9 +55,30 @@ one, answers 400. `GET /admin/users`, `POST /admin/users` and
 `PUT /admin/users/:userId/permissions` all answer `tenants: [{ id, name }]` per
 user, so the three agree on one shape.
 
-Tenants are created with SQL on the NAS, exactly like stock configuration
-below — the API only lists them, so an administrator can choose one when
+Tenants are created with SQL on the NAS — the API only lists them, so an administrator can choose one when
 creating a user. There is no create, rename, delete or deactivation.
+
+#### Stock administration
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/admin/stocks` | List all stocks, active or not — `{ stocks: [...] }` |
+| `POST` | `/admin/stocks` | Create a stock (201, the created stock) |
+| `PATCH` | `/admin/stocks/:stockId` | Update the fields present in the body (200, the updated stock); `null` clears an optional field; an empty body answers 400 |
+| `DELETE` | `/admin/stocks/:stockId` | Delete an inactive stock (204) |
+
+- Ids are generated (`stk_001`, `stk_002`, …); a client cannot choose or change one.
+- Only `name` is required on create. Defaults: `hasGrainSensors` true,
+  `hasHumidity` false, `active` true, `fanControlEnabled` false, `fanSwitchId` 0.
+- Bounds: `name` 1–100; `description` ≤500 (empty string stored as absent);
+  `deviceGroup`, `outdoorDevice` ≤64; `fanTopicPrefix` ≤200, no `#` or `+`, no
+  trailing `/`; `fanSwitchId` integer 0–9.
+- Two invariants hold after every create and update, else 400: fan control
+  needs a `fanTopicPrefix`, and grain sensors need a `deviceGroup`.
+- Deleting an active stock answers 409; deactivate it first. Unknown id: 404.
+- Schema violations answer the validation envelope (`error: 'VALIDATION_ERROR'`);
+  service-level refusals answer `{ error: { code, message, details } }` with
+  `code` one of `invalid`, `not_found`, `conflict`.
 
 ### Operational
 

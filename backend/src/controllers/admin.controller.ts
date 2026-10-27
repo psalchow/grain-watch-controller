@@ -2,15 +2,25 @@
  * Admin controller for user management operations.
  *
  * Provides request handlers for administrative endpoints including
- * user listing, creation, permission updates, and status changes.
+ * user listing, creation, permission updates, status changes, and stock
+ * administration.
  * All handlers require admin role authentication.
  */
 
 import { Request, Response, NextFunction } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
-import { UserService, UserServiceError, CreateUserData, UpdateUserData } from '../services';
+import {
+  UserService,
+  UserServiceError,
+  CreateUserData,
+  UpdateUserData,
+  StockService,
+  StockServiceError,
+  CreateStockInput,
+} from '../services';
 import { TenantRepository } from '../db/repositories';
-import { CreateUserRequest } from '../middleware';
+import type { StockPatch } from '../db/types';
+import { CreateUserRequest, CreateStockRequest, UpdateStockRequest } from '../middleware';
 
 /**
  * Controller class for admin-related endpoints.
@@ -20,6 +30,7 @@ import { CreateUserRequest } from '../middleware';
 export class AdminController {
   private readonly userService: UserService;
   private readonly tenantRepository: TenantRepository;
+  private readonly stockService: StockService;
 
   /**
    * Creates a new AdminController instance.
@@ -27,10 +38,16 @@ export class AdminController {
    * @param userService - UserService instance for user management operations
    * @param tenantRepository - Read-only tenant access, for listing and for
    *   rejecting a membership that names a tenant which does not exist
+   * @param stockService - StockService instance for stock administration
    */
-  constructor(userService: UserService, tenantRepository: TenantRepository) {
+  constructor(
+    userService: UserService,
+    tenantRepository: TenantRepository,
+    stockService: StockService
+  ) {
     this.userService = userService;
     this.tenantRepository = tenantRepository;
+    this.stockService = stockService;
   }
 
   /**
@@ -427,6 +444,142 @@ export class AdminController {
       }
       next(error);
     }
+  }
+
+  /**
+   * Lists all stocks, active or not.
+   *
+   * GET /api/v1/admin/stocks
+   *
+   * @example
+   * Response (200):
+   * { "stocks": [{ "id": "stk_001", "name": "Halle 1", "active": true, ... }] }
+   */
+  async listStocks(
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const stocks = await this.stockService.listStocks();
+      res.status(200).json({ stocks });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Creates a stock. The id is generated.
+   *
+   * POST /api/v1/admin/stocks
+   *
+   * @example
+   * Request body:
+   * { "name": "Halle 3", "deviceGroup": "corn-watch-3" }
+   *
+   * Response (201):
+   * {
+   *   "id": "stk_003",
+   *   "name": "Halle 3",
+   *   "deviceGroup": "corn-watch-3",
+   *   "hasHumidity": false,
+   *   "hasGrainSensors": true,
+   *   "active": true,
+   *   "createdAt": "2026-10-27T10:00:00.000Z",
+   *   "fanControlEnabled": false,
+   *   "fanSwitchId": 0,
+   *   "tenantId": "tnt_default"
+   * }
+   */
+  async createStock(
+    req: Request<object, unknown, CreateStockRequest>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { description, deviceGroup, outdoorDevice, fanTopicPrefix, ...rest } = req.body;
+
+      // The service type has optional strings, not nullable ones
+      const input: CreateStockInput = { ...rest };
+      if (description != null) input.description = description;
+      if (deviceGroup != null) input.deviceGroup = deviceGroup;
+      if (outdoorDevice != null) input.outdoorDevice = outdoorDevice;
+      if (fanTopicPrefix != null) input.fanTopicPrefix = fanTopicPrefix;
+
+      const stock = await this.stockService.createStock(input);
+      res.status(201).json(stock);
+    } catch (error) {
+      if (this.respondToStockError(error, res)) return;
+      next(error);
+    }
+  }
+
+  /**
+   * Updates the fields present in the body; `null` clears an optional field.
+   *
+   * PATCH /api/v1/admin/stocks/:stockId
+   *
+   * @example
+   * Request body:
+   * { "active": false }
+   *
+   * Response (200): the updated stock, shaped as in the create response.
+   */
+  async updateStock(
+    req: Request<ParamsDictionary, unknown, UpdateStockRequest>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const stockId = req.params['stockId'] as string;
+
+      // Drop keys the schema left undefined: a patch means "absent" by omission
+      const patch = Object.fromEntries(
+        Object.entries(req.body).filter(([, value]) => value !== undefined)
+      ) as StockPatch;
+
+      const stock = await this.stockService.updateStock(stockId, patch);
+      res.status(200).json(stock);
+    } catch (error) {
+      if (this.respondToStockError(error, res)) return;
+      next(error);
+    }
+  }
+
+  /**
+   * Deletes an inactive stock.
+   *
+   * DELETE /api/v1/admin/stocks/:stockId
+   *
+   * Response: 204 No Content. 409 while the stock is active, 404 if unknown.
+   */
+  async deleteStock(
+    req: Request<ParamsDictionary>,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      await this.stockService.deleteStock(req.params['stockId'] as string);
+      res.status(204).send();
+    } catch (error) {
+      if (this.respondToStockError(error, res)) return;
+      next(error);
+    }
+  }
+
+  /**
+   * Answers a StockServiceError with its HTTP status and error envelope.
+   *
+   * @returns true when a response has been sent, false for any other error
+   */
+  private respondToStockError(error: unknown, res: Response): boolean {
+    if (!(error instanceof StockServiceError)) return false;
+
+    const status = { invalid: 400, not_found: 404, conflict: 409 }[error.code];
+    res.status(status).json({
+      error: { code: error.code, message: error.message, details: error.message },
+    });
+    return true;
   }
 
   /**

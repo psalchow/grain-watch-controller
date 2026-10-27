@@ -284,6 +284,86 @@ export const createUserSchema = z.object({
 export type CreateUserRequest = z.infer<typeof createUserSchema>;
 
 /**
+ * Stock creation request body schema.
+ *
+ * Only `name` is required. The defaults mirror the DDL column defaults in
+ * `src/db/schema.ts` (`hasHumidity` has none there and is false in practice);
+ * change one set and change the other. The two stock invariants (fan control
+ * needs a prefix, grain sensors need a device group) are enforced by
+ * StockService, not here.
+ */
+export const createStockSchema = z.object({
+  /** Display name (1-100 characters) */
+  name: z
+    .string({
+      required_error: 'Name is required',
+      invalid_type_error: 'Name must be a string',
+    })
+    .min(1, 'Name is required')
+    .max(100, 'Name must be at most 100 characters'),
+
+  /** Free text (at most 500 characters); an empty string is stored as null */
+  description: z
+    .string()
+    .max(500, 'Description must be at most 500 characters')
+    .nullable()
+    .transform((value) => (value === '' ? null : value))
+    .optional(),
+
+  /** `device-group` tag selecting the grain thermometers */
+  deviceGroup: z
+    .string()
+    .max(64, 'Device group must be at most 64 characters')
+    .nullable()
+    .optional(),
+
+  /** `device` tag selecting the outdoor sensor */
+  outdoorDevice: z
+    .string()
+    .max(64, 'Outdoor device must be at most 64 characters')
+    .nullable()
+    .optional(),
+
+  hasHumidity: z.boolean().default(false),
+  hasGrainSensors: z.boolean().default(true),
+  active: z.boolean().default(true),
+  fanControlEnabled: z.boolean().default(false),
+
+  /** MQTT topic prefix of the fan controller: no wildcards, no trailing slash */
+  fanTopicPrefix: z
+    .string()
+    .max(200, 'Fan topic prefix must be at most 200 characters')
+    .refine((value) => !/[#+]/.test(value), 'Fan topic prefix must not contain # or +')
+    .refine((value) => !value.endsWith('/'), 'Fan topic prefix must not end in /')
+    .nullable()
+    .optional(),
+
+  /** Switch channel on the fan controller (0-9) */
+  fanSwitchId: z
+    .number({ invalid_type_error: 'Fan switch id must be a number' })
+    .int('Fan switch id must be an integer')
+    .min(0, 'Fan switch id must be between 0 and 9')
+    .max(9, 'Fan switch id must be between 0 and 9')
+    .default(0),
+});
+
+/** Type inferred from createStockSchema */
+export type CreateStockRequest = z.infer<typeof createStockSchema>;
+
+/**
+ * Stock update request body schema: every editable field may appear alone.
+ * An empty body is rejected. `.partial()` leaves the create defaults out, so an
+ * absent field stays untouched.
+ */
+export const updateStockSchema = createStockSchema.partial().refine(
+  (data) => Object.values(data).some((value) => value !== undefined),
+  { message: 'At least one field must be provided' }
+);
+
+/** Type inferred from updateStockSchema */
+export type UpdateStockRequest = z.infer<typeof updateStockSchema>;
+
+/**
  * Stock ID route parameter schema.
  */
 export const stockIdParamsSchema = z.object({

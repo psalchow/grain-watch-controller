@@ -77,7 +77,8 @@ export const stockService = new Proxy({} as StockService, {
 
 export { InfluxDBService } from './influx';
 export { UserService, AuthService, UserServiceError, AuthenticationError } from './auth';
-export { StockService } from './stock';
+export { StockService, StockServiceError } from './stock';
+export type { CreateStockInput } from './stock';
 export type {
   CreateUserData,
   UpdateUserData,
