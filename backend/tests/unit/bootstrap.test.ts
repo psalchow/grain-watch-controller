@@ -304,6 +304,19 @@ describe('Application Bootstrap', () => {
       expect(getAutomationService()).toBeNull();
     });
 
+    it('builds the fan manager even when no stock has fan control, so one configured later is picked up', async () => {
+      Object.assign(configRecord, FAN_TEST_CONFIG);
+      const db = initDb({ path: ':memory:' });
+      runMigrations(db);
+      await insertStock(db, { id: 'grain-watch-1', description: 'Lagerhalle 8' });
+
+      await initFanControl();
+
+      expect(getFanManager()).not.toBeNull();
+      expect(getAutomationService()).not.toBeNull();
+      expect(getFanManager()?.getController('grain-watch-1')).toBeNull();
+    });
+
     it("after initFanControl, automation is running and its first evaluation resolves a real controller", async () => {
       Object.assign(configRecord, FAN_TEST_CONFIG);
       const db = await primeDb();

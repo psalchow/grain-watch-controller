@@ -52,7 +52,8 @@ export async function bootstrapApplication(): Promise<BootstrapResult> {
 
 /**
  * Builds and starts the fan control manager for all fan-enabled stocks.
- * No-op when no stock has fan control configured. Recovers desired state.
+ * The manager is built even with no fan-enabled stock, so one configured later
+ * is picked up on the reconciliation tick. Recovers desired state.
  * Opens the live MQTT connection — not exercised by unit tests.
  */
 export async function initFanControl(): Promise<void> {
@@ -97,10 +98,6 @@ export async function initFanControl(): Promise<void> {
     );
   }
 
-  if (fanStocks.length === 0) {
-    console.log('Fan control: no fan-enabled stocks, skipping MQTT init');
-    return;
-  }
   // Both sections always exist in a real deployment — the configuration builds
   // them with defaults. This guard covers a partial config object (unit tests
   // omit the two so bootstrap opens no socket) and keeps bootstrap from
@@ -157,7 +154,11 @@ export async function initFanControl(): Promise<void> {
   setAutomationService(automationService);
   automationService.start();
 
-  console.log(`Fan control: initialised for ${fanStocks.length} stock(s)`);
+  console.log(
+    fanStocks.length === 0
+      ? 'Fan control: manager up, waiting for a stock with fan control'
+      : `Fan control: initialised for ${fanStocks.length} stock(s)`
+  );
 }
 
 export function shutdownFanControl(): void {
