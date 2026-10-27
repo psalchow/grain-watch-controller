@@ -263,8 +263,6 @@ export function StockFormDialog({
             <Input
               id="stock-fan-switch-id"
               type="number"
-              min={0}
-              max={9}
               step={1}
               value={draft.fanSwitchId}
               disabled={!draft.fanControlEnabled}
