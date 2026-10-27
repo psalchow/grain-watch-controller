@@ -47,7 +47,7 @@ export class StocksController {
         fanControlEnabled: fanControlAvailable(s),
         active: s.active,
         automation: {
-          // `available` implies fan control, never the reverse: a hall with a
+          // `available` implies fan control, never the reverse: a stock with a
           // fan but no grain thermometers cannot be automated in v1, because
           // the differential rule has nothing to compare (design spec §3.2).
           available: automationAvailable(s),

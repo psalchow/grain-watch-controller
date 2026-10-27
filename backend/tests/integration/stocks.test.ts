@@ -34,7 +34,7 @@ const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
 /**
  * A second tenant owning `grain-watch-2`.
  *
- * Without it both seeded halls sit in `tnt_default`, and the denied-access and
+ * Without it both seeded stocks sit in `tnt_default`, and the denied-access and
  * list-filter cases below would pass while covering nothing.
  */
 const SECOND_TENANT_ID = 'tnt_second';
@@ -111,7 +111,7 @@ describe('Stock Endpoints', () => {
     runMigrations(getDb());
     await seedStocks(new StockRepository(getDb()));
 
-    // Move the second hall into its own tenant, so "denied" and "filtered"
+    // Move the second stock into its own tenant, so "denied" and "filtered"
     // remain reachable states. Tenants are SQL-managed, hence the raw handle.
     const sqlite = getSqliteHandle();
     sqlite
@@ -131,7 +131,7 @@ describe('Stock Endpoints', () => {
       tenants: [DEFAULT_TENANT],
     });
 
-    // Belongs to both tenants, so this viewer reaches both halls.
+    // Belongs to both tenants, so this viewer reaches both stocks.
     viewerToken = createToken({
       userId: 'usr_002',
       username: 'viewer',
@@ -211,7 +211,7 @@ describe('Stock Endpoints', () => {
       expect(response.body.stocks[0]).toHaveProperty('active', true);
     });
 
-    it('should return only the halls of the viewer tenant', async () => {
+    it('should return only the stocks of the viewer tenant', async () => {
       const response = await request(app)
         .get('/api/v1/stocks')
         .set('Authorization', `Bearer ${restrictedViewerToken}`);
@@ -221,7 +221,7 @@ describe('Stock Endpoints', () => {
       expect(response.body.stocks[0].id).toBe('grain-watch-1');
     });
 
-    it('should return the halls of every tenant a viewer belongs to', async () => {
+    it('should return the stocks of every tenant a viewer belongs to', async () => {
       const response = await request(app)
         .get('/api/v1/stocks')
         .set('Authorization', `Bearer ${viewerToken}`);
@@ -292,7 +292,7 @@ describe('Stock Endpoints', () => {
 
         expect(response.status).toBe(200);
         expect(getMany).toHaveBeenCalledTimes(1);
-        // One read per stock would not scale with the hall count.
+        // One read per stock would not scale with the stock count.
         expect(get).not.toHaveBeenCalled();
       } finally {
         getMany.mockRestore();
@@ -759,14 +759,14 @@ describe('Stock Endpoints', () => {
       expect(mockGetLatestReadings).not.toHaveBeenCalled();
     });
 
-    it('reports fan control without automation for a hall without thermometers', async () => {
+    it('reports fan control without automation for a stock without thermometers', async () => {
       const response = await request(app)
         .get('/api/v1/stocks')
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(200);
       const stock = response.body.stocks.find((s: { id: string }) => s.id === 'fan-only');
-      // `available` implies fan control, never the other way round: this hall is
+      // `available` implies fan control, never the other way round: this stock is
       // served by the fan endpoints but cannot be automated in v1, because the
       // differential rule needs grain thermometers (design spec §3.2).
       expect(stock.fanControlEnabled).toBe(true);

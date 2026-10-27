@@ -169,7 +169,7 @@ export class FanControlManager {
    * and forgets the wiring.
    *
    * Deliberately a single shot rather than a retry loop. Withdrawing fan
-   * control is a rare, supervised change to a hall's installation, the fan is
+   * control is a rare, supervised change to a stock's installation, the fan is
    * practically never running at that moment, and the Shelly switches itself
    * off after one to two hours without a keep-alive signal — so the backend
    * does not need to chase an acknowledgement to stay safe.

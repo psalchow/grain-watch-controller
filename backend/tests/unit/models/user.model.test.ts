@@ -8,13 +8,13 @@ const profile = (tenantIds: string[]): UserProfile => ({
 });
 
 describe('hasStockAccess', () => {
-  it("reaches a hall of the user's own tenant", () => {
+  it("reaches a stock of the user's own tenant", () => {
     expect(hasStockAccess(profile(['tnt_default']), { tenantId: 'tnt_default' })).toBe(
       true,
     );
   });
 
-  it('does not reach a hall of another tenant', () => {
+  it('does not reach a stock of another tenant', () => {
     expect(hasStockAccess(profile(['tnt_default']), { tenantId: 'tnt_other' })).toBe(
       false,
     );
@@ -23,7 +23,7 @@ describe('hasStockAccess', () => {
   // The membership table, the claim and this predicate are multi-valued from
   // the start even though the API caps creation at one tenant. This is the
   // test that keeps that preparation real rather than nominal.
-  it('reaches halls of both tenants when the user belongs to two', () => {
+  it('reaches stocks of both tenants when the user belongs to two', () => {
     const user = profile(['tnt_default', 'tnt_other']);
 
     expect(hasStockAccess(user, { tenantId: 'tnt_default' })).toBe(true);

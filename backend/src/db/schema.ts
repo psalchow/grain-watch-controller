@@ -14,7 +14,7 @@ export const users = sqliteTable('users', {
 });
 
 /**
- * The tenant every hall and every user starts out in.
+ * The tenant every stock and every user starts out in.
  *
  * Migration 0005 inserts the row and backfills both `stocks.tenant_id` and
  * `user_tenants` with it, so it exists on every database before any user does.
@@ -80,7 +80,7 @@ export const stocks = sqliteTable('stocks', {
    * Owning tenant. Deliberately without a foreign key: SQLite refuses
    * `ALTER TABLE … ADD COLUMN` carrying both `REFERENCES` and a non-null
    * default while `PRAGMA foreign_keys = ON`, and rebuilding `stocks` would
-   * drag `fan_state` and `fan_events` along. A wrong value hides a hall from
+   * drag `fan_state` and `fan_events` along. A wrong value hides a stock from
    * its tenant rather than corrupting anything.
    */
   tenantId: text('tenant_id').notNull().default(DEFAULT_TENANT_ID),

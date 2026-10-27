@@ -33,7 +33,7 @@ function token(): string {
   return jwt.sign({ userId: 'u1', username: 'admin', role: 'admin', tenants: [{ id: 'tnt_default', name: 'Standard' }] }, JWT_SECRET, { expiresIn: '1h' });
 }
 
-/** A viewer belonging to a tenant that owns none of the seeded halls. */
+/** A viewer belonging to a tenant that owns none of the seeded stocks. */
 function foreignToken(): string {
   return jwt.sign({ userId: 'u2', username: 'viewer', role: 'viewer', tenants: [{ id: 'tnt_foreign', name: 'Fremder Betrieb' }] }, JWT_SECRET, { expiresIn: '1h' });
 }
@@ -46,7 +46,7 @@ beforeEach(async () => {
   initDb({ path: ':memory:' });
   runMigrations(getDb());
   await seedStocks(new StockRepository(getDb()));
-  // A hall with fan control but no grain thermometers: automation is
+  // A stock with fan control but no grain thermometers: automation is
   // unavailable for it although the fan endpoints serve it (design spec §3.2).
   await new StockRepository(getDb()).upsertMany([
     {
@@ -89,14 +89,14 @@ afterEach(() => { manager.shutdown(); setFanManager(null); setAutomationService(
 function app() { return finaliseApp(createApp({ enableLogging: false })); }
 
 describe('fan endpoints', () => {
-  it('GET /fan returns status for a fan hall', async () => {
+  it('GET /fan returns status for a fan stock', async () => {
     const res = await request(app()).get('/api/v1/stocks/grain-watch-1/fan').set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(200);
     expect(res.body.status.state).toBe('OFF');
     expect(Array.isArray(res.body.events)).toBe(true);
   });
 
-  it('GET /fan returns 404 for a non-fan hall', async () => {
+  it('GET /fan returns 404 for a non-fan stock', async () => {
     const res = await request(app()).get('/api/v1/stocks/grain-watch-2/fan').set('Authorization', `Bearer ${token()}`);
     expect(res.status).toBe(404);
   });
@@ -240,10 +240,10 @@ describe('fan endpoints', () => {
     });
   });
 
-  it('GET /fan reports automation as unavailable for a hall without grain thermometers', async () => {
+  it('GET /fan reports automation as unavailable for a stock without grain thermometers', async () => {
     const res = await request(app()).get('/api/v1/stocks/fan-only/fan').set('Authorization', `Bearer ${token()}`);
 
-    // The fan endpoints serve the hall — only the automation is out of reach.
+    // The fan endpoints serve the stock — only the automation is out of reach.
     expect(res.status).toBe(200);
     expect(res.body.automation.available).toBe(false);
   });
@@ -322,14 +322,14 @@ describe('automation configuration endpoints', () => {
     expect(new AutomationRepository(getDb()).get('grain-watch-1')).toEqual(AUTOMATION_DEFAULTS);
   });
 
-  it.each([['get'], ['put']] as const)('%s answers 404 for a hall without fan control', async (method) => {
+  it.each([['get'], ['put']] as const)('%s answers 404 for a stock without fan control', async (method) => {
     const res = await call(method, '/api/v1/stocks/grain-watch-2/fan/automation', token());
 
     expect(res.status).toBe(404);
   });
 
   it.each([['get'], ['put']] as const)(
-    '%s answers 404 for a hall without grain thermometers',
+    '%s answers 404 for a stock without grain thermometers',
     async (method) => {
       const res = await call(method, '/api/v1/stocks/fan-only/fan/automation', token());
 

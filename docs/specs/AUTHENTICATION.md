@@ -23,8 +23,8 @@ endpoints that need it. Each successful refresh rotates the cookie.
 The access token carries `tenants: [{ id, name }]`; the refresh token carries
 only the user id, so a rename or a membership change is only visible after the
 next access token is minted. The ids are what authorise — `requireStockAccess`
-below compares them against a hall's `tenant_id` — and the names ride along as
-display data. A rename therefore shows up for a signed-in user after at most
+below compares them against a stock's `tenant_id` — and the names ride along
+as display data. A rename therefore shows up for a signed-in user after at most
 one access-token lifetime (`JWT_EXPIRES_IN`, 15 minutes by default), not
 immediately.
 
@@ -32,18 +32,18 @@ immediately.
 
 - **Roles**: `admin` (full access, user management) and `viewer` (read-only
   access to the stocks of their tenants)
-- **Tenants**: every hall (`stocks.tenant_id`) belongs to exactly one tenant;
-  every user belongs to at least one (`user_tenants`). A user sees the halls of
+- **Tenants**: every stock (`stocks.tenant_id`) belongs to exactly one tenant;
+  every user belongs to at least one (`user_tenants`). A user sees the stocks of
   their tenants; an administrator sees all, by role rather than membership.
-  Tenants themselves are created with SQL on the NAS, like hall configuration
+  Tenants themselves are created with SQL on the NAS, like stock configuration
   (`docs/specs/API.md`, "Stocks without grain thermometers") — the API only
   lists them (`GET /admin/tenants`), so an administrator can pick one when
   creating a user.
-- Stock-scoped routes run `requireStockAccess`: it looks the hall up and
+- Stock-scoped routes run `requireStockAccess`: it looks the stock up and
   compares its tenant against the caller's tenant ids. An administrator passes
-  without the lookup. A hall of another tenant and an unknown hall both answer
-  **403** — the shape is unchanged from the retired per-hall list, so a 404
-  never reveals whether a hall id exists.
+  without the lookup. A stock of another tenant and an unknown stock both answer
+  **403** — the shape is unchanged from the retired per-stock list, so a 404
+  never reveals whether a stock id exists.
 - Admin routes run `requireRole('admin')` for the whole router
 
 ## Forced Password Change

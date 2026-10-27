@@ -39,7 +39,7 @@ export class AdminController {
    * GET /api/v1/admin/tenants
    *
    * Exists so an administrator can pick a tenant when creating a user.
-   * Tenants themselves are created with SQL, like hall configuration.
+   * Tenants themselves are created with SQL, like stock configuration.
    *
    * @example
    * Response (200):

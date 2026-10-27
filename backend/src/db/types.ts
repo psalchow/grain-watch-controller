@@ -27,7 +27,7 @@ export interface Stock {
   fanControlEnabled: boolean;
   fanTopicPrefix?: string;
   fanSwitchId: number;
-  /** Id of the owning tenant; a hall belongs to exactly one. */
+  /** Id of the owning tenant; a stock belongs to exactly one. */
   tenantId: string;
 }
 

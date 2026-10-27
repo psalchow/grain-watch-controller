@@ -86,7 +86,7 @@ function stock(overrides: Partial<Stock> = {}): Stock {
     active: true,
     createdAt: '2026-01-01T00:00:00.000Z',
     fanControlEnabled: true,
-    fanTopicPrefix: 'shelly/hall-1',
+    fanTopicPrefix: 'shelly/stock-1',
     fanSwitchId: 0,
     tenantId: 'tnt_default',
     ...overrides,

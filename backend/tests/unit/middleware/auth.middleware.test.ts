@@ -21,7 +21,7 @@ import { StockRepository } from '../../../src/db/repositories';
 import { DEFAULT_TENANT_ID } from '../../../src/db/schema';
 import { resetServiceSingletonsForTests } from '../../../src/services';
 
-/** The tenant the seeded hall belongs to, as it rides in a token. */
+/** The tenant the seeded stock belongs to, as it rides in a token. */
 const DEFAULT_TENANT = { id: DEFAULT_TENANT_ID, name: 'Standard' };
 const OTHER_TENANT_ID = 'tnt_other';
 
@@ -63,7 +63,7 @@ describe('Authentication Middleware', () => {
     // The default auth service Proxy resolves to the singleton, which needs
     // a DB to instantiate its UserRepository. Provide an in-memory DB so the
     // fallback path works in tests that don't override the auth service.
-    // `requireStockAccess` reads halls from the same DB, hence the fixture.
+    // `requireStockAccess` reads stocks from the same DB, hence the fixture.
     initDb({ path: ':memory:' });
     runMigrations(getDb());
     getSqliteHandle()
@@ -71,7 +71,7 @@ describe('Authentication Middleware', () => {
       .run(OTHER_TENANT_ID, 'Zweiter Betrieb', '2026-06-02T00:00:00.000Z');
     await new StockRepository(getDb()).upsertMany([
       {
-        id: 'hall-default',
+        id: 'stock-default',
         name: 'Halle 8',
         deviceGroup: 'corn-watch-1',
         devicePrefix: '1',
@@ -84,7 +84,7 @@ describe('Authentication Middleware', () => {
         tenantId: DEFAULT_TENANT_ID,
       },
       {
-        id: 'hall-other',
+        id: 'stock-other',
         name: 'Halle 7',
         deviceGroup: 'corn-watch-2',
         devicePrefix: '2',
@@ -394,9 +394,9 @@ describe('Authentication Middleware', () => {
       tenantIds,
     });
 
-    it('should call next() for a hall of the user own tenant', async () => {
+    it('should call next() for a stock of the user own tenant', async () => {
       mockRequest.user = viewerOf([DEFAULT_TENANT_ID]);
-      mockRequest.params = { stockId: 'hall-default' };
+      mockRequest.params = { stockId: 'stock-default' };
 
       await requireStockAccess(
         mockRequest as any,
@@ -408,14 +408,14 @@ describe('Authentication Middleware', () => {
       expect(statusMock).not.toHaveBeenCalled();
     });
 
-    it('should call next() for any hall when the user is an administrator', async () => {
+    it('should call next() for any stock when the user is an administrator', async () => {
       mockRequest.user = {
         id: 'usr_001',
         username: 'admin',
         role: 'admin',
         tenantIds: [DEFAULT_TENANT_ID],
       };
-      mockRequest.params = { stockId: 'hall-other' };
+      mockRequest.params = { stockId: 'stock-other' };
 
       await requireStockAccess(
         mockRequest as any,
@@ -427,9 +427,9 @@ describe('Authentication Middleware', () => {
       expect(statusMock).not.toHaveBeenCalled();
     });
 
-    it('should return 403 for a hall of another tenant', async () => {
+    it('should return 403 for a stock of another tenant', async () => {
       mockRequest.user = viewerOf([DEFAULT_TENANT_ID]);
-      mockRequest.params = { stockId: 'hall-other' };
+      mockRequest.params = { stockId: 'stock-other' };
 
       await requireStockAccess(
         mockRequest as any,
@@ -443,16 +443,16 @@ describe('Authentication Middleware', () => {
         expect.objectContaining({
           statusCode: 403,
           error: 'FORBIDDEN',
-          message: expect.stringContaining('hall-other'),
+          message: expect.stringContaining('stock-other'),
         })
       );
     });
 
     // 403 rather than 404 on purpose: the client reads a 404 on the fan
     // stream as fan control having been withdrawn.
-    it('should return 403 for a hall that does not exist', async () => {
+    it('should return 403 for a stock that does not exist', async () => {
       mockRequest.user = viewerOf([DEFAULT_TENANT_ID]);
-      mockRequest.params = { stockId: 'hall-missing' };
+      mockRequest.params = { stockId: 'stock-missing' };
 
       await requireStockAccess(
         mockRequest as any,
@@ -466,7 +466,7 @@ describe('Authentication Middleware', () => {
 
     it('should return 401 when user is not authenticated', async () => {
       delete mockRequest.user;
-      mockRequest.params = { stockId: 'hall-default' };
+      mockRequest.params = { stockId: 'stock-default' };
 
       await requireStockAccess(
         mockRequest as any,
@@ -506,7 +506,7 @@ describe('Authentication Middleware', () => {
 
     it('should return 403 for a user without any membership', async () => {
       mockRequest.user = viewerOf([]);
-      mockRequest.params = { stockId: 'hall-default' };
+      mockRequest.params = { stockId: 'stock-default' };
 
       await requireStockAccess(
         mockRequest as any,

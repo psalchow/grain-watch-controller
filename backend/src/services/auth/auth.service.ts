@@ -245,7 +245,7 @@ export class AuthService {
       // Validate required claims are present. `tenants` must be a non-empty
       // array of objects carrying a string id: a token minted before tenancy
       // must not authorise under the retired model, an empty list would yield
-      // a session that answers 403 to every hall without saying why, and a
+      // a session that answers 403 to every stock without saying why, and a
       // list of bare strings would survive with `undefined` ids.
       if (
         typeof decoded.userId !== 'string' ||

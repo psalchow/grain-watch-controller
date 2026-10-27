@@ -52,7 +52,7 @@ export default function FanControlPage() {
   const [busy, setBusy] = useState(false);
   // The status load and the stream race on mount. A 404 from either means the
   // same thing, so both feed the notice — otherwise the page briefly offers an
-  // enabled switch for a hall that has no fan control.
+  // enabled switch for a stock that has no fan control.
   const [notAvailable, setNotAvailable] = useState(false);
 
   const { snapshot: live, connected, disabled } = useFanStream(stockId, true);

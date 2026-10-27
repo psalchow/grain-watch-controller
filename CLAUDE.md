@@ -22,8 +22,9 @@ here.
 
 - **Seasonal.** Ventilation matters from August to May, with the bulk between
   September and February. After that the stock is at temperature.
-- **Installations are stable.** A hall is fitted with fan control once and keeps
-  it for years. Withdrawing it is a rare, planned change, not an operation.
+- **Installations are stable.** A stock is fitted with fan control once and
+  keeps it for years. Withdrawing it is a rare, planned change, not an
+  operation.
 - **People are present.** Storage and ventilation are supervised. A change to
   the installation happens with somebody on site who can look at the fan.
 - **The Shelly is the safety net.** It switches off by itself after roughly one

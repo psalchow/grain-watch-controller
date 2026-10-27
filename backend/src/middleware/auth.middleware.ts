@@ -149,14 +149,14 @@ export function requireRole(role: UserRole) {
 /**
  * Middleware that ensures the user can access the stock in req.params.stockId.
  *
- * An administrator passes without a lookup; everybody else has the hall read
- * and its tenant compared against their membership. A hall of another tenant
- * and a hall that does not exist both answer 403 — deliberately the same
+ * An administrator passes without a lookup; everybody else has the stock read
+ * and its tenant compared against their membership. A stock of another tenant
+ * and a stock that does not exist both answer 403 — deliberately the same
  * answer as before, because the client reads a 404 on the fan stream as fan
  * control having been withdrawn.
  *
  * Must be used after the `authenticate` middleware. Asynchronous because the
- * hall lookup is; Express 4 does not forward a rejected promise, so failures
+ * stock lookup is; Express 4 does not forward a rejected promise, so failures
  * are passed to `next` here.
  *
  * @param req - Express request object

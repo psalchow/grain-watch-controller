@@ -7,7 +7,7 @@ import type { TenantRef } from '../../models';
  * Read-only access to the tenant table.
  *
  * Tenants are created, renamed and removed with SQL on the NAS, exactly like
- * hall configuration, so there is nothing to write here. `created_at` is not
+ * stock configuration, so there is nothing to write here. `created_at` is not
  * projected because nothing reads it.
  */
 export class TenantRepository {

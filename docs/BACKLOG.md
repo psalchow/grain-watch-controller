@@ -83,7 +83,7 @@ bare one.
 **Deferred:** 2026-09-23 — pre-existing, restated in tenant terms because the
 previous entry named `user_stock_access`, a table this change drops.
 
-`requireStockAccess` runs once when the fan stream connects. Moving a hall to
+`requireStockAccess` runs once when the fan stream connects. Moving a stock to
 another tenant or removing a user's membership therefore stops nothing until
 the client reconnects or its access token expires (`JWT_EXPIRES_IN`, 15 minutes
 by default) — the feature flag *is* re-checked on each reconciliation tick; the
@@ -114,13 +114,13 @@ them, so the `viewer` role can now also switch automation on and off and
 change its parameters. Same fix, same cost, one more endpoint pair to update
 when it lands.
 
-## Per-hall grants inside a tenant are gone
+## Per-stock grants inside a tenant are gone
 
 **Deferred:** 2026-09-23 — accepted alongside the tenants migration
-(migration 0005), which widens access for anyone who held a partial hall grant.
+(migration 0005), which widens access for anyone who held a partial stock grant.
 
-Tenant membership is all-or-nothing: a user reaches every hall of their
-tenant, and the finer per-hall grant that `user_stock_access` used to offer has
+Tenant membership is all-or-nothing: a user reaches every stock of their
+tenant, and the finer per-stock grant that `user_stock_access` used to offer has
 no equivalent. Reinstating it means a filter *inside* a tenant, not a return to
 the dropped table.
 
@@ -128,10 +128,10 @@ the dropped table.
 
 **Deferred:** 2026-09-23 — accepted; `stocks.tenant_id` carries no foreign key
 (SQLite refuses `ADD COLUMN` with both `REFERENCES` and a non-null default),
-and hall-to-tenant assignment is manual SQL until a hall configuration screen
+and stock-to-tenant assignment is manual SQL until a stock configuration screen
 exists.
 
-A typo in `tenant_id` is therefore the expected way this goes wrong: the hall
+A typo in `tenant_id` is therefore the expected way this goes wrong: the stock
 simply drops out of its intended tenant's `GET /stocks`, while an administrator
 — who bypasses the tenant filter by role — still sees it, so the account most
 likely to investigate sees nothing wrong.
@@ -141,7 +141,7 @@ likely to investigate sees nothing wrong.
 into a log line, for a few lines of code.
 
 The quieter failure runs the other way once a second tenant exists: because
-the column's non-null default is `'tnt_default'`, a hall inserted by SQL
+the column's non-null default is `'tnt_default'`, a stock inserted by SQL
 without naming `tenant_id` does not error or disappear — it silently joins
 `tnt_default` and becomes visible to everyone in it.
 
@@ -163,7 +163,7 @@ return alongside a multi-field `LAST()` — it would need a second query.
 **Deferred:** 2026-09-19 — belongs to the planned stock configuration UI.
 
 Withdrawing fan control sends one best-effort `off` and forgets the stock; the
-Shelly's own auto-off covers the rest. Once halls are configured through a
+Shelly's own auto-off covers the rest. Once stocks are configured through a
 screen rather than SQL, that screen is the right place to say "switch the
 ventilation off by hand" — and to send the final `off` while the operator is
 watching.
@@ -198,8 +198,8 @@ no signal — the page sits on the last snapshot with a live-looking button.
 `refreshAttempts` makes it easier to reach than it looks: it is reset only on a
 successful open, never when the effect re-runs. `StockDetailPage` is not
 remounted when the `:stockId` route param changes, so navigating away from a
-hall that spent its refresh carries the count into the next hall, where a single
-401 then lands in the give-up branch directly.
+stock that spent its refresh carries the count into the next stock, where a
+single 401 then lands in the give-up branch directly.
 
 Closing it: abort on the second 401, as the 404 and 403 branches do, surface it,
 and reset the ref at the top of the effect body.

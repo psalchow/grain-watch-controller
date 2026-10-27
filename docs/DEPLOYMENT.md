@@ -660,14 +660,15 @@ GRAINWATCH_IMAGE=psalchow/grainwatch:<previous-version> \
 
 ## Upgrade Procedure
 
-> **Tenants replace the per-user hall list — run this query before upgrading.**
-> Migration 0005 gives every hall and every user a tenant (`tnt_default`,
+> **Tenants replace the per-user stock list — run this query before
+> upgrading.**
+> Migration 0005 gives every stock and every user a tenant (`tnt_default`,
 > "Standard") and drops `user_stock_access`. That **widens** access: anyone
-> holding a partial hall grant gains the rest, and dropping the table destroys
+> holding a partial stock grant gains the rest, and dropping the table destroys
 > the record of what they were meant to see. Before deploying, run this against
 > the SQLite file to find affected users — it starts from `users` so an account
 > with no grant at all is listed, treats `'*'` as full access, and ignores
-> grants naming halls that no longer exist:
+> grants naming stocks that no longer exist:
 >
 > ```sql
 > SELECT u.id, u.username, COUNT(a.stock_id) AS granted
