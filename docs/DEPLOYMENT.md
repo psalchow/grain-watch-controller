@@ -366,72 +366,43 @@ forced password change.
 
 ## Configuring a Stock
 
-Stocks have no admin UI: the `stocks` table is edited with SQL against the
-database file at `DATABASE_PATH` (`./backend/data/grainwatch.db` on the host
-with the production compose file). Seeding only inserts rows that are missing,
-so an existing row is never overwritten by a restart.
-
-### Columns
-
-| Column | Meaning |
-|--------|---------|
-| `id` | Internal stock id, used in URLs (`grain-watch-1`) |
-| `name`, `description` | What the PWA shows |
-| `device_group` | Selects the **grain thermometers** (Influx tag `device-group`) |
-| `outdoor_device` | Selects the **outdoor sensor on the fan controller** (Influx tag `device`); empty means the stock reports no outdoor values |
-| `device_prefix` | Documents the device-id convention (`1` for `1.1`…`1.5`); nothing reads it |
-| `has_humidity` | Grain humidity probe present in the middle layer |
-| `has_grain_sensors` | Grain thermometers currently installed in this stock |
-| `active` | Inactive stocks are listed but cannot be opened |
-| `fan_control_enabled` | Stock has fan control |
-| `fan_topic_prefix` | MQTT prefix of its Shelly; **fan control needs both this and the flag** |
-| `fan_switch_id` | Switch channel on the Shelly (`0` for a single-channel device) |
-| `tenant_id` | Owning tenant; viewers see a stock only through membership |
+Administrators manage stocks in the app: **Stocks** in the header (route
+`/admin/stocks`). Create, edit, activate and deactivate, assign thermometers,
+humidity probe and outdoor sensor, and switch fan control on or off there. Fan
+control changes take effect without a restart; the reconciliation tick builds,
+re-wires and retires controllers within about a minute. A fresh database has no
+stocks, so the home page stays empty until an administrator creates the first.
 
 The two device selectors are independent on purpose. The fan controller is
 installed once and stays with the stock; a thermometer set is movable and may be
-carried to another stock. That the two carry the same name today
-(`corn-watch-1`) is naming history — nothing derives one from the other.
+carried to another stock. To move one, clear it on the old stock and enter it on
+the new one in the screen.
 
-### Commissioning a stock
-
-```sql
-UPDATE stocks SET
-  active = 1,
-  description = 'Lagerhalle 7',
-  device_group = 'corn-watch-2',
-  outdoor_device = 'corn-watch-2',
-  has_humidity = 1,
-  has_grain_sensors = 1,
-  fan_control_enabled = 1,
-  fan_topic_prefix = '/corn-watch/actors/corn-watch-2/fan-control',
-  fan_switch_id = 0
-WHERE id = 'grain-watch-2';
-```
-
-**Restart the container afterwards.** The fan manager builds its controllers
-once at startup; the reconciliation tick only retires stocks whose fan control
-was revoked, it never picks up newly enabled ones. Readings, outdoor conditions
-and the `active` flag do take effect without a restart.
-
-Outside the application, the sink service has to publish this stock's data:
-sensor points tagged `device-group = 'corn-watch-2'` in `INFLUXDB_MEASUREMENT`,
-outdoor points tagged `device = 'corn-watch-2'` in the two outdoor measurements.
-
-### Moving a thermometer set to another stock
-
-Only the thermometer columns move; the fan controller, its topic and the
-outdoor sensor stay where they are.
-
-```sql
-UPDATE stocks SET has_grain_sensors = 0 WHERE id = 'grain-watch-1';
-UPDATE stocks SET device_group = 'corn-watch-1', has_grain_sensors = 1
-  WHERE id = 'grain-watch-2';
-```
+Outside the application, the sink service has to publish the stock's data:
+sensor points tagged `device-group = '<device group>'` in `INFLUXDB_MEASUREMENT`,
+outdoor points tagged `device = '<outdoor device>'` in the two outdoor
+measurements.
 
 A stock without grain thermometers keeps fan control and still shows outdoor
 conditions, but cannot be automated: the control rule compares grain against
 outdoor air and has nothing to compare.
+
+### What the screen cannot do
+
+- **Assign a tenant.** The product has no tenant selection; every stock created
+  in the screen lands in `tnt_default`. For any other tenant, update the row in
+  the SQLite file at `DATABASE_PATH` (`./backend/data/grainwatch.db` on the host
+  with the production compose file):
+
+  ```sql
+  UPDATE stocks SET tenant_id = 'tnt_other' WHERE id = 'stk_001';
+  ```
+
+  `stocks.tenant_id` carries no foreign key, so check the tenant id against the
+  `tenants` table; a typo makes the stock vanish from that tenant's list.
+- **Change a stock's id.** The id is the primary key that `fan_state`,
+  `fan_events` and `stock_automation` reference. To "rename", create a new stock
+  and deactivate the old one; the history stays with the old id.
 
 ---
 

@@ -10,34 +10,6 @@ is done; keep the list short enough to be read before every feature.
 
 ---
 
-## Stock configuration cannot be edited without SQL
-
-**Deferred:** 2026-09-18 — explicitly postponed while removing `deviceCount`.
-
-Stocks are seeded (`backend/src/db/seed.ts`) and `StockRepository.upsertMany`
-uses `onConflictDoNothing`, so an existing row never changes. There are no admin
-endpoints for stocks, only for users. Setting `has_grain_sensors`,
-`device_group`, `outdoor_device`, `fan_control_enabled` or `fan_topic_prefix`
-therefore means editing the SQLite file on the NAS by hand, as documented in
-`docs/DEPLOYMENT.md` ("Configuring a Stock").
-
-Worth doing when stock configuration changes more than once a season: an admin
-API plus a screen, or at minimum a seed that upserts declared fields. Mobile
-thermometer sets move this closer: carrying a set to another stock is two
-`UPDATE`s plus a decision about which stock keeps `has_grain_sensors`.
-
-## `device_prefix` has no reader
-
-**Deferred:** 2026-09-18 — kept deliberately when `device_count` was dropped.
-
-Device rosters now come from the measurements themselves, so
-`stocks.device_prefix` is written and never read (`backend/src/db/schema.ts`
-carries a comment saying so). It documents the naming convention (`1` → `1.1`…).
-
-Drop it in its own migration if a future reader does not appear — note that
-migration 0004 already made rollback a database-restore operation, so a second
-column drop costs little extra.
-
 ## A probe that is silent for a whole range vanishes from the history
 
 **Deferred:** 2026-09-18 — current behaviour is the decided one, documented in
@@ -127,23 +99,21 @@ the dropped table.
 ## A wrong `stocks.tenant_id` disappears silently
 
 **Deferred:** 2026-09-23 — accepted; `stocks.tenant_id` carries no foreign key
-(SQLite refuses `ADD COLUMN` with both `REFERENCES` and a non-null default),
-and stock-to-tenant assignment is manual SQL until a stock configuration screen
-exists.
+(SQLite refuses `ADD COLUMN` with both `REFERENCES` and a non-null default).
+Amended 2026-10-27: stocks created in the admin screen always land in
+`tnt_default`, so a typo is no longer the expected failure.
 
-A typo in `tenant_id` is therefore the expected way this goes wrong: the stock
-simply drops out of its intended tenant's `GET /stocks`, while an administrator
-— who bypasses the tenant filter by role — still sees it, so the account most
-likely to investigate sees nothing wrong.
+What remains is SQL-assigned tenancy (`docs/DEPLOYMENT.md`, "What the screen
+cannot do"): a typo there makes the stock drop out of its intended tenant's
+`GET /stocks`, while an administrator — who bypasses the tenant filter by role —
+still sees it.
 
 `initFanControl` already reads every stock at startup. Warning there about a
-`tenant_id` with no matching `tenants` row would turn a silent disappearance
-into a log line, for a few lines of code.
+`tenant_id` with no matching `tenants` row would turn that into a log line, for
+a few lines of code.
 
-The quieter failure runs the other way once a second tenant exists: because
-the column's non-null default is `'tnt_default'`, a stock inserted by SQL
-without naming `tenant_id` does not error or disappear — it silently joins
-`tnt_default` and becomes visible to everyone in it.
+A stock inserted by SQL without naming `tenant_id` does not error either: the
+column's default is `'tnt_default'`, so it silently joins that tenant.
 
 ## The offline flag trusts the device clock
 
@@ -157,16 +127,6 @@ timestamp is never flagged.
 
 Fixing it means obtaining a per-device ingest timestamp, which InfluxQL does not
 return alongside a multi-field `LAST()` — it would need a second query.
-
-## Warn about a running fan when fan control is withdrawn
-
-**Deferred:** 2026-09-19 — belongs to the planned stock configuration UI.
-
-Withdrawing fan control sends one best-effort `off` and forgets the stock; the
-Shelly's own auto-off covers the rest. Once stocks are configured through a
-screen rather than SQL, that screen is the right place to say "switch the
-ventilation off by hand" — and to send the final `off` while the operator is
-watching.
 
 ## The withdrawal never reaches a client that is watching
 
@@ -318,28 +278,29 @@ trade-off, decided separately each time rather than once. Worth settling which
 one a switch command should follow generally, now that there are two data
 points.
 
-## Retirement never unsubscribes the stock's MQTT topics
+## A failed switch-off during a fan re-wire can resume `on` on unobserved hardware
 
-**Deferred:** 2026-09-19 — costs broker traffic, not correctness.
+**Deferred:** 2026-10-27 — reachable only through the failing-write family
+above.
 
-`FanControlManager.init` subscribes to `<prefix>/monitor/#`, `<prefix>/status/#`
-and `<prefix>/online` per stock; retiring a stock deletes the wiring but never
-unsubscribes, and `MqttClientLike` has no `unsubscribe` at all. The broker keeps
-delivering that prefix's traffic for the life of the process, and `route()`
-drops it silently.
+If `controller.command('off')` throws before the state is persisted, the rebuilt
+controller's `recover()` reads a `desiredOn` that was never cleared and
+publishes `on` to the new command topic — hardware the backend has never
+observed. Code: `FanControlManager.reconcile`
+(`backend/src/services/fan/fan.manager.ts`) and `FanController.recover`
+(`backend/src/services/fan/fan.controller.ts`). Settling the ordering question
+above decides this too.
 
-Adding `unsubscribe` to `MqttClientLike` and calling it in `retireController`
-would close it.
-
-## Clear-then-re-enable inside one tick retires the controller anyway
+## Clear-then-re-enable inside one tick cycles the fan needlessly
 
 **Deferred:** 2026-09-19 — needs a mistaken edit corrected within 60 s, which
 the operating reality makes unlikely.
 
-`reconcile` retires on `!enabled.has(stockId) || wiring.retiring`. If a request
-marked the stock while the row was briefly cleared, the next tick retires it
-even though the fresh read says the stock is enabled again. Rebuilding the
-controller then needs a restart.
+If a request marked the stock while its fan control was briefly cleared, the
+next tick retires the controller (one `off`, a `stand_down` row) and a later tick
+rebuilds it, so no restart is needed any more. What remains is the needless
+off/on cycle in between (`FanControlManager.reconcile`,
+`backend/src/services/fan/fan.manager.ts`).
 
 Closing it: retire only on `!enabled.has(stockId)`, and clear the mark when the
 fresh read still contains the stock.
@@ -458,21 +419,6 @@ hold a safety rule it cannot enforce (design spec §6), but nothing turns the
 fan off in that situation short of somebody walking back to the contactor. No
 software closes this; it is worth writing down because it bounds the reach of
 every safety rule this system implements, present and future.
-
-## `FanControlManager.reconcile` only retires, never adds
-
-**Deferred:** 2026-09-29, in the fan automation core design (spec §3.2, §11).
-
-Controllers are built once, at startup, from `selectFanStocks`
-(`backend/src/services/fan/fan.manager.ts`). `reconcile` on the reconciliation
-tick only ever retires a stock whose row stopped asking for fan control; it
-never builds a controller for a row that started asking for one after the
-process came up. Enabling fan control for a stock therefore still needs a
-restart — and, because automation requires a controller
-(`automationAvailable`, design spec §3.2), a restart is also what makes
-automation reachable for that stock. `docs/specs/API.md` already documents the
-fan-control half of this under "Stocks without grain thermometers"; automation
-inherits it rather than working around it differently.
 
 ## Backend validation messages reach the German UI in English
 
@@ -596,3 +542,62 @@ next monitor message or the watchdog corrects it. Repairing it means deciding
 what a divergence should do (correct the state, raise a fault, re-assert the
 command), which is a behaviour change, not a defect in the code this task
 touched.
+## `StockService.applyPatch` duplicates `StockRepository.update`
+
+**Deferred:** 2026-10-27 — found in review of stock administration.
+
+`StockService.applyPatch` (`backend/src/services/stock/stock.service.ts`)
+repeats the field-by-field patch logic of `StockRepository.update`. A field
+added to `StockPatch` must be added in both, and nothing enforces that.
+
+## `createStockSchema` accepts `""` for device selectors and topic prefix
+
+**Deferred:** 2026-10-27 — a fix would exceed the bounds the design spec states.
+
+`deviceGroup`, `outdoorDevice` and `fanTopicPrefix` accept an empty string
+(`backend/src/middleware/validation.middleware.ts`). An empty `outdoorDevice` is
+stored as a selector that matches nothing. The service's invariants treat blank
+as missing, so only the stored value is odd. Closing it: `.trim().min(1)`, or
+storing `""` as null.
+
+## Fan automation spec §5.5 misdescribes when `fan_control_withdrawn` fires
+
+**Deferred:** 2026-10-27 — documentation only.
+
+`docs/superpowers/specs/2026-09-29-fan-automation-core-design.md` §5.5 says
+`retireController` fires `fan_control_withdrawn` only on withdrawal; it now also
+fires on a wiring change. Related: the same event is recorded twice in different
+words — the `stand_down` row says "fan wiring changed", the `automation_disabled`
+row says `fan_control_withdrawn` — unavoidable while `DisableCause` is a closed
+four-value union.
+
+## `makeStock` cannot express an absent optional
+
+**Deferred:** 2026-10-27 — found while writing stock administration tests.
+
+Under `exactOptionalPropertyTypes`, `makeStock` (`backend/tests/setup/stocks.ts`)
+cannot leave a field out, so tests needing a stock without an `outdoorDevice`
+pass a full literal to `create` instead. An `omit` option would close it.
+
+## Row actions on the admin pages do not guard against a double click
+
+**Deferred:** 2026-10-27 — found in review of stock administration.
+
+Neither `AdminStocksPage` nor `AdminUsersPage` (`frontend/src/pages/`) disables
+a row action while its request is in flight; the second request 404s into the
+error band.
+
+## `Header.test.tsx` has no case for the `Stocks` links
+
+**Deferred:** 2026-10-27.
+
+`frontend/src/components/Header.test.tsx` does not cover the two new `Stocks`
+links (bar and menu); its existing counts key on `Users` and `Account`.
+
+## `AdminStocksPage` shows an empty Equipment cell for a bare stock
+
+**Deferred:** 2026-10-27.
+
+For a stock with no thermometers, no humidity and no fan control the Equipment
+cell is empty, where `StockCard` shows explanatory text in the same situation.
+
