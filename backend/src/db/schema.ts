@@ -37,10 +37,10 @@ export const userTenants = sqliteTable(
       .notNull()
       .references(() => tenants.id),
   },
-  (table) => ({
-    pk: primaryKey({ columns: [table.userId, table.tenantId] }),
-    tenantIdIdx: index('user_tenants_tenant_id_idx').on(table.tenantId),
-  })
+  (table) => [
+    primaryKey({ columns: [table.userId, table.tenantId] }),
+    index('user_tenants_tenant_id_idx').on(table.tenantId),
+  ]
 );
 
 export const stocks = sqliteTable('stocks', {
@@ -102,9 +102,7 @@ export const fanEvents = sqliteTable(
     payload: text('payload'),
     source: text('source').notNull(),
   },
-  (table) => ({
-    stockTsIdx: index('fan_events_stock_ts_idx').on(table.stockId, table.ts),
-  })
+  (table) => [index('fan_events_stock_ts_idx').on(table.stockId, table.ts)]
 );
 
 /** Per-stock automation parameters, `stock_automation` (design spec §3.1). */
