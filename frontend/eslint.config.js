@@ -19,6 +19,13 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Off since eslint-plugin-react-hooks 7.1.1 introduced it. Every page
+      // that loads data resets `loading` and `error` synchronously before
+      // starting the fetch, which the rule flags. Satisfying it means moving
+      // the loading and error handling of seven components onto a different
+      // data-fetching pattern — a behaviour change, not a lint fix. Recorded
+      // in docs/BACKLOG.md.
+      'react-hooks/set-state-in-effect': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },

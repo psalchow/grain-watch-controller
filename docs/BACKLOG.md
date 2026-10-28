@@ -655,3 +655,20 @@ the stored row, so the rule exists once. Note that the diff has to preserve the
 Related: the integration test for a patch that switches a flag off does not pin
 that `outdoorDevice` survives over HTTP — the service test covers it, so the
 gap is only in the layer that proves the API exempts it.
+
+## Seven data-loading effects set state synchronously
+
+**Deferred:** 2026-10-28 — found when `eslint-plugin-react-hooks` 7.1.1 added
+`set-state-in-effect`; the rule is disabled in `frontend/eslint.config.js` with
+a pointer to this entry.
+
+`HomePage`, `AdminUsersPage`, `AdminStocksPage`, `FanControlPage`,
+`FanAutomationPanel` and `StockHistorySection` all reset `loading` and `error`
+synchronously at the top of the effect that starts the fetch. React's current
+guidance is to drive that from the fetch itself or from an external store, so
+the reset is not a render-triggering side effect.
+
+Closing it: move the six components onto one shared data-loading hook — the
+pattern is identical in all of them — then re-enable the rule. It touches the
+spinner and error-band behaviour of every page that loads, so it wants the
+frontend test suite watched rather than a mechanical rewrite.
