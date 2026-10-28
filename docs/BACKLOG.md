@@ -636,3 +636,22 @@ not resumed. The next tick finds a matching prefix and never retries it.
 
 Closing it: retry the activation on the next tick, or insert the map entry only
 once activation has succeeded.
+
+## The switch-governed field rule is written twice
+
+**Deferred:** 2026-10-28 — found while moving the rule into the service; a
+refactor rather than a defect.
+
+`normalise` and `effectivePatch` in
+`backend/src/services/stock/stock.service.ts` encode the same rule from two
+sides: one produces the stock as it will look, the other the patch the
+repository is told. A third switch-governed field has to be added in both, and
+nothing enforces that.
+
+Closing it: derive the patch from the normalised stock by diffing it against
+the stored row, so the rule exists once. Note that the diff has to preserve the
+`null`-clears-versus-absent-leaves-alone distinction `StockPatch` rests on.
+
+Related: the integration test for a patch that switches a flag off does not pin
+that `outdoorDevice` survives over HTTP — the service test covers it, so the
+gap is only in the layer that proves the API exempts it.
