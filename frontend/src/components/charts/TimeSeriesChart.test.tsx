@@ -43,20 +43,31 @@ class ResizeObserverStub {
 }
 (globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver =
   ResizeObserverStub;
-Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+function fakeRect(width: number, height: number): DOMRect {
   return {
     x: 0,
     y: 0,
     top: 0,
     left: 0,
-    right: 800,
-    bottom: 300,
-    width: 800,
-    height: 300,
+    right: width,
+    bottom: height,
+    width,
+    height,
     toJSON() {
       return this;
     },
   } as DOMRect;
+}
+
+// The legend needs a size of its own. Recharts measures it and subtracts the
+// result from the plot area, so a blanket 800x300 for every element leaves a
+// 300px legend inside a 240px chart, no room to draw in, and reference areas
+// that render as empty groups — a shape of the stub, not of the component.
+Element.prototype.getBoundingClientRect = function getBoundingClientRect(this: Element) {
+  const isLegend =
+    this.classList?.contains('recharts-legend-wrapper') ||
+    this.closest?.('.recharts-legend-wrapper') !== null;
+  return isLegend ? fakeRect(800, 24) : fakeRect(800, 300);
 };
 
 const sampleSeries = [

@@ -98,9 +98,9 @@ export function TimeSeriesChart({
               width={48}
             />
             <Tooltip
-              labelFormatter={(value: string) => formatTick(value, intervalSeconds)}
-              formatter={(value: number) =>
-                value === null || value === undefined ? '—' : `${value.toFixed(1)}${unit}`
+              labelFormatter={(label) => formatTick(String(label), intervalSeconds)}
+              formatter={(value) =>
+                typeof value === 'number' ? `${value.toFixed(1)}${unit}` : '—'
               }
             />
             <Legend wrapperStyle={{ fontSize: 12 }} />
