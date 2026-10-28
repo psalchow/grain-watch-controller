@@ -6,7 +6,36 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { z, ZodSchema, ZodError } from 'zod';
+import { z, ZodType, ZodError } from 'zod';
+
+/**
+ * Builds the `error` parameter Zod 4 uses in place of `required_error` and
+ * `invalid_type_error`.
+ *
+ * The two messages differ in what they tell the caller — one that a field is
+ * missing, the other that it carries something unusable — so the single
+ * callback has to tell those apart again, which it does by the input being
+ * `undefined`. Returning `undefined` hands back to Zod's own wording, which is
+ * what omitting either message meant in Zod 3.
+ *
+ * Only the issues that stand for "wrong input altogether" are answered:
+ * `invalid_type` for every schema, plus `invalid_value`, which is the one an
+ * enum raises for a missing, mistyped and unknown value alike. A failed `min`
+ * or `regex` is left to the message given at the check itself.
+ */
+export function typeMessages(
+  onMissing?: string,
+  onWrongType?: string
+): { error: (issue: { code: string; input?: unknown }) => string | undefined } {
+  return {
+    error: (issue: { code: string; input?: unknown }): string | undefined =>
+      issue.code === 'invalid_type' || issue.code === 'invalid_value'
+        ? issue.input === undefined
+          ? onMissing
+          : onWrongType
+        : undefined,
+  };
+}
 
 /**
  * Creates middleware that validates the request body against a Zod schema.
@@ -25,7 +54,7 @@ import { z, ZodSchema, ZodError } from 'zod';
  *
  * router.post('/users', validateBody(createUserSchema), createUserHandler);
  */
-export function validateBody<T>(schema: ZodSchema<T>) {
+export function validateBody<T>(schema: ZodType<T>) {
   return function validateBodyMiddleware(
     req: Request,
     res: Response,
@@ -68,7 +97,7 @@ export function validateBody<T>(schema: ZodSchema<T>) {
  *
  * router.get('/temperature', validateQuery(stockQuerySchema), getTemperatureHandler);
  */
-export function validateQuery<T>(schema: ZodSchema<T>) {
+export function validateQuery<T>(schema: ZodType<T>) {
   return function validateQueryMiddleware(
     req: Request,
     res: Response,
@@ -110,7 +139,7 @@ export function validateQuery<T>(schema: ZodSchema<T>) {
  *
  * router.get('/:stockId', validateParams(stockParamsSchema), getStockHandler);
  */
-export function validateParams<T>(schema: ZodSchema<T>) {
+export function validateParams<T>(schema: ZodType<T>) {
   return function validateParamsMiddleware(
     req: Request,
     res: Response,
@@ -166,19 +195,13 @@ function formatZodErrors(error: ZodError): Record<string, string[]> {
 export const loginSchema = z.object({
   /** Username for authentication (3-50 characters) */
   username: z
-    .string({
-      required_error: 'Username is required',
-      invalid_type_error: 'Username must be a string',
-    })
+    .string(typeMessages('Username is required', 'Username must be a string'))
     .min(1, 'Username is required')
     .max(50, 'Username must be at most 50 characters'),
 
   /** Password for authentication (8-100 characters) */
   password: z
-    .string({
-      required_error: 'Password is required',
-      invalid_type_error: 'Password must be a string',
-    })
+    .string(typeMessages('Password is required', 'Password must be a string'))
     .min(1, 'Password is required')
     .max(100, 'Password must be at most 100 characters'),
 });
@@ -191,11 +214,11 @@ export type LoginRequest = z.infer<typeof loginSchema>;
  */
 export const changePasswordSchema = z.object({
   currentPassword: z
-    .string({ required_error: 'Current password is required' })
+    .string(typeMessages('Current password is required'))
     .min(1, 'Current password is required')
     .max(100, 'Password must be at most 100 characters'),
   newPassword: z
-    .string({ required_error: 'New password is required' })
+    .string(typeMessages('New password is required'))
     .min(8, 'Password must be at least 8 characters')
     .max(100, 'Password must be at most 100 characters'),
 });
@@ -208,7 +231,7 @@ export type ChangePasswordRequest = z.infer<typeof changePasswordSchema>;
  */
 export const resetPasswordSchema = z.object({
   newPassword: z
-    .string({ required_error: 'New password is required' })
+    .string(typeMessages('New password is required'))
     .min(8, 'Password must be at least 8 characters')
     .max(100, 'Password must be at most 100 characters'),
 });
@@ -220,7 +243,9 @@ export type ResetPasswordRequest = z.infer<typeof resetPasswordSchema>;
  * User role enum for validation.
  */
 export const userRoleEnum = z.enum(['admin', 'viewer'], {
-  errorMap: () => ({ message: 'Role must be one of: admin, viewer' }),
+  // A plain string covers every issue the enum can raise, which is what the
+  // Zod 3 `errorMap` did: a missing role reads the same as an unknown one.
+  error: 'Role must be one of: admin, viewer',
 });
 
 /** Type for valid user role values */
@@ -232,14 +257,22 @@ export type UserRole = z.infer<typeof userRoleEnum>;
  * Capped at one entry: storage, claim, predicate and client type all carry a
  * list, but no interface offers a second choice and no feature has answered
  * what a multi-tenant user would mean. Lifting the cap is one line.
+ *
+ * The bounds sit in a `superRefine` rather than on `min`/`max` because Zod 4
+ * keeps running checks after the type check has already failed: a string of
+ * twelve characters would otherwise be reported both as "not an array" and as
+ * over the cap.
  */
 export const tenantIdsSchema = z
-  .array(z.string(), {
-    required_error: 'Tenant list is required',
-    invalid_type_error: 'Tenants must be an array of tenant ids',
-  })
-  .min(1, 'At least one tenant is required')
-  .max(1, 'A user can belong to at most one tenant');
+  .array(z.string(), typeMessages('Tenant list is required', 'Tenants must be an array of tenant ids'))
+  .superRefine((tenantIds, ctx) => {
+    if (tenantIds.length < 1) {
+      ctx.addIssue({ code: 'custom', message: 'At least one tenant is required' });
+    }
+    if (tenantIds.length > 1) {
+      ctx.addIssue({ code: 'custom', message: 'A user can belong to at most one tenant' });
+    }
+  });
 
 /**
  * User creation request body schema.
@@ -247,10 +280,7 @@ export const tenantIdsSchema = z
 export const createUserSchema = z.object({
   /** Username (3-50 alphanumeric characters and underscores) */
   username: z
-    .string({
-      required_error: 'Username is required',
-      invalid_type_error: 'Username must be a string',
-    })
+    .string(typeMessages('Username is required', 'Username must be a string'))
     .min(3, 'Username must be at least 3 characters')
     .max(50, 'Username must be at most 50 characters')
     .regex(
@@ -260,10 +290,7 @@ export const createUserSchema = z.object({
 
   /** Password (8-100 characters) */
   password: z
-    .string({
-      required_error: 'Password is required',
-      invalid_type_error: 'Password must be a string',
-    })
+    .string(typeMessages('Password is required', 'Password must be a string'))
     .min(8, 'Password must be at least 8 characters')
     .max(100, 'Password must be at most 100 characters'),
 
@@ -284,21 +311,21 @@ export const createUserSchema = z.object({
 export type CreateUserRequest = z.infer<typeof createUserSchema>;
 
 /**
- * Stock creation request body schema.
+ * The editable stock fields, carrying their bounds but no create defaults.
  *
- * Only `name` is required. The defaults mirror the DDL column defaults in
- * `src/db/schema.ts` (`hasHumidity` has none there and is false in practice);
- * change one set and change the other. The two stock invariants (fan control
- * needs a prefix, grain sensors need a device group) are enforced by
- * StockService, not here.
+ * Create and update layer on top of this: create adds the defaults, update
+ * makes every field optional. Keeping the defaults out of the shared shape is
+ * what lets an absent field in an update stay untouched — a default on the
+ * shape would be filled in by `.partial()` as well, and an empty body would
+ * arrive at the repository as a full set of values.
+ *
+ * The two stock invariants (fan control needs a prefix, grain sensors need a
+ * device group) are enforced by StockService, not here.
  */
-export const createStockSchema = z.object({
+const stockFields = {
   /** Display name (1-100 characters) */
   name: z
-    .string({
-      required_error: 'Name is required',
-      invalid_type_error: 'Name must be a string',
-    })
+    .string(typeMessages('Name is required', 'Name must be a string'))
     .min(1, 'Name is required')
     .max(100, 'Name must be at most 100 characters'),
 
@@ -324,10 +351,10 @@ export const createStockSchema = z.object({
     .nullable()
     .optional(),
 
-  hasHumidity: z.boolean().default(false),
-  hasGrainSensors: z.boolean().default(true),
-  active: z.boolean().default(true),
-  fanControlEnabled: z.boolean().default(false),
+  hasHumidity: z.boolean(),
+  hasGrainSensors: z.boolean(),
+  active: z.boolean(),
+  fanControlEnabled: z.boolean(),
 
   /** MQTT topic prefix of the fan controller: no wildcards, no trailing slash */
   fanTopicPrefix: z
@@ -340,11 +367,26 @@ export const createStockSchema = z.object({
 
   /** Switch channel on the fan controller (0-9) */
   fanSwitchId: z
-    .number({ invalid_type_error: 'Fan switch id must be a number' })
+    .number(typeMessages(undefined, 'Fan switch id must be a number'))
     .int('Fan switch id must be an integer')
     .min(0, 'Fan switch id must be between 0 and 9')
-    .max(9, 'Fan switch id must be between 0 and 9')
-    .default(0),
+    .max(9, 'Fan switch id must be between 0 and 9'),
+};
+
+/**
+ * Stock creation request body schema.
+ *
+ * Only `name` is required. The defaults mirror the DDL column defaults in
+ * `src/db/schema.ts` (`hasHumidity` has none there and is false in practice);
+ * change one set and change the other.
+ */
+export const createStockSchema = z.object({
+  ...stockFields,
+  hasHumidity: stockFields.hasHumidity.default(false),
+  hasGrainSensors: stockFields.hasGrainSensors.default(true),
+  active: stockFields.active.default(true),
+  fanControlEnabled: stockFields.fanControlEnabled.default(false),
+  fanSwitchId: stockFields.fanSwitchId.default(0),
 });
 
 /** Type inferred from createStockSchema */
@@ -352,10 +394,10 @@ export type CreateStockRequest = z.infer<typeof createStockSchema>;
 
 /**
  * Stock update request body schema: every editable field may appear alone.
- * An empty body is rejected. `.partial()` leaves the create defaults out, so an
- * absent field stays untouched.
+ * An empty body is rejected. Built from the undefaulted shape, so an absent
+ * field stays untouched instead of being filled with a create default.
  */
-export const updateStockSchema = createStockSchema.partial().refine(
+export const updateStockSchema = z.object(stockFields).partial().refine(
   (data) => Object.values(data).some((value) => value !== undefined),
   { message: 'At least one field must be provided' }
 );
@@ -369,10 +411,7 @@ export type UpdateStockRequest = z.infer<typeof updateStockSchema>;
 export const stockIdParamsSchema = z.object({
   /** Stock identifier */
   stockId: z
-    .string({
-      required_error: 'Stock ID is required',
-      invalid_type_error: 'Stock ID must be a string',
-    })
+    .string(typeMessages('Stock ID is required', 'Stock ID must be a string'))
     .min(1, 'Stock ID is required'),
 });
 
@@ -385,10 +424,7 @@ export type StockIdParams = z.infer<typeof stockIdParamsSchema>;
 export const userIdParamsSchema = z.object({
   /** User identifier */
   userId: z
-    .string({
-      required_error: 'User ID is required',
-      invalid_type_error: 'User ID must be a string',
-    })
+    .string(typeMessages('User ID is required', 'User ID must be a string'))
     .min(1, 'User ID is required'),
 });
 
@@ -399,10 +435,7 @@ export type UserIdParams = z.infer<typeof userIdParamsSchema>;
  * Stock history endpoint query schema.
  */
 export const historyQuerySchema = z.object({
-  resolution: z.enum(['day', 'week', 'month', 'year'], {
-    required_error: 'Resolution is required',
-    invalid_type_error: 'Resolution must be one of: day, week, month, year',
-  }),
+  resolution: z.enum(['day', 'week', 'month', 'year'], typeMessages('Resolution is required', 'Resolution must be one of: day, week, month, year')),
 });
 
 /** Type inferred from historyQuerySchema */
@@ -412,10 +445,7 @@ export type HistoryQuery = z.infer<typeof historyQuerySchema>;
  * Fan command request body schema.
  */
 export const fanCommandSchema = z.object({
-  action: z.enum(['on', 'off'], {
-    required_error: 'Action is required',
-    invalid_type_error: 'Action must be one of: on, off',
-  }),
+  action: z.enum(['on', 'off'], typeMessages('Action is required', 'Action must be one of: on, off')),
 });
 
 /** Type inferred from fanCommandSchema */
@@ -430,39 +460,30 @@ export type FanCommandRequest = z.infer<typeof fanCommandSchema>;
  */
 export const automationConfigSchema = z
   .object({
-    enabled: z.boolean({
-      required_error: 'enabled is required',
-      invalid_type_error: 'enabled must be a boolean',
-    }),
+    enabled: z.boolean(typeMessages('enabled is required', 'enabled must be a boolean')),
     /** Upper bound only: the lower one is `deltaOffK`, checked across the fields below. */
     deltaOnK: z
-      .number({ required_error: 'deltaOnK is required', invalid_type_error: 'deltaOnK must be a number' })
+      .number(typeMessages('deltaOnK is required', 'deltaOnK must be a number'))
       .max(20, 'deltaOnK must be at most 20'),
     deltaOffK: z
-      .number({ required_error: 'deltaOffK is required', invalid_type_error: 'deltaOffK must be a number' })
+      .number(typeMessages('deltaOffK is required', 'deltaOffK must be a number'))
       .min(2, 'deltaOffK must be at least 2'),
     maxOutdoorHumidityPct: z
-      .number({
-        required_error: 'maxOutdoorHumidityPct is required',
-        invalid_type_error: 'maxOutdoorHumidityPct must be a number',
-      })
+      .number(typeMessages('maxOutdoorHumidityPct is required', 'maxOutdoorHumidityPct must be a number'))
       .min(40, 'maxOutdoorHumidityPct must be at least 40')
       .max(100, 'maxOutdoorHumidityPct must be at most 100'),
     /** Null switches the target-temperature rule off altogether. */
     targetTempC: z
-      .number({ invalid_type_error: 'targetTempC must be a number or null' })
+      .number(typeMessages(undefined, 'targetTempC must be a number or null'))
       .min(-10, 'targetTempC must be at least -10')
       .max(30, 'targetTempC must be at most 30')
       .nullable(),
     targetHysteresisK: z
-      .number({
-        required_error: 'targetHysteresisK is required',
-        invalid_type_error: 'targetHysteresisK must be a number',
-      })
+      .number(typeMessages('targetHysteresisK is required', 'targetHysteresisK must be a number'))
       .min(0, 'targetHysteresisK must be at least 0')
       .max(5, 'targetHysteresisK must be at most 5'),
     minRunMinutes: z
-      .number({ required_error: 'minRunMinutes is required', invalid_type_error: 'minRunMinutes must be a number' })
+      .number(typeMessages('minRunMinutes is required', 'minRunMinutes must be a number'))
       .int('minRunMinutes must be a whole number of minutes')
       .min(0, 'minRunMinutes must be at least 0')
       .max(240, 'minRunMinutes must be at most 240'),
@@ -472,7 +493,7 @@ export const automationConfigSchema = z
      * path produces (design spec §3.1).
      */
     minPauseMinutes: z
-      .number({ required_error: 'minPauseMinutes is required', invalid_type_error: 'minPauseMinutes must be a number' })
+      .number(typeMessages('minPauseMinutes is required', 'minPauseMinutes must be a number'))
       .int('minPauseMinutes must be a whole number of minutes')
       .min(5, 'minPauseMinutes must be at least 5')
       .max(240, 'minPauseMinutes must be at most 240'),

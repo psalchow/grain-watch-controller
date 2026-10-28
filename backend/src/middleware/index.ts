@@ -31,6 +31,7 @@ export {
   historyQuerySchema,
   fanCommandSchema,
   automationConfigSchema,
+  typeMessages,
 } from './validation.middleware';
 
 export type {

@@ -11,7 +11,7 @@ Backend-specific guidance for the Grainwatch BFF service. See root `CLAUDE.md` f
 | Language | TypeScript | 5.7+ |
 | Database | InfluxDB 2.x | InfluxQL |
 | Auth | JWT + bcrypt | - |
-| Validation | Zod | 3.x |
+| Validation | Zod | 4.x |
 | Testing | Jest + Supertest | - |
 
 ## Architecture Rules

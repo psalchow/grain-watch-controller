@@ -126,7 +126,7 @@ describe('Error Handling Middleware', () => {
           {
             code: 'invalid_type',
             expected: 'string',
-            received: 'undefined',
+            input: undefined,
             path: ['username'],
             message: 'Required',
           },
@@ -156,16 +156,16 @@ describe('Error Handling Middleware', () => {
           {
             code: 'too_small',
             minimum: 3,
-            type: 'string',
+            origin: 'string',
             inclusive: true,
-            exact: false,
+            input: 'ab',
             path: ['username'],
             message: 'String must contain at least 3 character(s)',
           },
           {
             code: 'invalid_type',
             expected: 'string',
-            received: 'undefined',
+            input: undefined,
             path: ['password'],
             message: 'Required',
           },
@@ -198,7 +198,7 @@ describe('Error Handling Middleware', () => {
           {
             code: 'invalid_type',
             expected: 'string',
-            received: 'number',
+            input: 42,
             path: ['config', 'settings', 'name'],
             message: 'Expected string, received number',
           },

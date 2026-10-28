@@ -21,6 +21,7 @@ import {
   resetPasswordSchema,
   tenantIdsSchema,
   userIdParamsSchema,
+  typeMessages,
   getAuthService,
 } from '../middleware';
 import { getTenantRepository, getStockService } from '../services';
@@ -44,10 +45,7 @@ const updatePermissionsSchema = z.object({
  */
 const updateStatusSchema = z.object({
   /** Active status (required) */
-  active: z.boolean({
-    required_error: 'Active status is required',
-    invalid_type_error: 'Active must be a boolean',
-  }),
+  active: z.boolean(typeMessages('Active status is required', 'Active must be a boolean')),
 });
 
 /**
