@@ -672,3 +672,24 @@ Closing it: move the six components onto one shared data-loading hook — the
 pattern is identical in all of them — then re-enable the rule. It touches the
 spinner and error-band behaviour of every page that loads, so it wants the
 frontend test suite watched rather than a mechanical rewrite.
+
+## TypeScript 7 is blocked on the lint and test toolchain
+
+**Deferred:** 2026-10-28 — attempted during the dependency round and reverted;
+the blockers are upstream, not in this repository.
+
+TypeScript 7 is the native compiler port. Installing it and running the gates
+gives, in order of severity:
+
+- `typescript-eslint` 8.72.1 refuses it outright — "typescript-eslint does not
+  support TS 7.0" — so `npm run lint` dies in both workspaces. Its peer range
+  is `>=4.8.4 <6.1.0` and no released version names 7.
+- ts-jest 29.4.15 caps at `<7`, and every backend suite that compiles TypeScript
+  fails.
+- `baseUrl` (frontend `tsconfig.json`) and `moduleResolution: node10` (backend
+  `tsconfig.json`) have both been removed from the compiler, so the two configs
+  need rewriting before anything type-checks at all.
+
+Pick this up when typescript-eslint and ts-jest ship releases naming TypeScript
+7 in their peer ranges. The two tsconfig options are the only work this
+repository itself owes.
