@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { LoaderCircle } from 'lucide-react';
 import { stocksApi } from '@/api';
 import type { Resolution, StockHistoryResponse, SeriesPoint } from '@/types/api';
 import { Button } from '@/components/ui/button';
@@ -67,7 +67,7 @@ export function StockHistorySection({
 
       {loading && (
         <div className="flex items-center justify-center py-10">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <LoaderCircle className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { RefreshCw, LoaderCircle } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { StockCard } from '@/components/StockCard';
 import { Button } from '@/components/ui/button';
@@ -54,7 +54,7 @@ export default function HomePage() {
             disabled={refreshing}
           >
             {refreshing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <LoaderCircle className="h-4 w-4 animate-spin" />
             ) : (
               <RefreshCw className="h-4 w-4" />
             )}
@@ -64,7 +64,7 @@ export default function HomePage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : error ? (
           <div className="rounded-md bg-destructive/10 p-4 text-center text-destructive">

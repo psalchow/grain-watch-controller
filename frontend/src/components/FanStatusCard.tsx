@@ -1,4 +1,4 @@
-import { Fan, AlertTriangle, Wifi, WifiOff, HelpCircle, Loader2, ChevronRight } from 'lucide-react';
+import { Fan, TriangleAlert, Wifi, WifiOff, CircleQuestionMark, LoaderCircle, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { translateDeviceMessage } from '@/lib/messages';
 import type { FanState, FanStatus } from '@/types/fan';
@@ -33,7 +33,7 @@ const REACHABILITY = {
     label: 'Steuerung nicht erreichbar',
     tone: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
   },
-  null: { Icon: HelpCircle, label: 'Erreichbarkeit unbekannt', tone: 'bg-muted text-muted-foreground' },
+  null: { Icon: CircleQuestionMark, label: 'Erreichbarkeit unbekannt', tone: 'bg-muted text-muted-foreground' },
 } as const;
 
 /**
@@ -120,7 +120,7 @@ export function FanStatusCard({
       <div className="flex items-center gap-2">
         <Fan className={cn('h-5 w-5', isOn && 'animate-spin text-green-600')} />
         <span className="font-medium">Lüfter</span>
-        {isPending && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        {isPending && <LoaderCircle className="h-4 w-4 animate-spin text-muted-foreground" />}
         <span className="ml-auto text-sm font-semibold">
           {status ? STATE_LABEL[state] : '—'}
         </span>
@@ -130,19 +130,19 @@ export function FanStatusCard({
       <div className="mt-2 flex flex-wrap gap-2">
         {status?.lastAlert && (
           <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
-            <AlertTriangle className="h-3 w-3" /> Alarm: {translateDeviceMessage(status.lastAlert.message)}
+            <TriangleAlert className="h-3 w-3" /> Alarm: {translateDeviceMessage(status.lastAlert.message)}
           </span>
         )}
         {status?.lastWarning && (
           <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-            <AlertTriangle className="h-3 w-3" /> Warnung: {translateDeviceMessage(status.lastWarning.message)}
+            <TriangleAlert className="h-3 w-3" /> Warnung: {translateDeviceMessage(status.lastWarning.message)}
           </span>
         )}
         {status?.contactorEngaged && !status.desiredOn && (
           // The backend cannot open a contactor held by hand (design spec §6):
           // without this the locally running fan would be invisible in the app.
           <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-            <AlertTriangle className="h-3 w-3" /> Gebläse läuft, vor Ort geschaltet
+            <TriangleAlert className="h-3 w-3" /> Gebläse läuft, vor Ort geschaltet
           </span>
         )}
         {status && (

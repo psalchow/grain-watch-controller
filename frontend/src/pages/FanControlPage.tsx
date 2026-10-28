@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FanStatusCard } from '@/components/FanStatusCard';
 import { FanAutomationPanel } from '@/components/FanAutomationPanel';
@@ -103,7 +103,7 @@ export default function FanControlPage() {
     if (isPending) {
       return (
         <Button size="lg" disabled>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Wird quittiert…
+          <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> Wird quittiert…
         </Button>
       );
     }

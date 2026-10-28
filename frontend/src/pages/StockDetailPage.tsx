@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, LoaderCircle } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { FanStatusCard } from '@/components/FanStatusCard';
 import { SensorCard } from '@/components/SensorCard';
@@ -88,7 +88,7 @@ export default function StockDetailPage() {
               disabled={refreshing || loading}
             >
               {refreshing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoaderCircle className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
@@ -99,7 +99,7 @@ export default function StockDetailPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : error ? (
           <div className="rounded-md bg-destructive/10 p-4 text-center text-destructive">

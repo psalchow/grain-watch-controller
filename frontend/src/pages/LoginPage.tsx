@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wheat, Loader2 } from 'lucide-react';
+import { Wheat, LoaderCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { extractError } from '@/lib/messages';
 import { Button } from '@/components/ui/button';
@@ -85,7 +85,7 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                   Signing in...
                 </>
               ) : (

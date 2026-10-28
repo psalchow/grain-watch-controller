@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { LoaderCircle, ArrowLeft } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,7 +69,7 @@ export default function AdminUsersPage() {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+          <div className="flex justify-center py-12"><LoaderCircle className="h-6 w-6 animate-spin" /></div>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
             <table className="w-full text-sm">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Wheat, Loader2, LogOut, ArrowLeft } from 'lucide-react';
+import { Wheat, LoaderCircle, LogOut, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { authApi } from '@/api';
 import { extractError } from '@/lib/messages';
@@ -94,7 +94,7 @@ export default function AccountPage() {
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</>) : 'Change password'}
+              {loading ? (<><LoaderCircle className="mr-2 h-4 w-4 animate-spin" />Saving...</>) : 'Change password'}
             </Button>
             <Button type="button" variant="ghost" className="w-full" onClick={logout} disabled={loading}>
               <LogOut className="h-4 w-4 mr-2" />Logout

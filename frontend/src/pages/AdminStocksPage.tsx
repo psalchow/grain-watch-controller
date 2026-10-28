@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Droplets, Fan, Loader2, Thermometer } from 'lucide-react';
+import { ArrowLeft, Droplets, Fan, LoaderCircle, Thermometer } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -97,7 +97,7 @@ export default function AdminStocksPage() {
 
         {loading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin" />
+            <LoaderCircle className="h-6 w-6 animate-spin" />
           </div>
         ) : (
           <div className="overflow-x-auto rounded-lg border">
