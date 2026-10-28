@@ -6,14 +6,14 @@ Frontend-specific guidance for the Grainwatch PWA. See root `CLAUDE.md` for shar
 
 | Component | Technology | Version |
 |-----------|------------|---------|
-| Build Tool | Vite | 7.3+ |
-| Framework | React | 19.2+ |
+| Build Tool | Vite | 8.3+ |
+| Framework | React | 19.3+ |
 | Language | TypeScript | 5.9+ |
-| Styling | Tailwind CSS | 4.2+ (CSS-first) |
+| Styling | Tailwind CSS | 4.3+ (CSS-first) |
 | UI Components | shadcn/ui style | - |
-| PWA | vite-plugin-pwa | 1.2+ (Workbox) |
-| Router | React Router | 7.13+ |
-| HTTP | Axios | 1.13+ |
+| PWA | vite-plugin-pwa | 2.0+ (Workbox) |
+| Router | React Router | 7.18+ |
+| HTTP | Axios | 1.21+ |
 | State | React Context | - |
 
 ## Project Structure
