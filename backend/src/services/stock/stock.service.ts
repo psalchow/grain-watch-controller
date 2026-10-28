@@ -43,12 +43,12 @@ export class StockService {
   }
 
   async createStock(input: CreateStockInput): Promise<Stock> {
-    const stock: Stock = {
+    const stock = normalise({
       ...input,
       id: await this.generateStockId(),
       createdAt: new Date().toISOString(),
       tenantId: DEFAULT_TENANT_ID,
-    };
+    });
     this.assertInvariants(stock);
     try {
       await this.repo.create(stock);
@@ -69,10 +69,10 @@ export class StockService {
     const existing = await this.repo.findById(id);
     if (!existing) throw new StockServiceError(`Stock ${id} not found`, 'not_found');
 
-    const merged = applyPatch(existing, patch);
+    const merged = normalise(applyPatch(existing, patch));
     this.assertInvariants(merged);
 
-    if (!(await this.repo.update(id, patch))) {
+    if (!(await this.repo.update(id, effectivePatch(patch, merged)))) {
       throw new StockServiceError(`Stock ${id} not found`, 'not_found');
     }
     reconcileFanControl();
@@ -114,6 +114,43 @@ export class StockService {
     const next = (numbers.length > 0 ? Math.max(...numbers) : 0) + 1;
     return `stk_${String(next).padStart(3, '0')}`;
   }
+}
+
+/**
+ * A switch that is off governs its dependent fields: they are written as their
+ * defaults whatever was supplied. Discarded silently; the browser form submits
+ * disabled fields on purpose. `outdoorDevice` belongs to the fan controller
+ * and is not governed by either switch.
+ */
+function normalise(stock: Stock): Stock {
+  const result: Stock = { ...stock };
+  if (!result.hasGrainSensors) {
+    delete result.deviceGroup;
+    result.hasHumidity = false;
+  }
+  if (!result.fanControlEnabled) {
+    delete result.fanTopicPrefix;
+    result.fanSwitchId = 0;
+  }
+  return result;
+}
+
+/**
+ * What the repository is told: the caller's patch with the suppressed fields
+ * replaced by explicit resets, so a stored value is cleared even when the
+ * patch never mentioned it.
+ */
+function effectivePatch(patch: StockPatch, normalised: Stock): StockPatch {
+  const effective: StockPatch = { ...patch };
+  if (!normalised.hasGrainSensors) {
+    effective.deviceGroup = null;
+    effective.hasHumidity = false;
+  }
+  if (!normalised.fanControlEnabled) {
+    effective.fanTopicPrefix = null;
+    effective.fanSwitchId = 0;
+  }
+  return effective;
 }
 
 /** The stock as it will look once `patch` is applied: `null` clears an optional field. */

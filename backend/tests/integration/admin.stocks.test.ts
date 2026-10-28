@@ -172,7 +172,7 @@ describe('Admin Stock Endpoints', () => {
     });
 
     it('leaves fields absent from the patch untouched, not reset to create defaults', async () => {
-      await createStock({ active: false, hasHumidity: true, fanSwitchId: 3 });
+      await createStock({ active: false, hasHumidity: true, fanControlEnabled: true, fanTopicPrefix: 'shellies/x', fanSwitchId: 3 });
 
       const response = await asAdmin(request(app).patch('/api/v1/admin/stocks/stk_001')).send({
         name: 'Renamed',
@@ -187,6 +187,40 @@ describe('Admin Stock Endpoints', () => {
         hasHumidity: true,
         fanSwitchId: 3,
       });
+    });
+
+    it('discards the fields of a switched-off feature on create, as a follow-up GET shows', async () => {
+      const response = await createStock({
+        hasGrainSensors: false,
+        deviceGroup: 'corn-watch-3',
+        hasHumidity: true,
+        fanTopicPrefix: 'shellies/x',
+        fanSwitchId: 3,
+      });
+
+      expect(response.status).toBe(201);
+      const list = await asAdmin(request(app).get('/api/v1/admin/stocks'));
+      const stored = list.body.stocks[0];
+      expect(stored).not.toHaveProperty('deviceGroup');
+      expect(stored).not.toHaveProperty('fanTopicPrefix');
+      expect(stored).toMatchObject({ hasHumidity: false, fanSwitchId: 0 });
+    });
+
+    it('clears the fields of a feature a patch switches off, as a follow-up GET shows', async () => {
+      await createStock({ hasHumidity: true, fanControlEnabled: true, fanTopicPrefix: 'shellies/x', fanSwitchId: 3 });
+
+      const response = await asAdmin(request(app).patch('/api/v1/admin/stocks/stk_001')).send({
+        hasGrainSensors: false,
+        fanControlEnabled: false,
+        deviceGroup: 'ignored',
+      });
+
+      expect(response.status).toBe(200);
+      const list = await asAdmin(request(app).get('/api/v1/admin/stocks'));
+      const stored = list.body.stocks[0];
+      expect(stored).not.toHaveProperty('deviceGroup');
+      expect(stored).not.toHaveProperty('fanTopicPrefix');
+      expect(stored).toMatchObject({ hasHumidity: false, fanSwitchId: 0 });
     });
 
     it('clears an optional field when the patch sets it to null', async () => {

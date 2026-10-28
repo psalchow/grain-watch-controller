@@ -196,6 +196,80 @@ describe('StockService administration', () => {
     expect(await repo.findById(a.id)).toEqual(a);
   });
 
+  describe('switch-governed fields', () => {
+    it('discards the thermometer fields on create when hasGrainSensors is false', async () => {
+      const stock = await service.createStock(input({ hasGrainSensors: false, deviceGroup: 'corn-watch-9', hasHumidity: true }));
+      expect(stock.deviceGroup).toBeUndefined();
+      expect(stock.hasHumidity).toBe(false);
+      const row = await repo.findById(stock.id);
+      expect(row?.deviceGroup).toBeUndefined();
+      expect(row?.hasHumidity).toBe(false);
+    });
+
+    it('discards the fan fields on create when fanControlEnabled is false', async () => {
+      const stock = await service.createStock(input({ fanControlEnabled: false, fanTopicPrefix: 'shellies/x', fanSwitchId: 3 }));
+      expect(stock.fanTopicPrefix).toBeUndefined();
+      expect(stock.fanSwitchId).toBe(0);
+      const row = await repo.findById(stock.id);
+      expect(row?.fanTopicPrefix).toBeUndefined();
+      expect(row?.fanSwitchId).toBe(0);
+    });
+
+    it('clears a stored deviceGroup and hasHumidity when an update switches hasGrainSensors off', async () => {
+      const a = await insertStock(testDb.db, { id: 'stk_001', hasHumidity: true });
+      const updated = await service.updateStock(a.id, { hasGrainSensors: false });
+      expect(updated.deviceGroup).toBeUndefined();
+      expect(updated.hasHumidity).toBe(false);
+      const row = await repo.findById(a.id);
+      expect(row?.hasGrainSensors).toBe(false);
+      expect(row?.deviceGroup).toBeUndefined();
+      expect(row?.hasHumidity).toBe(false);
+    });
+
+    it('clears a stored fanTopicPrefix and fanSwitchId when an update switches fanControlEnabled off', async () => {
+      const a = await insertStock(testDb.db, { id: 'stk_001', fanControlEnabled: true, fanTopicPrefix: 'shellies/x', fanSwitchId: 2 });
+      const updated = await service.updateStock(a.id, { fanControlEnabled: false });
+      expect(updated.fanTopicPrefix).toBeUndefined();
+      expect(updated.fanSwitchId).toBe(0);
+      const row = await repo.findById(a.id);
+      expect(row?.fanControlEnabled).toBe(false);
+      expect(row?.fanTopicPrefix).toBeUndefined();
+      expect(row?.fanSwitchId).toBe(0);
+    });
+
+    it('writes a deviceGroup supplied together with hasGrainSensors on', async () => {
+      const { deviceGroup: _omit, ...rest } = makeStock({ id: 'stk_001', hasGrainSensors: false, hasHumidity: false });
+      await repo.create(rest);
+      const updated = await service.updateStock('stk_001', { hasGrainSensors: true, deviceGroup: 'corn-watch-7', hasHumidity: true });
+      expect(updated).toMatchObject({ deviceGroup: 'corn-watch-7', hasHumidity: true });
+      expect(await repo.findById('stk_001')).toMatchObject({ hasGrainSensors: true, deviceGroup: 'corn-watch-7', hasHumidity: true });
+    });
+
+    it('writes a fanTopicPrefix supplied together with fanControlEnabled on', async () => {
+      await insertStock(testDb.db, { id: 'stk_001' });
+      const updated = await service.updateStock('stk_001', { fanControlEnabled: true, fanTopicPrefix: 'shellies/y', fanSwitchId: 1 });
+      expect(updated).toMatchObject({ fanTopicPrefix: 'shellies/y', fanSwitchId: 1 });
+      expect(await repo.findById('stk_001')).toMatchObject({ fanControlEnabled: true, fanTopicPrefix: 'shellies/y', fanSwitchId: 1 });
+    });
+
+    it('leaves the row unchanged for a patch that only supplies suppressed fields', async () => {
+      const { deviceGroup: _omit, ...rest } = makeStock({ id: 'stk_001', hasGrainSensors: false, hasHumidity: false });
+      await repo.create(rest);
+      const before = await repo.findById('stk_001');
+      await service.updateStock('stk_001', { deviceGroup: 'x', hasHumidity: true, fanTopicPrefix: 'shellies/z', fanSwitchId: 4 });
+      expect(await repo.findById('stk_001')).toEqual(before);
+    });
+
+    it('keeps outdoorDevice when both switches are off', async () => {
+      const a = await insertStock(testDb.db, { id: 'stk_001', outdoorDevice: 'outdoor-1' });
+      const updated = await service.updateStock(a.id, { hasGrainSensors: false, fanControlEnabled: false });
+      expect(updated.outdoorDevice).toBe('outdoor-1');
+      expect((await repo.findById(a.id))?.outdoorDevice).toBe('outdoor-1');
+      const created = await service.createStock(input({ hasGrainSensors: false, outdoorDevice: 'outdoor-2' }));
+      expect((await repo.findById(created.id))?.outdoorDevice).toBe('outdoor-2');
+    });
+  });
+
   it('works without a fan manager', async () => {
     setFanManager(null);
     const s = await service.createStock(input({ active: false }));

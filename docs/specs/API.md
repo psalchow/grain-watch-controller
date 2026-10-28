@@ -76,6 +76,12 @@ delete or deactivation.
   trailing `/`; `fanSwitchId` integer 0–9.
 - Two invariants hold after every create and update, else 400: fan control
   needs a `fanTopicPrefix`, and grain sensors need a `deviceGroup`.
+- Switches govern their fields, identically on create and update: with
+  `hasGrainSensors` false, `deviceGroup` is stored absent and `hasHumidity` false;
+  with `fanControlEnabled` false, `fanTopicPrefix` is stored absent and
+  `fanSwitchId` 0. The switch value after the patch decides, and a supplied
+  value for a suppressed field is discarded silently, not rejected.
+  `outdoorDevice` is unaffected.
 - Deleting an active stock answers 409; deactivate it first. Unknown id: 404.
 - Schema violations answer the validation envelope (`error: 'VALIDATION_ERROR'`);
   service-level refusals answer `{ error: { code, message, details } }` with
