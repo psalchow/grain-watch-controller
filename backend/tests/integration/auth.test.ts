@@ -228,6 +228,22 @@ describe('Auth Endpoints', () => {
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('VALIDATION_ERROR');
     });
+
+    /**
+     * Express 5 leaves `req.body` undefined when nothing was sent, where
+     * Express 4 left an empty object. The answer has to stay a list of the
+     * missing fields rather than one complaint about the body as a whole.
+     */
+    it('should name the missing fields when no body is sent at all', async () => {
+      const response = await request(app).post('/api/v1/auth/login');
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('VALIDATION_ERROR');
+      expect(response.body.details.fields).toEqual({
+        username: ['Username is required'],
+        password: ['Password is required'],
+      });
+    });
   });
 
   describe('POST /api/v1/auth/refresh', () => {

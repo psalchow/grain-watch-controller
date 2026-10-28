@@ -60,7 +60,10 @@ export function validateBody<T>(schema: ZodType<T>) {
     res: Response,
     next: NextFunction
   ): void {
-    const result = schema.safeParse(req.body);
+    // Express 5 leaves `req.body` undefined when no body was sent, where
+    // Express 4 left an empty object. Parsing `{}` keeps the answer a list of
+    // the fields that are missing rather than one complaint about the body.
+    const result = schema.safeParse(req.body ?? {});
 
     if (!result.success) {
       const errors = formatZodErrors(result.error);
@@ -118,8 +121,18 @@ export function validateQuery<T>(schema: ZodType<T>) {
       return;
     }
 
-    // Replace query with parsed values (handles type coercion)
-    req.query = result.data as typeof req.query;
+    // Replace query with parsed values (handles type coercion).
+    //
+    // Express 5 exposes `req.query` through a getter with no setter, so a
+    // plain assignment throws. Redefining the property is what leaves the
+    // handlers downstream reading the validated values under the name they
+    // already use, which is the whole point of this middleware.
+    Object.defineProperty(req, 'query', {
+      value: result.data,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
     next();
   };
 }

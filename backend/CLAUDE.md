@@ -7,7 +7,7 @@ Backend-specific guidance for the Grainwatch BFF service. See root `CLAUDE.md` f
 | Component | Technology | Version |
 |-----------|------------|---------|
 | Runtime | Node.js | 22+ |
-| Framework | Express.js | 4.x |
+| Framework | Express.js | 5.x |
 | Language | TypeScript | 5.7+ |
 | Database | InfluxDB 2.x | InfluxQL |
 | Auth | JWT + bcrypt | - |

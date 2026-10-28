@@ -271,7 +271,10 @@ export function createApp(options: CreateAppOptions = {}): Express {
   if (frontendDistPath) {
     app.use(express.static(frontendDistPath, { index: false }));
 
-    app.get('*', (req, res, next) => {
+    // `/{*splat}` rather than Express 5's `/*splat`: the latter requires at
+    // least one segment and answers 404 for `/`, which is the PWA's start URL.
+    // The braces make the wildcard optional, so the bare root matches too.
+    app.get('/{*splat}', (req, res, next) => {
       if (req.path.startsWith('/api') || req.path === '/health') {
         return next();
       }
