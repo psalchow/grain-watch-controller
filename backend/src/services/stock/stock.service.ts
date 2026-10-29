@@ -49,7 +49,7 @@ export class StockService {
       createdAt: new Date().toISOString(),
       tenantId: DEFAULT_TENANT_ID,
     });
-    this.assertInvariants(stock);
+    await this.assertInvariants(stock);
     try {
       await this.repo.create(stock);
     } catch (error) {
@@ -70,7 +70,7 @@ export class StockService {
     if (!existing) throw new StockServiceError(`Stock ${id} not found`, 'not_found');
 
     const merged = normalise(applyPatch(existing, patch));
-    this.assertInvariants(merged);
+    await this.assertInvariants(merged);
 
     if (!(await this.repo.update(id, effectivePatch(patch, merged)))) {
       throw new StockServiceError(`Stock ${id} not found`, 'not_found');
@@ -95,12 +95,41 @@ export class StockService {
     }
   }
 
-  private assertInvariants(stock: Stock): void {
+  private async assertInvariants(stock: Stock): Promise<void> {
     if (stock.fanControlEnabled && isBlank(stock.fanTopicPrefix)) {
       throw new StockServiceError('Fan control requires a fan topic prefix', 'invalid');
     }
     if (stock.hasGrainSensors && isBlank(stock.deviceGroup)) {
       throw new StockServiceError('Grain thermometers require a device group', 'invalid');
+    }
+    await this.assertTopicPrefixIsFree(stock);
+  }
+
+  /**
+   * A topic prefix addresses one fan controller, so two stocks may not share
+   * one: commands published under it switch whichever controller listens, and
+   * `FanControlManager.route` hands an incoming message to the first matching
+   * wiring only — the second stock is then switched blind, without status or
+   * monitor. Copying a prefix from a neighbouring stock is the obvious mistake
+   * the form invites, so it is refused rather than tolerated.
+   *
+   * Compared verbatim across all tenants: MQTT topics are global and
+   * case-sensitive, so two prefixes differing in case are two controllers.
+   * A stock without fan control carries no prefix (`normalise`) and is
+   * therefore neither a subject nor a candidate here.
+   */
+  private async assertTopicPrefixIsFree(stock: Stock): Promise<void> {
+    const prefix = stock.fanTopicPrefix;
+    if (prefix === undefined) return;
+
+    const clash = (await this.repo.findAll()).find(
+      (other) => other.id !== stock.id && other.fanTopicPrefix === prefix
+    );
+    if (clash) {
+      throw new StockServiceError(
+        `Fan topic prefix is already used by stock ${clash.id}`,
+        'conflict'
+      );
     }
   }
 

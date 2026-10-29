@@ -76,6 +76,10 @@ delete or deactivation.
   trailing `/`; `fanSwitchId` integer 0–9.
 - Two invariants hold after every create and update, else 400: fan control
   needs a `fanTopicPrefix`, and grain sensors need a `deviceGroup`.
+- A stored `fanTopicPrefix` is unique across all stocks and tenants, else 409:
+  one prefix addresses one fan controller. Compared verbatim — MQTT topics are
+  case-sensitive. A stock with `fanControlEnabled` false stores no prefix and
+  so neither holds nor clashes with one.
 - Switches govern their fields, identically on create and update: with
   `hasGrainSensors` false, `deviceGroup` is stored absent and `hasHumidity` false;
   with `fanControlEnabled` false, `fanTopicPrefix` is stored absent and

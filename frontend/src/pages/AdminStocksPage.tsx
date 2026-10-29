@@ -187,6 +187,10 @@ export default function AdminStocksPage() {
         <StockFormDialog
           open
           stock={form.stock}
+          takenTopicPrefixes={stocks
+            .filter((s) => s.id !== form.stock?.id && s.fanControlEnabled)
+            .map((s) => s.fanTopicPrefix)
+            .filter((prefix): prefix is string => prefix !== undefined)}
           onSave={save}
           onCancel={() => setForm(null)}
         />

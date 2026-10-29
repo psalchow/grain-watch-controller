@@ -603,8 +603,10 @@ pass a full literal to `create` instead. An `omit` option would close it.
 
 ## `route()` dispatches a shared prefix to one stock only
 
-**Deferred:** 2026-10-27 — pre-existing, but the stock form now makes it
-reachable without a hand-edited row.
+**Deferred:** 2026-10-27 — pre-existing. **Narrowed 2026-10-29:** the API now
+refuses a duplicate `fan_topic_prefix` with 409 (`StockService`,
+`assertTopicPrefixIsFree`), so only a row written before that date can still
+carry one. Such a row is found when it is next saved, which then answers 409.
 
 `FanControlManager.route` (`backend/src/services/fan/fan.manager.ts`, ~:296-298)
 returns after the first wiring whose prefix matches. When two stocks share a
@@ -613,7 +615,7 @@ while the backend keeps publishing its commands. The design spec
 (`docs/superpowers/specs/2026-10-27-stock-administration-design.md` §4.3) accepts
 the shared prefix deliberately — the unsubscribe guard in `unsubscribeWiring`
 exists for it — so this records the half that was not closed: dispatch to every
-matching wiring, or refuse the duplicate in `StockService.assertInvariants`.
+matching wiring.
 
 ## The form's topic-prefix rules apply while fan control is off
 

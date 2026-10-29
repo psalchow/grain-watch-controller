@@ -22,9 +22,15 @@ const fullyEquipped: AdminStock = {
 const onSave = vi.fn();
 const onCancel = vi.fn();
 
-function renderDialog(stock?: AdminStock) {
+function renderDialog(stock?: AdminStock, takenTopicPrefixes?: string[]) {
   return render(
-    <StockFormDialog open stock={stock} onSave={onSave} onCancel={onCancel} />
+    <StockFormDialog
+      open
+      stock={stock}
+      takenTopicPrefixes={takenTopicPrefixes}
+      onSave={onSave}
+      onCancel={onCancel}
+    />
   );
 }
 
@@ -176,6 +182,43 @@ describe('StockFormDialog validation', () => {
 
     expect(await screen.findByText(/# und kein \+/)).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('rejects a topic prefix another stock already uses', async () => {
+    renderDialog(undefined, ['shellies/halle-nord']);
+
+    fireEvent.change(field('Name'), { target: { value: 'Halle Süd' } });
+    fireEvent.change(field('Device group'), {
+      target: { value: 'grain-watch-2' },
+    });
+    fireEvent.click(field('Fan control enabled'));
+    fireEvent.change(field('Topic prefix'), {
+      target: { value: ' shellies/halle-nord ' },
+    });
+    submit();
+
+    expect(
+      await screen.findByText(/gehört bereits zu einer anderen Halle/)
+    ).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('accepts a taken prefix left behind by an unticked fan control', async () => {
+    // The field keeps its text and is still submitted; the backend discards it.
+    renderDialog(undefined, ['shellies/halle-nord']);
+
+    fireEvent.change(field('Name'), { target: { value: 'Halle Süd' } });
+    fireEvent.change(field('Device group'), {
+      target: { value: 'grain-watch-2' },
+    });
+    fireEvent.click(field('Fan control enabled'));
+    fireEvent.change(field('Topic prefix'), {
+      target: { value: 'shellies/halle-nord' },
+    });
+    fireEvent.click(field('Fan control enabled'));
+    submit();
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
   });
 });
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type ReactNode, type SubmitEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/dialog';
@@ -9,6 +9,12 @@ export interface StockFormDialogProps {
   open: boolean;
   /** Absent means create; present means edit that stock. */
   stock?: AdminStock;
+  /**
+   * The fan topic prefixes of the *other* stocks. A prefix addresses one fan
+   * controller, so reusing one would switch a neighbour's fan; the backend
+   * refuses it with 409 and this pre-empts it in German.
+   */
+  takenTopicPrefixes?: string[];
   /** Rejects to keep the dialog open and show the failure beside the fields. */
   onSave: (values: CreateStockRequest) => void | Promise<void>;
   onCancel: () => void;
@@ -68,7 +74,7 @@ function orNull(value: string): string | null {
  * a locked field keeps its value and is still submitted, so the backend still
  * validates it.
  */
-function validate(draft: Draft): string | null {
+function validate(draft: Draft, takenTopicPrefixes: string[]): string | null {
   const name = draft.name.trim();
   if (name === '') return 'Ein Name ist erforderlich';
   if (name.length > 100)
@@ -98,6 +104,10 @@ function validate(draft: Draft): string | null {
 
   if (draft.fanControlEnabled && prefix === '')
     return 'Für die Lüftersteuerung wird ein Topic-Präfix benötigt';
+  // Only while fan control is on: with the switch off the backend discards the
+  // prefix, so it reserves nothing and nothing clashes with it.
+  if (draft.fanControlEnabled && takenTopicPrefixes.includes(prefix))
+    return 'Dieses Topic-Präfix gehört bereits zu einer anderen Halle';
   if (draft.hasGrainSensors && draft.deviceGroup.trim() === '')
     return 'Für Korn-Thermometer wird eine Gerätegruppe benötigt';
 
@@ -128,6 +138,7 @@ function toPayload(draft: Draft): CreateStockRequest {
 export function StockFormDialog({
   open,
   stock,
+  takenTopicPrefixes = [],
   onSave,
   onCancel,
 }: StockFormDialogProps) {
@@ -146,9 +157,9 @@ export function StockFormDialog({
   const withdrawingFanControl =
     stock?.fanControlEnabled === true && !draft.fanControlEnabled;
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const message = validate(draft);
+    const message = validate(draft, takenTopicPrefixes);
     if (message) {
       setError(message);
       return;

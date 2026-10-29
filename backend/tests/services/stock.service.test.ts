@@ -109,6 +109,60 @@ describe('StockService administration', () => {
     expect(await code(service.createStock(rest))).toBe('invalid');
   });
 
+  it('refuses a fan topic prefix another stock already uses', async () => {
+    await insertStock(testDb.db, {
+      id: 'stk_001',
+      fanControlEnabled: true,
+      fanTopicPrefix: 'shellies/halle-8',
+    });
+    const copied = input({ fanControlEnabled: true, fanTopicPrefix: 'shellies/halle-8' });
+    expect(await code(service.createStock(copied))).toBe('conflict');
+    expect(reconcile).not.toHaveBeenCalled();
+    expect((await repo.findAll()).map((s) => s.id)).toEqual(['stk_001']);
+  });
+
+  it('refuses an update that copies another stock\'s fan topic prefix', async () => {
+    await insertStock(testDb.db, {
+      id: 'stk_001',
+      fanControlEnabled: true,
+      fanTopicPrefix: 'shellies/halle-8',
+    });
+    const seven = await insertStock(testDb.db, {
+      id: 'stk_002',
+      fanControlEnabled: true,
+      fanTopicPrefix: 'shellies/halle-7',
+    });
+    expect(
+      await code(service.updateStock(seven.id, { fanTopicPrefix: 'shellies/halle-8' }))
+    ).toBe('conflict');
+    expect(await repo.findById(seven.id)).toEqual(seven);
+  });
+
+  it('lets a stock keep its own fan topic prefix across an update', async () => {
+    const a = await insertStock(testDb.db, {
+      id: 'stk_001',
+      fanControlEnabled: true,
+      fanTopicPrefix: 'shellies/halle-8',
+    });
+    expect((await service.updateStock(a.id, { name: 'Halle 8' })).fanTopicPrefix).toBe(
+      'shellies/halle-8'
+    );
+    expect(
+      (await service.updateStock(a.id, { fanTopicPrefix: 'shellies/halle-8' })).fanTopicPrefix
+    ).toBe('shellies/halle-8');
+  });
+
+  it('does not reserve a prefix for a stock whose fan control is off', async () => {
+    // The switch governs the field, so the stored prefix is cleared and free.
+    await service.createStock(
+      input({ fanControlEnabled: false, fanTopicPrefix: 'shellies/halle-8' })
+    );
+    const second = await service.createStock(
+      input({ fanControlEnabled: true, fanTopicPrefix: 'shellies/halle-8' })
+    );
+    expect(second.fanTopicPrefix).toBe('shellies/halle-8');
+  });
+
   it('maps a primary-key collision to conflict', async () => {
     await insertStock(testDb.db, { id: 'stk_001' });
     // A scan that misses the existing row simulates a concurrent writer.

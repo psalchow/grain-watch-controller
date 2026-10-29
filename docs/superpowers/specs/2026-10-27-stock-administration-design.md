@@ -74,7 +74,7 @@ Rollback is a database restore, as it has been since migration 0004.
 
 ### 2.3 Invariants the API enforces
 
-Two, both of which turn a silent misconfiguration into a rejected request:
+Three, all of which turn a silent misconfiguration into a rejected request:
 
 1. `fan_control_enabled = true` requires a non-empty `fan_topic_prefix`.
    Today such a row produces a `console.warn` at startup ("no MQTT topic prefix
@@ -82,6 +82,14 @@ Two, both of which turn a silent misconfiguration into a rejected request:
    the UI saying why.
 2. `has_grain_sensors = true` requires a non-empty `device_group`. The mirror
    image of the nullable column: no group, nothing to query.
+3. A stored `fan_topic_prefix` is unique across all stocks and tenants; a
+   duplicate answers 409 (added 2026-10-29, after a copied prefix started the
+   neighbouring stock's fan). A prefix addresses one controller, so sharing one
+   switches the wrong fan and leaves the second stock without status or monitor
+   (§4.3, and the "first matching prefix" trap in §7). Compared verbatim: MQTT
+   topics are case-sensitive. No unique index backs it — a database that
+   already holds a duplicate would fail the migration at startup, and a single
+   admin writer makes the service check sufficient.
 
 `has_humidity` is **not** constrained by `has_grain_sensors`. The form locks the
 field when the thermometers are deselected, but the stored value is kept, so a
@@ -157,7 +165,8 @@ runtime it becomes a real one. `unsubscribe` is added to `MqttClientLike` and
 
 Guard: unsubscribe only when no remaining wiring uses that prefix. Two stocks
 can share a prefix through misconfiguration, and the survivor must keep its
-feed.
+feed. Since 2026-10-29 the API refuses the duplicate (§2.3), so only rows
+written before that date can still reach the guard; it stays for them.
 
 ### 4.4 Latency
 
