@@ -76,6 +76,15 @@ describe('FanController', () => {
     expect(published).toEqual(['on', 'on']);
   });
 
+  it('does not log the keep-alive re-assert', async () => {
+    const { controller } = await makeController();
+    controller.command('on');
+    controller.handleShellyMessage(successMsg(true));
+    const before = controller.getRecentEvents(50).length;
+    jest.advanceTimersByTime(900000 * 3);
+    expect(controller.getRecentEvents(50)).toHaveLength(before);
+  });
+
   it('alert -> FAULT, desired off, stops keep-alive', async () => {
     const { controller, published } = await makeController();
     controller.command('on');

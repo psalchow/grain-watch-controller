@@ -305,13 +305,16 @@ export class FanController {
     if (this.watchdog) { clearTimeout(this.watchdog); this.watchdog = null; }
   }
 
-  /** Starts the keep-alive interval once (idempotent); re-publishes 'on' while desiredOn. */
+  /**
+   * Starts the keep-alive interval once (idempotent); re-publishes 'on' while
+   * desiredOn. The re-assert is not logged: it changes nothing on the device,
+   * and a row every interval buried the switching history.
+   */
   private ensureKeepAlive(): void {
     if (this.keepAlive) return;
     this.keepAlive = setInterval(() => {
       if (!this.desiredOn) return;
       this.deps.publish('on');
-      this.log('command', { action: 'on', keepAlive: true }, 'backend');
     }, this.deps.timings.keepAliveMs);
   }
 

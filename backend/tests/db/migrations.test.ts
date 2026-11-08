@@ -123,3 +123,41 @@ describe('0008_stock_admin', () => {
     expect(row.device_group).toBe('corn-watch-1');
   });
 });
+
+describe('0009_drop_keepalive_events', () => {
+  let sqlite: SqliteHandle;
+
+  afterEach(() => sqlite.close());
+
+  it('removes keep-alive command rows and keeps every other event', () => {
+    const created = createDb({ path: ':memory:' });
+    sqlite = created.sqlite;
+    runMigrations(created.db, migrationsUpTo('0008_stock_admin'));
+
+    sqlite
+      .prepare(
+        `INSERT INTO stocks (
+           id, name, device_group, has_humidity, has_grain_sensors, active,
+           created_at, fan_control_enabled, fan_switch_id, tenant_id
+         ) VALUES ('grain-watch-1', 'Halle 8', 'corn-watch-1', 1, 1, 1, ?, 1, 0, 'tnt_default')`,
+      )
+      .run('2026-06-02T00:00:00.000Z');
+    const insertEvent = sqlite.prepare(
+      `INSERT INTO fan_events (stock_id, ts, kind, payload, source)
+       VALUES ('grain-watch-1', '2026-11-01T10:00:00.000Z', ?, ?, ?)`,
+    );
+    insertEvent.run('command', '{"action":"on"}', 'auto');
+    insertEvent.run('command', '{"action":"on","keepAlive":true}', 'backend');
+    insertEvent.run('success', '{"type":"success"}', 'shelly');
+
+    runMigrations(created.db);
+
+    const rows = sqlite
+      .prepare('SELECT kind, payload FROM fan_events ORDER BY id')
+      .all() as Array<{ kind: string; payload: string }>;
+    expect(rows).toEqual([
+      { kind: 'command', payload: '{"action":"on"}' },
+      { kind: 'success', payload: '{"type":"success"}' },
+    ]);
+  });
+});

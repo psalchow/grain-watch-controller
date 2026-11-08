@@ -115,7 +115,10 @@ Behaviour:
   commands (last write wins).
 - **Keep-alive:** while `desiredOn = true`, a `setInterval` re-publishes
   `command/switch:0 = on` every **15 minutes** (well under the Shelly's 1 h Auto
-  OFF). Each re-assert resets the Shelly Auto-OFF timer.
+  OFF). Each re-assert resets the Shelly Auto-OFF timer. The re-assert is
+  **not logged** (2026-11-08): it changes nothing on the device, and a row
+  every 15 minutes buried the switching history. Migration
+  `0009_drop_keepalive_events` removes the rows written before.
 - **Watchdog:** after publishing `on`, expect a `success` with `switchState=true`
   within **10 s**. If absent → publish `off`, set state `FAULT`, log
   `watchdog_off`.

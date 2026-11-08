@@ -64,6 +64,13 @@
       "when": 1793129523024,
       "tag": "0008_stock_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1794162130934,
+      "tag": "0009_drop_keepalive_events",
+      "breakpoints": true
     }
   ]
 }
