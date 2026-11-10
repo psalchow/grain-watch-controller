@@ -359,13 +359,13 @@ describe('Application Bootstrap', () => {
 
       // `recover()` publishes the one `on` that resumes the run. Automation's
       // first evaluation agrees with the already-resumed state and issues no
-      // second, redundant `on` and no `auto_on` event. This pins the outcome
+      // second, redundant `on` and no automation `command` row. This pins the outcome
       // — the state automation reads is the recovered one — not a statement
       // order: see the comment above `manager.init()` in bootstrap.ts for why
       // that order is not, today, independently observable.
       expect(mockPublished.filter((p) => p.message === 'on')).toHaveLength(1);
       const events = new FanEventsRepository(db).listRecent('grain-watch-1', 20);
-      expect(events.some((e) => e.kind === 'auto_on')).toBe(false);
+      expect(events.some((e) => e.kind === 'command' && e.source === 'auto')).toBe(false);
     });
   });
 });

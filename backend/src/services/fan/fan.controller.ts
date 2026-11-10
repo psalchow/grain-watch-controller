@@ -5,6 +5,8 @@ import type { FanState, FanStatus, FanEventKind, ShellyMonitorMessage, Interfere
 type FanEventSource = 'user' | 'shelly' | 'backend' | 'auto';
 /** Callers of `command()`: never 'shelly' — that source only ever arises internally, from a monitor message. */
 type CommandSource = 'user' | 'backend' | 'auto';
+/** Extra fields a caller records in the `command` row; see `command`. */
+type CommandDetails = Record<string, unknown>;
 
 export interface FanControllerDeps {
   /** Stock (Halle) this controller drives. */
@@ -82,19 +84,21 @@ export class FanController {
   /**
    * Switch request. `source` records who asked: the API passes the default,
    * the manager passes 'backend' when it switches a fan off on retirement,
-   * and the automation service (a later task) will pass 'auto'.
+   * and the automation service passes 'auto'. `details` is merged into the
+   * `command` row's payload next to `action` — the automation hands over why
+   * it switched and on which readings, so one row records the whole switch.
    *
    * An `off` while the desired state is already false has nothing to wait
    * for — the Shelly's output does not need to move — so it does not enter
    * TURN_OFF_PENDING; see `turnOffImmediately`.
    */
-  command(action: 'on' | 'off', source: CommandSource = 'user'): void {
+  command(action: 'on' | 'off', source: CommandSource = 'user', details: CommandDetails = {}): void {
     if (action === 'on') {
-      this.beginTurnOn(source, true, this.now().toISOString());
+      this.beginTurnOn(source, true, this.now().toISOString(), details);
     } else if (this.desiredOn) {
-      this.beginTurnOff(source);
+      this.beginTurnOff(source, details);
     } else {
-      this.turnOffImmediately(source);
+      this.turnOffImmediately(source, details);
     }
   }
 
@@ -232,26 +236,31 @@ export class FanController {
   // --- internals ---
 
   /** Enters TURN_ON_PENDING, publishes 'on', arms the watchdog and keep-alive. */
-  private beginTurnOn(source: CommandSource, persist: boolean, since: string | null): void {
+  private beginTurnOn(
+    source: CommandSource,
+    persist: boolean,
+    since: string | null,
+    details: CommandDetails = {},
+  ): void {
     this.desiredOn = true;
     this.since = since;
     if (persist) this.persistState();
     this.setState('TURN_ON_PENDING');
-    this.log('command', { action: 'on' }, source);
+    this.log('command', { ...details, action: 'on' }, source);
     this.deps.publish('on');
     this.armWatchdog();
     this.ensureKeepAlive();
   }
 
   /** Enters TURN_OFF_PENDING, stops timers, publishes 'off'. Only reachable while desiredOn is true — there is a 'success' to wait for. */
-  private beginTurnOff(source: CommandSource = 'user'): void {
+  private beginTurnOff(source: CommandSource, details: CommandDetails): void {
     this.desiredOn = false;
     this.since = null;
     this.persistState();
     this.clearWatchdog();
     this.clearKeepAlive();
     this.setState('TURN_OFF_PENDING');
-    this.log('command', { action: 'off' }, source);
+    this.log('command', { ...details, action: 'off' }, source);
     this.deps.publish('off');
   }
 
@@ -269,13 +278,13 @@ export class FanController {
    * warning handler sets it explicitly from `inputState` right afterwards,
    * while an ordinary already-off `off` leaves it exactly as it stands.
    */
-  private turnOffImmediately(source: FanEventSource): void {
+  private turnOffImmediately(source: FanEventSource, details: CommandDetails = {}): void {
     this.desiredOn = false;
     this.since = null;
     this.persistState();
     this.clearWatchdog();
     this.clearKeepAlive();
-    this.log('command', { action: 'off' }, source);
+    this.log('command', { ...details, action: 'off' }, source);
     this.deps.publish('off');
   }
 

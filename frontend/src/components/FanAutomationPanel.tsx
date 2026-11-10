@@ -2,35 +2,8 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fanApi } from '@/api/fan';
+import { reasonText } from '@/lib/fanEvents';
 import type { AutomationConfig, AutomationSnapshot } from '@/types/fan';
-
-/**
- * German text for the nine reasons the automation can decide on (design spec
- * §4.3). A `Map` rather than the `Record` lookup `EVENT_LABEL` uses in
- * `FanControlPage`: `reason` arrives from the wire as an unvalidated string,
- * and a plain object resolves an unknown key such as `constructor` through
- * `Object.prototype` instead of falling through to the `??` fallback — the
- * same trap `FanStatusCard`'s reachability lookup documents. A `Map` has no
- * such prototype chain, so `.get` on any string that was never inserted
- * reliably returns `undefined`, and the caller falls back to the raw string
- * rather than rendering something that was never a label.
- */
-const REASON_LABEL = new Map<string, string>([
-  ['no_data', 'Keine verwertbaren Messwerte'],
-  ['condensation_risk', 'Kondensationsgefahr am kältesten Messpunkt'],
-  ['humidity_high', 'Außenluft zu feucht'],
-  ['target_reached', 'Zieltemperatur erreicht'],
-  ['delta_too_small', 'Temperaturunterschied zu gering'],
-  ['delta_ok', 'Außenluft kühlt'],
-  ['min_run_time', 'Mindestlaufzeit läuft noch'],
-  ['min_pause', 'Mindestpause läuft noch'],
-  ['hold', 'Keine Änderung nötig'],
-]);
-
-function reasonText(reason: string | null): string {
-  if (reason === null) return 'Noch keine Entscheidung';
-  return REASON_LABEL.get(reason) ?? reason;
-}
 
 function evaluatedAtText(evaluatedAt: string | null): string {
   if (!evaluatedAt) return 'noch nicht ausgewertet';

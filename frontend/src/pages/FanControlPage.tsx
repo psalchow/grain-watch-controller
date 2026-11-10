@@ -6,43 +6,12 @@ import { FanStatusCard } from '@/components/FanStatusCard';
 import { FanAutomationPanel } from '@/components/FanAutomationPanel';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { translateDeviceMessage } from '@/lib/messages';
+import { describeFanEvent } from '@/lib/fanEvents';
 import { fanApi } from '@/api/fan';
 import { useFanStream } from '@/hooks/useFanStream';
 import type { FanSnapshot } from '@/types/fan';
 
 const PENDING = ['TURN_ON_PENDING', 'TURN_OFF_PENDING'];
-
-/** German labels for the event kinds recorded in the audit log. */
-const EVENT_LABEL: Record<string, string> = {
-  command: 'Schaltbefehl',
-  success: 'Quittiert',
-  safety_shutoff: 'Sicherheitsabschaltung',
-  warning: 'Warnung',
-  alert: 'Alarm',
-  status: 'Statusmeldung',
-  // Recorded under its original key; the label matches the reachability badge.
-  online_change: 'Erreichbarkeit geändert',
-  watchdog_off: 'Zeitüberschreitung, abgeschaltet',
-  stand_down: 'Steuerung entzogen',
-  recovery: 'Zustand wiederhergestellt',
-  auto_on: 'Automatik: eingeschaltet',
-  auto_off: 'Automatik: ausgeschaltet',
-  automation_disabled: 'Automatik deaktiviert',
-  automation_configured: 'Automatik konfiguriert',
-};
-
-/** Event kinds that record a problem, highlighted in the history. */
-const PROBLEM_KINDS = ['warning', 'alert', 'safety_shutoff', 'watchdog_off'];
-
-/** Reads the device message out of an event payload, when it carries one. */
-function eventMessage(payload: unknown): string | null {
-  if (payload && typeof payload === 'object' && 'message' in payload) {
-    const message = (payload as { message?: unknown }).message;
-    if (typeof message === 'string') return translateDeviceMessage(message);
-  }
-  return null;
-}
 
 export default function FanControlPage() {
   const { stockId } = useParams<{ stockId: string }>();
@@ -178,17 +147,16 @@ export default function FanControlPage() {
           <h2 className="mb-2 text-sm font-semibold text-muted-foreground">Verlauf</h2>
           <ul className="space-y-1 text-xs">
             {(snapshot?.events ?? []).map((ev) => {
-              const message = eventMessage(ev.payload);
-              const isProblem = PROBLEM_KINDS.includes(ev.kind);
+              const { label, detail, problem } = describeFanEvent(ev);
               return (
                 <li key={ev.id} className="flex flex-wrap gap-2 border-b py-1">
                   <span className="text-muted-foreground/60">
                     {new Date(ev.ts).toLocaleString('de-DE')}
                   </span>
-                  <span className={cn('font-medium', isProblem && 'text-destructive')}>
-                    {EVENT_LABEL[ev.kind] ?? ev.kind}
+                  <span className={cn('font-medium', problem && 'text-destructive')}>
+                    {label}
                   </span>
-                  {message && <span className="text-muted-foreground">{message}</span>}
+                  {detail && <span className="text-muted-foreground">{detail}</span>}
                 </li>
               );
             })}

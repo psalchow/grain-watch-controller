@@ -26,8 +26,6 @@ export type FanEventKind =
   | 'watchdog_off'
   | 'stand_down'
   | 'recovery'
-  | 'auto_on'
-  | 'auto_off'
   | 'automation_disabled'
   | 'automation_configured';
 

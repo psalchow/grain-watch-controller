@@ -39,6 +39,25 @@ describe('FanController', () => {
     expect(controller.getStatus().desiredOn).toBe(true);
   });
 
+  it('records the details a caller hands over in the command row', async () => {
+    const { controller } = await makeController();
+
+    controller.command('on', 'auto', { reason: 'delta_ok', deltaT: 12 });
+    controller.handleShellyMessage(successMsg(true));
+    controller.command('off', 'auto', { reason: 'humidity_high', runMinutes: 30 });
+
+    const commands = controller
+      .getRecentEvents(10)
+      .filter((e) => e.kind === 'command')
+      .map((e) => ({ source: e.source, payload: e.payload }));
+    expect(commands).toEqual(
+      expect.arrayContaining([
+        { source: 'auto', payload: { action: 'on', reason: 'delta_ok', deltaT: 12 } },
+        { source: 'auto', payload: { action: 'off', reason: 'humidity_high', runMinutes: 30 } },
+      ]),
+    );
+  });
+
   it('publishes even when a status subscriber throws', async () => {
     const { controller, published } = await makeController();
     const consoleError = jest.spyOn(console, 'error').mockImplementation();

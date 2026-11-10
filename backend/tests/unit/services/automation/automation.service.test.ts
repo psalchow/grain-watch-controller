@@ -35,13 +35,16 @@ function minutesAgo(minutes: number): string {
 class FakeController {
   desiredOn = false;
   readonly commands: Array<{ action: 'on' | 'off'; source: string }> = [];
+  /** What each command handed over for its event row, parallel to `commands`. */
+  readonly details: Array<Record<string, unknown> | undefined> = [];
 
   getStatus(): { desiredOn: boolean } {
     return { desiredOn: this.desiredOn };
   }
 
-  command(action: 'on' | 'off', source: string): void {
+  command(action: 'on' | 'off', source: string, details?: Record<string, unknown>): void {
     this.commands.push({ action, source });
+    this.details.push(details);
     this.desiredOn = action === 'on';
   }
 
@@ -232,7 +235,7 @@ afterEach(() => {
 });
 
 describe('AutomationService — acting on a decision', () => {
-  it('switches on and writes auto_on when the decision differs from the controller', async () => {
+  it('switches on and hands the reason and readings to the command when the decision differs', async () => {
     // ΔT = 20 - 5 = 15, at or above deltaOnK, and nothing has been commanded
     // yet, so the minimum pause is elapsed.
     const h = setup();
@@ -241,11 +244,9 @@ describe('AutomationService — acting on a decision', () => {
     h.service.stop();
 
     expect(h.controller.commands).toEqual([{ action: 'on', source: 'auto' }]);
-    const event = h.events.find((e) => e.kind === 'auto_on');
-    expect(event).toBeDefined();
-    expect(event?.source).toBe('auto');
-    expect(event?.stockId).toBe(STOCK_ID);
-    expect(event?.payload).toEqual({
+    // The command row is the record; the service writes no row of its own.
+    expect(h.events).toEqual([]);
+    expect(h.controller.details[0]).toEqual({
       reason: 'delta_ok',
       grainMeanC: 20,
       grainMinC: 20,
@@ -257,7 +258,7 @@ describe('AutomationService — acting on a decision', () => {
     });
   });
 
-  it('switches off and writes auto_off with the run duration', async () => {
+  it('switches off and hands over the run duration', async () => {
     const h = setup();
     // ΔT = 6 - 5 = 1, below deltaOffK, and the fan has run past the minimum.
     h.getLatestReadings.mockImplementation(async () => grainReadings(6));
@@ -269,9 +270,8 @@ describe('AutomationService — acting on a decision', () => {
     h.service.stop();
 
     expect(h.controller.commands).toEqual([{ action: 'off', source: 'auto' }]);
-    const event = h.events.find((e) => e.kind === 'auto_off');
-    expect(event?.source).toBe('auto');
-    expect(event?.payload).toEqual({
+    expect(h.events).toEqual([]);
+    expect(h.controller.details[0]).toEqual({
       reason: 'delta_too_small',
       grainMeanC: 6,
       grainMinC: 6,
@@ -345,8 +345,7 @@ describe('AutomationService — read failures', () => {
     await tick();
 
     expect(h.controller.commands).toEqual([{ action: 'off', source: 'auto' }]);
-    const event = h.events.find((e) => e.kind === 'auto_off');
-    expect(event?.payload).toMatchObject({
+    expect(h.controller.details[0]).toMatchObject({
       reason: 'no_data',
       grainMeanC: null,
       outdoorTempC: null,
@@ -362,7 +361,6 @@ describe('AutomationService — read failures', () => {
     h.service.stop();
 
     expect(h.controller.commands).toHaveLength(1);
-    expect(h.events.filter((e) => e.kind === 'auto_off')).toHaveLength(1);
   });
 
   it('resets the counter on a successful read', async () => {

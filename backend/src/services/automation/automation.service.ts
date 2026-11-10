@@ -285,7 +285,6 @@ export class AutomationService {
         this.deps.automationRepo.get(stock.id).enabled
       ) {
         this.act(
-          stock.id,
           current,
           decision.desiredOn,
           decision.reason,
@@ -301,15 +300,13 @@ export class AutomationService {
   }
 
   /**
-   * Issues the command and records why it was decided.
+   * Issues the command, handing over why it was decided and on which readings.
    *
-   * The command goes first on purpose: the event row is the audit trail, the
-   * command is the safety-relevant action, and a failing write must not be what
-   * keeps a fan running. `FanController.command` writes its own `command` row,
-   * so an automation switch leaves two rows — what was switched, and why.
+   * `FanController.command` records them in its `command` row, so an
+   * automation switch leaves one row like any other switch. Older histories
+   * still hold the separate `auto_on`/`auto_off` rows this used to write.
    */
   private act(
-    stockId: string,
     controller: FanController,
     desiredOn: boolean,
     reason: AutomationReason,
@@ -318,8 +315,6 @@ export class AutomationService {
     timing: FanTimingState,
     at: Date,
   ): void {
-    controller.command(desiredOn ? 'on' : 'off', 'auto');
-
     const deltaT =
       readings.grainMeanC !== null && readings.outdoorTempC !== null
         ? Math.round((readings.grainMeanC - readings.outdoorTempC) * 10) / 10
@@ -343,13 +338,7 @@ export class AutomationService {
           : null;
     }
 
-    this.deps.eventsRepo.insert({
-      stockId,
-      ts: at.toISOString(),
-      kind: desiredOn ? 'auto_on' : 'auto_off',
-      payload,
-      source: 'auto',
-    });
+    controller.command(desiredOn ? 'on' : 'off', 'auto', payload);
   }
 
   /**

@@ -267,16 +267,11 @@ Publishing first and logging afterwards would flip it, at the cost of losing the
 record when the publish throws. Worth deciding deliberately rather than in
 passing.
 
-**Extended 2026-09-30**, by the automation core: `AutomationService.act`
-(`backend/src/services/automation/automation.service.ts`) issues its MQTT
-command *before* writing the `auto_on`/`auto_off` event, the opposite order
-from `FanController.beginTurnOn`/`beginTurnOff` above, on the same reasoning
-inverted — there the audit trail is what a failing write must not cost the
-switch-off; here the command is the safety-relevant action and the event is
-only the record of why. The repository now carries both orderings for the same
-trade-off, decided separately each time rather than once. Worth settling which
-one a switch command should follow generally, now that there are two data
-points.
+**Extended 2026-09-30, resolved 2026-11-09:** the automation core briefly
+added a second ordering (command first, its own `auto_on`/`auto_off` row
+afterwards). Automation now hands its reason to `FanController.command`, which
+records it in the `command` row, so every switch follows the ordering above
+again.
 
 ## A failed switch-off during a fan re-wire can resume `on` on unobserved hardware
 
@@ -383,7 +378,8 @@ reacting to.
   only realised decisions are logged. An edge-triggered event on the
   transition into that hold would close it.
 - `fan_events` is swept wholesale after `FAN_EVENT_RETENTION_DAYS` (90 days by
-  default), which also governs automation's own `auto_on`/`auto_off`/
+  default), which also governs automation's switch records (`command` rows with
+  source `auto`, formerly `auto_on`/`auto_off`) and its
   `automation_disabled`/`automation_configured` rows. A longer, separate
   retention for automation decisions was named in the concept but not
   implemented.
