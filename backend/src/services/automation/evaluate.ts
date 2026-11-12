@@ -85,9 +85,17 @@ export function evaluate(
     return { desiredOn: false, reason: 'condensation_risk' };
   }
 
-  // Rule 3: outdoor air too humid to bring in.
+  // Rule 3: outdoor air too humid to bring in. A stopped fan stays off until
+  // the humidity has fallen by the tolerance, so a reading hovering at the
+  // limit cannot start and stop it on every pause.
   if (readings.outdoorHumidityPct > parameters.maxOutdoorHumidityPct) {
     return { desiredOn: false, reason: 'humidity_high' };
+  }
+  if (
+    !state.desiredOn &&
+    readings.outdoorHumidityPct > parameters.maxOutdoorHumidityPct - parameters.humidityHysteresisPct
+  ) {
+    return { desiredOn: null, reason: 'humidity_high' };
   }
 
   // Rule 4: target temperature, skipped entirely when none is configured.

@@ -57,6 +57,7 @@ defaults while no row exists, so the migration needs no backfill.
 | `delta_on_k` | REAL | 10 | > `delta_off_k`, ≤ 20 |
 | `delta_off_k` | REAL | 2 | ≥ 2, < `delta_on_k` |
 | `max_outdoor_humidity_pct` | REAL | 80 | 40–100 |
+| `humidity_hysteresis_pct` | REAL | 5 | 0–20 |
 | `target_temp_c` | REAL, nullable | 12 | −10 to 30 |
 | `target_hysteresis_k` | REAL | 1 | 0–5 |
 | `min_run_minutes` | INTEGER | 30 | 0–240 |
@@ -167,7 +168,8 @@ First matching rule wins:
 |---|-----------|--------|----------|
 | 1 | Outdoor temperature, outdoor humidity **or the derived dew point** missing or stale, **or** not one valid grain reading | off | `no_data` |
 | 2 | Outdoor dew point ≥ coldest grain reading − `DEWPOINT_MARGIN_K` | off | `condensation_risk` |
-| 3 | Outdoor relative humidity > `max_outdoor_humidity_pct` | off | `humidity_high` |
+| 3a | Outdoor relative humidity > `max_outdoor_humidity_pct` | off | `humidity_high` |
+| 3b | Fan off, outdoor relative humidity > `max_outdoor_humidity_pct` − `humidity_hysteresis_pct` | hold | `humidity_high` |
 | 4a | Fan on, grain mean ≤ `target_temp_c` | off | `target_reached` |
 | 4b | Fan off, grain mean < `target_temp_c` + `target_hysteresis_k` | hold | `target_reached` |
 | 5 | ΔT < `delta_off_k` | off | `delta_too_small` |
@@ -181,6 +183,11 @@ The target hysteresis sits in the split between 4a and 4b and needs no stored
 state: while the fan runs, reaching the target stops it; while it is off,
 proximity to the target prevents a restart until the grain is a hysteresis band
 above it.
+
+The humidity hysteresis (3a/3b, added 2026-11-11) works the same way. Without
+it, humidity hovering at the limit stopped the fan the moment it had restarted:
+the minimum pause only spaces out restarts, and 3a deliberately switches off
+without waiting for the minimum run time.
 
 ### 4.1 Grain figures
 

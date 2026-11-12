@@ -306,6 +306,7 @@ defaults below while no row exists yet:
   "deltaOnK": 10,
   "deltaOffK": 2,
   "maxOutdoorHumidityPct": 80,
+  "humidityHysteresisPct": 5,
   "targetTempC": 12,
   "targetHysteresisK": 1,
   "minRunMinutes": 30,
@@ -314,7 +315,7 @@ defaults below while no row exists yet:
 ```
 
 `PUT /stocks/:stockId/fan/automation` takes the same shape and stores all
-eight fields in one call — the form submits the switch and the parameters
+nine fields in one call — the form submits the switch and the parameters
 together, so re-enabling after a self-disable is the same request as changing
 a parameter. Bounds, a violation of any of which answers 400 with the usual
 `VALIDATION_ERROR` envelope:
@@ -324,6 +325,7 @@ a parameter. Bounds, a violation of any of which answers 400 with the usual
 | `deltaOnK` | ≤ 20, and strictly greater than `deltaOffK` |
 | `deltaOffK` | ≥ 2 |
 | `maxOutdoorHumidityPct` | 40–100 |
+| `humidityHysteresisPct` | 0–20; a stopped fan switches on again only at or below `maxOutdoorHumidityPct` minus this |
 | `targetTempC` | −10 to 30, or `null` to switch the target-temperature rule off |
 | `targetHysteresisK` | 0–5 |
 | `minRunMinutes` | 0–240, whole minutes |

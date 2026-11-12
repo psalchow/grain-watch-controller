@@ -65,6 +65,7 @@ export interface AutomationConfig {
   deltaOnK: number;
   deltaOffK: number;
   maxOutdoorHumidityPct: number;
+  humidityHysteresisPct: number;
   targetTempC: number | null;
   targetHysteresisK: number;
   minRunMinutes: number;

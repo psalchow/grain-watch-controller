@@ -111,6 +111,7 @@ export interface AutomationConfig {
   deltaOnK: number;
   deltaOffK: number;
   maxOutdoorHumidityPct: number;
+  humidityHysteresisPct: number;
   targetTempC: number | null;
   targetHysteresisK: number;
   minRunMinutes: number;
@@ -129,6 +130,7 @@ export const AUTOMATION_DEFAULTS: AutomationConfig = {
   deltaOnK: 10,
   deltaOffK: 2,
   maxOutdoorHumidityPct: 80,
+  humidityHysteresisPct: 5,
   targetTempC: 12,
   targetHysteresisK: 1,
   minRunMinutes: 30,
@@ -145,6 +147,9 @@ export const stockAutomation = sqliteTable('stock_automation', {
   maxOutdoorHumidityPct: real('max_outdoor_humidity_pct')
     .notNull()
     .default(AUTOMATION_DEFAULTS.maxOutdoorHumidityPct),
+  humidityHysteresisPct: real('humidity_hysteresis_pct')
+    .notNull()
+    .default(AUTOMATION_DEFAULTS.humidityHysteresisPct),
   targetTempC: real('target_temp_c').default(AUTOMATION_DEFAULTS.targetTempC as number),
   targetHysteresisK: real('target_hysteresis_k').notNull().default(AUTOMATION_DEFAULTS.targetHysteresisK),
   minRunMinutes: integer('min_run_minutes').notNull().default(AUTOMATION_DEFAULTS.minRunMinutes),

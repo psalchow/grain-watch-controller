@@ -42,6 +42,7 @@ describe('fanApi', () => {
       deltaOnK: 10,
       deltaOffK: 2,
       maxOutdoorHumidityPct: 80,
+      humidityHysteresisPct: 5,
       targetTempC: 12,
       targetHysteresisK: 1,
       minRunMinutes: 30,

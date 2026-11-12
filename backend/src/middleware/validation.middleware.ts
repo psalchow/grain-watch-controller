@@ -467,7 +467,7 @@ export type FanCommandRequest = z.infer<typeof fanCommandSchema>;
 /**
  * Automation configuration request body schema.
  *
- * The switch and the seven parameters arrive in one call: the form submits them
+ * The switch and the eight parameters arrive in one call: the form submits them
  * together, and re-enabling after a self-disable is then the same request
  * (design spec §7). Bounds per §3.1, including the two cross-field conditions.
  */
@@ -485,6 +485,10 @@ export const automationConfigSchema = z
       .number(typeMessages('maxOutdoorHumidityPct is required', 'maxOutdoorHumidityPct must be a number'))
       .min(40, 'maxOutdoorHumidityPct must be at least 40')
       .max(100, 'maxOutdoorHumidityPct must be at most 100'),
+    humidityHysteresisPct: z
+      .number(typeMessages('humidityHysteresisPct is required', 'humidityHysteresisPct must be a number'))
+      .min(0, 'humidityHysteresisPct must be at least 0')
+      .max(20, 'humidityHysteresisPct must be at most 20'),
     /** Null switches the target-temperature rule off altogether. */
     targetTempC: z
       .number(typeMessages(undefined, 'targetTempC must be a number or null'))

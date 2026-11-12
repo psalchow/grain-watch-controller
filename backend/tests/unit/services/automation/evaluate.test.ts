@@ -23,6 +23,7 @@ function baseParameters(overrides: Partial<AutomationConfig> = {}): AutomationCo
     deltaOnK: 10,
     deltaOffK: 2,
     maxOutdoorHumidityPct: 80,
+    humidityHysteresisPct: 5,
     targetTempC: null,
     targetHysteresisK: 1,
     minRunMinutes: 30,
@@ -159,15 +160,55 @@ describe('evaluate — rule 3: humidity_high', () => {
     expect(result).toEqual({ desiredOn: false, reason: 'humidity_high' });
   });
 
-  it('does not fire exactly at the limit', () => {
+  it('does not switch a running fan off exactly at the limit', () => {
     const result = evaluate(
       baseReadings({ outdoorHumidityPct: 80 }),
       baseParameters({ maxOutdoorHumidityPct: 80 }),
-      baseState(),
+      baseState({ desiredOn: true, since: minutesAgo(60) }),
       NOW,
     );
     expect(result.reason).not.toBe('humidity_high');
     expect(result).toEqual({ desiredOn: null, reason: 'hold' });
+  });
+
+  it('holds a stopped fan off while humidity sits within the tolerance below the limit', () => {
+    const result = evaluate(
+      baseReadings({ outdoorHumidityPct: 76, grainMeanC: 20 }), // ΔT 15 would switch on
+      baseParameters({ maxOutdoorHumidityPct: 80, humidityHysteresisPct: 5 }),
+      baseState(),
+      NOW,
+    );
+    expect(result).toEqual({ desiredOn: null, reason: 'humidity_high' });
+  });
+
+  it('lets a stopped fan switch on once humidity has fallen to the limit minus the tolerance', () => {
+    const result = evaluate(
+      baseReadings({ outdoorHumidityPct: 75, grainMeanC: 20 }),
+      baseParameters({ maxOutdoorHumidityPct: 80, humidityHysteresisPct: 5 }),
+      baseState(),
+      NOW,
+    );
+    expect(result).toEqual({ desiredOn: true, reason: 'delta_ok' });
+  });
+
+  it('keeps a running fan going within the tolerance band', () => {
+    const result = evaluate(
+      baseReadings({ outdoorHumidityPct: 78, grainMeanC: 20 }),
+      baseParameters({ maxOutdoorHumidityPct: 80, humidityHysteresisPct: 5 }),
+      baseState({ desiredOn: true, since: minutesAgo(60) }),
+      NOW,
+    );
+    expect(result).toEqual({ desiredOn: true, reason: 'delta_ok' });
+  });
+
+  it('with zero tolerance, lets a stopped fan switch on exactly at the limit', () => {
+    const result = evaluate(
+      baseReadings({ outdoorHumidityPct: 80, grainMeanC: 20 }),
+      baseParameters({ maxOutdoorHumidityPct: 80, humidityHysteresisPct: 0 }),
+      baseState(),
+      NOW,
+    );
+    expect(result).toEqual({ desiredOn: true, reason: 'delta_ok' });
   });
 });
 

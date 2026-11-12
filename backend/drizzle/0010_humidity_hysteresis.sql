@@ -1,0 +1,1 @@
+ALTER TABLE `stock_automation` ADD `humidity_hysteresis_pct` real DEFAULT 5 NOT NULL;
