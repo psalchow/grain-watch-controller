@@ -19,7 +19,7 @@ export default function AccountPage() {
 
   const forced = !!user?.mustChangePassword;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
 

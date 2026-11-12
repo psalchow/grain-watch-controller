@@ -145,7 +145,7 @@ function CreateUserDialog({ tenants, onClose, onSaved }: { tenants: Tenant[]; on
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     if (username.length < 3) return setError('Der Benutzername muss mindestens 3 Zeichen lang sein');
@@ -201,7 +201,7 @@ function EditUserDialog({ user, tenants, onClose, onSaved }: { user: AdminUser; 
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     if (!tenantId) return setError('Ein Mandant muss ausgewählt werden');
@@ -246,7 +246,7 @@ function ResetPasswordDialog({ user, onClose, onSaved }: { user: AdminUser; onCl
   const [done, setDone] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     if (newPassword.length < 8) return setError('Das Passwort muss mindestens 8 Zeichen lang sein');

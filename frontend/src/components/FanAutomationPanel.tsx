@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type SubmitEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { fanApi } from '@/api/fan';
@@ -152,7 +152,7 @@ export function FanAutomationPanel({
     void submit(toPayload(draft, !snapshot.enabled));
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!draft) return;
     void submit(toPayload(draft, snapshot.enabled));
