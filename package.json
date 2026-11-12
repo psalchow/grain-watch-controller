@@ -1,6 +1,6 @@
 {
   "name": "grainwatch",
-  "version": "1.6.2",
+  "version": "1.7.0",
   "private": true,
   "description": "Grain stock monitoring system — frontend and backend",
   "workspaces": [
