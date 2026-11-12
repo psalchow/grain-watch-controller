@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { fitDomain } from '@/lib/chartDomain';
 import { formatTick } from '@/lib/chartTickFormat';
 
 export interface TimeSeries {
@@ -29,6 +30,7 @@ export interface TimeSeriesChartProps {
   series: TimeSeries[];
   intervalSeconds: number;
   unit: string;
+  /** Fixed y-axis domain; fitted to this chart's own readings when omitted. */
   yDomain?: [number, number];
   thresholdBands?: ThresholdBand[];
   height?: number;
@@ -64,6 +66,7 @@ export function TimeSeriesChart({
 }: TimeSeriesChartProps) {
   const data = toChartRows(series);
   const isEmpty = data.length === 0;
+  const domain = yDomain ?? fitDomain(series.flatMap((s) => s.points.map((p) => p.v)));
 
   return (
     <div className="rounded-md border p-3">
@@ -76,11 +79,14 @@ export function TimeSeriesChart({
         <ResponsiveContainer width="100%" height={height}>
           <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            {/* Open band ends are pinned to the domain edges: Recharts maps an
+                omitted y1/y2 to the top/bottom pixel edge regardless of which
+                end is open, which turned the bands upside down. */}
             {thresholdBands?.map((band, i) => (
               <ReferenceArea
                 key={i}
-                y1={Number.isFinite(band.from) ? band.from : undefined}
-                y2={Number.isFinite(band.to) ? band.to : undefined}
+                y1={Number.isFinite(band.from) ? band.from : domain?.[0]}
+                y2={Number.isFinite(band.to) ? band.to : domain?.[1]}
                 fill={band.colour}
                 fillOpacity={band.opacity ?? 0.08}
                 ifOverflow="hidden"
@@ -92,7 +98,7 @@ export function TimeSeriesChart({
               minTickGap={32}
             />
             <YAxis
-              domain={yDomain ?? ['auto', 'auto']}
+              domain={domain ?? ['auto', 'auto']}
               allowDataOverflow={yDomain !== undefined}
               tickFormatter={(value: number) => `${value}${unit}`}
               width={48}

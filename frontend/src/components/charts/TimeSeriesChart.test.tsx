@@ -140,6 +140,37 @@ describe('TimeSeriesChart', () => {
     expect(paths.length).toBeGreaterThan(0);
   });
 
+  it('draws open-ended bands from the matching edge of the domain', () => {
+    // Regression: Recharts maps an omitted y1/y2 to the top/bottom pixel edge
+    // respectively, so an open lower bound used to be drawn at the top and
+    // the bands came out upside down.
+    const { container } = renderWithSize(
+      <TimeSeriesChart
+        title="Top Temperatures"
+        series={sampleSeries}
+        intervalSeconds={1800}
+        unit="°C"
+        yDomain={[0, 40]}
+        thresholdBands={[
+          { from: -Infinity, to: 13, colour: '#22c55e' },
+          { from: 30, to: Infinity, colour: '#ef4444' },
+        ]}
+      />,
+    );
+    const verticalExtent = (fill: string) => {
+      const d = container.querySelector(`path[fill="${fill}"]`)?.getAttribute('d') ?? '';
+      const [, y] = /M\s*[-\d.]+,\s*([-\d.]+)/.exec(d) ?? [];
+      const [, height] = /v\s*([-\d.]+)/.exec(d) ?? [];
+      const top = Number(y);
+      const bottom = top + Number(height);
+      return { top: Math.min(top, bottom), bottom: Math.max(top, bottom) };
+    };
+    const green = verticalExtent('#22c55e');
+    const red = verticalExtent('#ef4444');
+    // SVG y grows downwards: the cold band must sit entirely below the hot one.
+    expect(green.top).toBeGreaterThan(red.bottom);
+  });
+
   it('renders an empty-state placeholder when no series have points', () => {
     renderWithSize(
       <TimeSeriesChart

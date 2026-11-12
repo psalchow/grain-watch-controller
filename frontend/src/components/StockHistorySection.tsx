@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { TimeSeriesChart, type ThresholdBand, type TimeSeries } from '@/components/charts/TimeSeriesChart';
 import { HistoryRangeTabs } from '@/components/HistoryRangeTabs';
 import { getDeviceColour } from '@/lib/deviceColours';
+import { fitDomain } from '@/lib/chartDomain';
 
 const TEMPERATURE_BANDS: ThresholdBand[] = [
   { from: -Infinity, to: 13, colour: '#22c55e', opacity: 0.08 },
@@ -19,6 +20,17 @@ export interface StockHistorySectionProps {
   resolution: Resolution;
   onResolutionChange: (next: Resolution) => void;
   refreshNonce: number;
+}
+
+/**
+ * One y-axis domain for all three layers, fitted to the readings, so equal
+ * height means equal temperature across the charts.
+ */
+function sharedTemperatureDomain(data: StockHistoryResponse): [number, number] | undefined {
+  const { top, mid, bottom } = data.series.temperature;
+  return fitDomain(
+    [top, mid, bottom].flatMap((layer) => layer.flatMap((points) => points.map((p) => p.v))),
+  );
 }
 
 function buildSeries(
@@ -61,6 +73,8 @@ export function StockHistorySection({
     // refreshNonce and retryCount intentionally included to trigger re-fetch
   }, [loadHistory, refreshNonce, retryCount]);
 
+  const yDomain = data ? sharedTemperatureDomain(data) : undefined;
+
   return (
     <section className="mt-6">
       <HistoryRangeTabs value={resolution} onChange={onResolutionChange} />
@@ -92,7 +106,7 @@ export function StockHistorySection({
             series={buildSeries(data.devices, data.series.temperature.top)}
             intervalSeconds={data.intervalSeconds}
             unit="°C"
-            yDomain={[0, 40]}
+            yDomain={yDomain}
             thresholdBands={TEMPERATURE_BANDS}
           />
           <TimeSeriesChart
@@ -100,7 +114,7 @@ export function StockHistorySection({
             series={buildSeries(data.devices, data.series.temperature.mid)}
             intervalSeconds={data.intervalSeconds}
             unit="°C"
-            yDomain={[0, 40]}
+            yDomain={yDomain}
             thresholdBands={TEMPERATURE_BANDS}
           />
           <TimeSeriesChart
@@ -108,7 +122,7 @@ export function StockHistorySection({
             series={buildSeries(data.devices, data.series.temperature.bottom)}
             intervalSeconds={data.intervalSeconds}
             unit="°C"
-            yDomain={[0, 40]}
+            yDomain={yDomain}
             thresholdBands={TEMPERATURE_BANDS}
           />
         </div>
