@@ -91,4 +91,64 @@ describe('StockCard', () => {
 
     expect(screen.getByText('Lüftersteuerung', { selector: 'span' })).toBeInTheDocument();
   });
+
+  describe('overview figures', () => {
+    const overview = {
+      grainMeanC: 11.24,
+      outdoor: {
+        temperature: 6.3,
+        humidity: 91.4,
+        dewPoint: 5,
+        absoluteHumidity: 6.8,
+        lastMeasurement: '2026-11-18T09:00:00.000Z',
+        offline: false,
+      },
+      fanRunning: true,
+    };
+
+    it('shows the stock mean and the outdoor conditions', () => {
+      render(<StockCard stock={stock({ overview })} />);
+
+      expect(screen.getByText('11.2°C')).toBeInTheDocument();
+      expect(screen.getByText('6.3°C')).toBeInTheDocument();
+      expect(screen.getByText('91%')).toBeInTheDocument();
+    });
+
+    it('shows a dash for a stock mean without current readings', () => {
+      render(<StockCard stock={stock({ overview: { ...overview, grainMeanC: null } })} />);
+
+      expect(screen.getByText('–°C')).toBeInTheDocument();
+    });
+
+    it('shows no stock mean for a stock without grain thermometers', () => {
+      render(<StockCard stock={stock({ hasGrainSensors: false, overview })} />);
+
+      expect(screen.queryByText('Stapel Ø')).not.toBeInTheDocument();
+      expect(screen.getByText('Außen')).toBeInTheDocument();
+    });
+
+    it('shows no outdoor figures for a stock without an outdoor sensor', () => {
+      render(<StockCard stock={stock({ overview: { ...overview, outdoor: null } })} />);
+
+      expect(screen.queryByText('Außen')).not.toBeInTheDocument();
+    });
+
+    it('lights the fan glyph while the fan is running', () => {
+      render(<StockCard stock={stock({ overview })} />);
+
+      expect(screen.getByText('Gebläse läuft', { selector: 'span' })).toBeInTheDocument();
+    });
+
+    it('does not claim a running fan without a report', () => {
+      render(<StockCard stock={stock({ overview: { ...overview, fanRunning: null } })} />);
+
+      expect(screen.queryByText('Gebläse läuft', { selector: 'span' })).not.toBeInTheDocument();
+    });
+
+    it('shows no figures for a cached response without an overview', () => {
+      render(<StockCard stock={stock()} />);
+
+      expect(screen.queryByText('Stapel Ø')).not.toBeInTheDocument();
+    });
+  });
 });

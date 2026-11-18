@@ -25,8 +25,10 @@ import type { FanControlManager } from '../../src/services/fan';
  * answer from.
  */
 const wiredStocks = new Set(['grain-watch-1', 'fan-only']);
+let contactorEngaged: boolean | null = null;
 const fakeFanManager = {
-  getController: (stockId: string) => (wiredStocks.has(stockId) ? {} : null),
+  getController: (stockId: string) =>
+    wiredStocks.has(stockId) ? { getStatus: () => ({ contactorEngaged }) } : null,
 } as unknown as FanControlManager;
 
 const JWT_SECRET = 'test-secret-key-for-testing-only-must-be-long-enough';
@@ -329,6 +331,71 @@ describe('Stock Endpoints', () => {
       } finally {
         setFanManager(fakeFanManager);
       }
+    });
+
+    describe('overview', () => {
+      const fresh = (offsetMs: number) => new Date(Date.now() - offsetMs).toISOString();
+      const overviewOf = (body: { stocks: { id: string; overview: unknown }[] }, id: string) =>
+        body.stocks.find((s) => s.id === id)!.overview as {
+          grainMeanC: number | null;
+          outdoor: { temperature: number | null; humidity: number | null; offline: boolean } | null;
+          fanRunning: boolean | null;
+        };
+
+      afterEach(() => {
+        contactorEngaged = null;
+      });
+
+      it('averages every fresh grain temperature into one figure', async () => {
+        mockGetLatestReadings.mockResolvedValue([
+          { device: '1.1', tempTop: 10, tempMid: 12, tempBottom: 8, humidity: 80, battery: 430, measurementTime: fresh(60_000) },
+          { device: '1.2', tempTop: 14, tempMid: null, tempBottom: 12, humidity: 80, battery: 430, measurementTime: fresh(60_000) },
+          // Past the 15-minute threshold: left out of the mean.
+          { device: '1.3', tempTop: 40, tempMid: 40, tempBottom: 40, humidity: 80, battery: 430, measurementTime: fresh(3_600_000) },
+        ]);
+        mockGetOutdoorReading.mockResolvedValue({
+          temperature: 6.3, humidity: 91, temperatureTime: fresh(30_000), humidityTime: fresh(30_000),
+        });
+
+        const response = await request(app)
+          .get('/api/v1/stocks')
+          .set('Authorization', `Bearer ${adminToken}`);
+
+        expect(response.status).toBe(200);
+        const overview = overviewOf(response.body, 'grain-watch-1');
+        expect(overview.grainMeanC).toBe(11.2);
+        expect(overview.outdoor).toMatchObject({ temperature: 6.3, humidity: 91, offline: false });
+      });
+
+      it('reports the fan as running from the contactor, only where fan control is up', async () => {
+        contactorEngaged = true;
+
+        const response = await request(app)
+          .get('/api/v1/stocks')
+          .set('Authorization', `Bearer ${adminToken}`);
+
+        expect(overviewOf(response.body, 'grain-watch-1').fanRunning).toBe(true);
+        expect(overviewOf(response.body, 'grain-watch-2').fanRunning).toBeNull();
+      });
+
+      it('still lists the stocks when InfluxDB fails', async () => {
+        mockGetLatestReadings.mockRejectedValue(new Error('influx down'));
+        const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        try {
+          const response = await request(app)
+            .get('/api/v1/stocks')
+            .set('Authorization', `Bearer ${adminToken}`);
+
+          expect(response.status).toBe(200);
+          expect(response.body.stocks).toHaveLength(2);
+          const overview = overviewOf(response.body, 'grain-watch-1');
+          expect(overview.grainMeanC).toBeNull();
+          expect(overview.outdoor).toMatchObject({ temperature: null, humidity: null });
+        } finally {
+          consoleError.mockRestore();
+        }
+      });
     });
 
     it('should return 401 without authentication', async () => {

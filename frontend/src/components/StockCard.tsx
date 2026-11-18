@@ -8,7 +8,16 @@ interface StockCardProps {
   onClick?: () => void;
 }
 
+const fmt1 = (value: number | null | undefined): string =>
+  value != null ? value.toFixed(1) : '–';
+
+const fmtInt = (value: number | null | undefined): string =>
+  value != null ? String(Math.round(value)) : '–';
+
 export function StockCard({ stock, onClick }: StockCardProps) {
+  const overview = stock.overview;
+  const fanRunning = overview?.fanRunning === true;
+
   return (
     <Card
       className={cn(
@@ -34,7 +43,32 @@ export function StockCard({ stock, onClick }: StockCardProps) {
         </div>
         <CardDescription>{stock.description}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
+        {/* One figure per side of the ventilation decision: the stock's mean
+            over every probe and layer, and the air it would be ventilated
+            with. Exact values per probe are on the detail page. */}
+        {overview && (stock.hasGrainSensors !== false || overview.outdoor) && (
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm">
+            {stock.hasGrainSensors !== false && (
+              <span className="inline-flex items-baseline gap-1.5">
+                <span className="text-muted-foreground">Stapel Ø</span>
+                <span className="font-semibold">{fmt1(overview.grainMeanC)}°C</span>
+              </span>
+            )}
+            {overview.outdoor && (
+              <span
+                className={cn(
+                  'inline-flex items-baseline gap-1.5',
+                  overview.outdoor.offline && 'opacity-50',
+                )}
+              >
+                <span className="text-muted-foreground">Außen</span>
+                <span className="font-semibold">{fmt1(overview.outdoor.temperature)}°C</span>
+                <span className="text-muted-foreground">{fmtInt(overview.outdoor.humidity)}%</span>
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           {/* What the stock is equipped with, from its configuration. Both
               fields are optional because a cached response from an older
@@ -57,10 +91,17 @@ export function StockCard({ stock, onClick }: StockCardProps) {
           )}
           {stock.fanControlEnabled && (
             <span className="inline-flex items-center">
-              <Fan className="h-4 w-4" aria-hidden="true" >
-                <title>Lüftersteuerung</title>
+              {/* Green while the contactor reports the fan running, whoever
+                  switched it. Unknown reads as not running: no claim without
+                  a report. */}
+              <Fan
+                className={cn('h-4 w-4', fanRunning && 'text-green-600 dark:text-green-400')}
+                aria-hidden="true"
+              >
+                <title>{fanRunning ? 'Lüftersteuerung – Gebläse läuft' : 'Lüftersteuerung'}</title>
               </Fan>
               <span className="sr-only">Lüftersteuerung</span>
+              {fanRunning && <span className="sr-only">Gebläse läuft</span>}
             </span>
           )}
           {/* The automation marker sits beside the fan glyph (design spec §8):
@@ -73,7 +114,10 @@ export function StockCard({ stock, onClick }: StockCardProps) {
           {stock.automation?.available &&
             (stock.automation.enabled ? (
               <span className="inline-flex items-center">
-                <Bot className="h-4 w-4" aria-hidden="true">
+                {/* Coloured so an active automation stands out from the grey
+                    equipment glyphs; blue, because green already means the
+                    fan is running. */}
+                <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true">
                   <title>Automatik aktiv</title>
                 </Bot>
                 <span className="sr-only">Automatik aktiv</span>

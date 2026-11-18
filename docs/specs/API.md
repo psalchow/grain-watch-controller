@@ -378,6 +378,23 @@ automation}`. Two additions to it:
 one per stock, and no `reason` or `evaluatedAt`: the list has no SSE push to
 keep them current.
 
+### Stock overview on the list
+
+`GET /stocks` carries an `overview` per stock, the figures the stock cards on
+the start page show:
+
+| Field | Meaning |
+|-------|---------|
+| `grainMeanC` | Mean over every fresh grain temperature, all probes and layers — the same figure the automation compares (`summariseGrain`). `null` without a current reading or without grain thermometers |
+| `outdoor` | The outdoor conditions as `GET …/latest` reports them, or `null` for a stock without an outdoor device |
+| `fanRunning` | `status.contactorEngaged` of the fan controller; `null` without fan control or before the Shelly has reported |
+
+The list reads InfluxDB twice per stock, in parallel. A failing read costs that
+stock's figures (`grainMeanC: null`, outdoor values `null`), never the list:
+the cards still lead to the detail pages while InfluxDB is down. The figures
+are as fresh as the last load — the list has no SSE push, only the refresh
+button.
+
 ### Database
 
 | Variable | Default | Description |

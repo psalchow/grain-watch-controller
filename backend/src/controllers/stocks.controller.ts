@@ -1,17 +1,34 @@
 import { Request, Response, NextFunction } from 'express';
 import { InfluxDBService, SeriesPoint, StockService } from '../services';
-import { fanControlAvailable, automationAvailable } from '../services/fan';
+import {
+  fanControlAvailable,
+  automationAvailable,
+  getFanManager,
+} from '../services/fan';
 import {
   offlineAfterMs,
   isOffline,
   buildOutdoorConditions,
+  summariseGrain,
   NO_OUTDOOR_READING,
+  OutdoorConditions,
 } from '../services/conditions';
 import { NotFoundError } from '../middleware';
 import { getDb } from '../db';
 import { AutomationRepository } from '../db/repositories';
 import { hasStockAccess } from '../models';
 import { getRange, Resolution } from '../utils/timeRange';
+import type { Stock } from '../db/types';
+
+/** The at-a-glance figures the stock list shows on each card. */
+interface StockOverview {
+  /** Mean over every fresh grain temperature; null without a current one. */
+  grainMeanC: number | null;
+  /** Null for a stock without an outdoor sensor. */
+  outdoor: OutdoorConditions | null;
+  /** The contactor's auxiliary contact; null without fan control or report. */
+  fanRunning: boolean | null;
+}
 
 export class StocksController {
   constructor(
@@ -39,7 +56,11 @@ export class StocksController {
         accessibleStocks.map((s) => s.id)
       );
 
-      const stocks = accessibleStocks.map((s) => ({
+      const overviews = await Promise.all(
+        accessibleStocks.map((s) => this.overview(s))
+      );
+
+      const stocks = accessibleStocks.map((s, i) => ({
         id: s.id,
         name: s.name,
         description: s.description ?? '',
@@ -53,6 +74,7 @@ export class StocksController {
           available: automationAvailable(s),
           enabled: automation.get(s.id)?.enabled ?? false,
         },
+        overview: overviews[i],
       }));
 
       res.status(200).json({
@@ -61,6 +83,47 @@ export class StocksController {
       });
     } catch (error) {
       next(error);
+    }
+  }
+
+  /**
+   * Reads one stock's overview figures. A failing InfluxDB read costs the
+   * measurements, never the list: the list worked without InfluxDB before
+   * it carried any readings, and the card can still lead to the detail page.
+   */
+  private async overview(stock: Stock): Promise<StockOverview> {
+    const fanRunning = fanControlAvailable(stock)
+      ? (getFanManager()?.getController(stock.id)?.getStatus().contactorEngaged ?? null)
+      : null;
+
+    try {
+      const [readings, outdoorReading] = await Promise.all([
+        stock.hasGrainSensors && stock.deviceGroup
+          ? this.influxService.getLatestReadings(stock.deviceGroup)
+          : Promise.resolve([]),
+        stock.outdoorDevice
+          ? this.influxService.getOutdoorReading(stock.outdoorDevice)
+          : Promise.resolve(NO_OUTDOOR_READING),
+      ]);
+      const offlineThreshold = Date.now() - offlineAfterMs();
+      return {
+        // The same figure the automation compares against the outdoor air.
+        grainMeanC: summariseGrain(readings, offlineThreshold).meanC,
+        outdoor: stock.outdoorDevice
+          ? buildOutdoorConditions(outdoorReading, offlineThreshold)
+          : null,
+        fanRunning,
+      };
+    } catch (error) {
+      console.error(`Reading the overview of ${stock.id} failed`, error);
+      // Same shapes as for sensors that went silent: a dash, not a gap.
+      return {
+        grainMeanC: null,
+        outdoor: stock.outdoorDevice
+          ? buildOutdoorConditions(NO_OUTDOOR_READING, Date.now() - offlineAfterMs())
+          : null,
+        fanRunning,
+      };
     }
   }
 

@@ -97,6 +97,18 @@ export interface GrainStock {
    * page then cannot show.
    */
   automation?: AutomationStatus;
+  /** Optional: a cached response from a pre-upgrade backend omits it. */
+  overview?: StockOverview;
+}
+
+/** The at-a-glance figures for a stock card on the overview page. */
+export interface StockOverview {
+  /** Mean over every fresh grain temperature, all probes and layers; null without one. */
+  grainMeanC: number | null;
+  /** Null for a stock without an outdoor sensor. */
+  outdoor: OutdoorConditions | null;
+  /** Whether the contactor reports the fan running; null without fan control or report. */
+  fanRunning: boolean | null;
 }
 
 export interface StocksResponse {
