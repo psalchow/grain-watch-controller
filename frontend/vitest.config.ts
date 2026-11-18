@@ -1,11 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
-import { readAppVersion } from './appVersion';
+import { readAppVersion } from './appVersion.ts';
 
 export default defineConfig({
   // Mirrors the production build so components can rely on __APP_VERSION__.
   define: {
-    __APP_VERSION__: JSON.stringify(readAppVersion(path.resolve(__dirname, '..'))),
+    __APP_VERSION__: JSON.stringify(readAppVersion(path.resolve(import.meta.dirname, '..'))),
   },
   test: {
     environment: 'jsdom',
@@ -14,7 +14,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
 });

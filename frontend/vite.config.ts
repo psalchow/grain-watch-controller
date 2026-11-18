@@ -1,16 +1,16 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import { API_CACHE_NAME } from './src/lib/apiCache'
-import { BRAND_BLUE } from './src/brand/wheatmarkGeometry'
+import { API_CACHE_NAME } from './src/lib/apiCache.ts'
+import { BRAND_BLUE } from './src/brand/wheatmarkGeometry.ts'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
-import { readAppVersion } from './appVersion'
+import { readAppVersion } from './appVersion.ts'
 
 export default defineConfig({
   // The bundle cannot read a manifest at runtime, so the version is baked in.
   define: {
-    __APP_VERSION__: JSON.stringify(readAppVersion(path.resolve(__dirname, '..')))
+    __APP_VERSION__: JSON.stringify(readAppVersion(path.resolve(import.meta.dirname, '..')))
   },
   plugins: [
     tailwindcss(),
@@ -95,7 +95,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src')
+      '@': path.resolve(import.meta.dirname, './src')
     }
   }
 })
